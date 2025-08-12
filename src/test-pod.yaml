@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-snap-pod
+  namespace: default
+  annotations:
+    snap/containers: "ace"
+    snap/info: '{"checkpointed":false,"checkpointedTime":""}'
+spec:
+  containers:
+  - name: ace-container
+    image: busybox:latest
+    command: ["sleep", "3600"]
+  - name: sidecar-container
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-snap-pod-2
+  namespace: default
+  annotations:
+    snap/info: >
+      {"checkpointed":true,
+       "checkpointedTime":"2025-07-31T16:00:00Z"}
+spec:
+  containers:
+  - name: main-app
+    image: python:3.9-slim
+    command: ["sleep", "3600"]
+  - name: monitoring
+    image: prom/prometheus:latest
+    command: ["sleep", "3600"]

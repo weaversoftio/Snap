@@ -1,0 +1,19 @@
+image:
+  repository: "snap-operator"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: "snap-operator"
+
+rbac:
+  create: true
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

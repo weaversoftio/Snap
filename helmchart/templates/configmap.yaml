@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: snap-operator-config
+  namespace: {{ .Release.Namespace }}
+data:
+  log-level: "INFO"
