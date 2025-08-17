@@ -1,6 +1,6 @@
 image:
-  repository: "snap-operator"
-  tag: "latest"
+  repository: "192.168.33.204"
+  tag: "8082/snap-operator"
   pullPolicy: IfNotPresent
 
 serviceAccount:
