@@ -40,38 +40,5 @@ docker build -t "$FULL_IMAGE" "$DOCKERFILE_DIR"
 echo "Pushing image: $FULL_IMAGE"
 docker push "$FULL_IMAGE"
 
-# Update Helm values.yaml with new image repo and tag
-VALUES_FILE="$CHART_DIR/values.yaml"
-if [[ ! -f "$VALUES_FILE" ]]; then
-  echo "ERROR: values.yaml not found at $VALUES_FILE" >&2
-  exit 1
-fi
-
-# Cross-platform sed in-place
-sed_i() {
-  if sed --version >/dev/null 2>&1; then
-    sed -i "$@"
-  else
-    sed -i '' "$@"
-  fi
-}
-
-# Ensure keys exist and update them
-# repository
-if grep -q '^image:\s*$' "$VALUES_FILE"; then
-  :
-fi
-
-sed_i "s|^\s*repository:.*$|  repository: '$REGISTRY/$IMAGE_NAME'|" "$VALUES_FILE"
-sed_i "s|^\s*tag:.*$|  tag: '$IMAGE_TAG'|" "$VALUES_FILE"
-
-# Deploy or upgrade with Helm
-if command -v helm >/dev/null 2>&1; then
-  echo "Deploying with Helm release '$RELEASE_NAME' to namespace '$NAMESPACE'"
-  helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
-    --namespace "$NAMESPACE" --create-namespace
-else
-  echo "helm not found; skipping Helm deployment. Chart updated with image $FULL_IMAGE"
-fi
 
 echo "Done. Image: $FULL_IMAGE"
