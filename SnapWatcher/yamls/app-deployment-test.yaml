@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: snap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      snap.weaversoft.io/checkpoint-me: "true"   # <-- match the handler
+  template:
+    metadata:
+      labels:
+        app: nginx
+        snap.weaversoft.io/checkpoint-me: "true" # <-- required
+      # remove these so the handler doesn't skip:
+      # annotations:
+      #   snap.weaversoft.io/repo: "snap-checkpoints/custom-namespace-nginx"
+      #   snap.weaversoft.io/fallback: "false"
+    spec:
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:stable
+          ports:
+            - containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          securityContext:
+            runAsNonRoot: true

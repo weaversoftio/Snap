@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkpoint-watcher
+  namespace: snap
+  labels:
+    app: checkpoint-watcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: checkpoint-watcher
+  template:
+    metadata:
+      labels:
+        app: checkpoint-watcher
+    spec:
+      serviceAccountName: checkpoint-watcher
+      # Attach image pull secret if your registry is private
+      imagePullSecrets:
+      - name: nexus-registry-secret
+      containers:
+      - name: operator
+        image: 192.168.33.204:8082/checkpoint-watcher:20250819160514-a0f3b5f
+        imagePullPolicy: IfNotPresent
+        # Kopf CLI already set as ENTRYPOINT in Dockerfile; override/env is optional
+        # command: ["kopf", "run", "--standalone", "/app/operator.py"]
+        env:
+        # Optional: make label/annotation keys configurable
+        - name: CHECKPOINT_LABEL
+          value: "snap.weaversoft.io/checkpoint-me"
+        - name: ANN_REPO
+          value: "snap.weaversoft.io/repo"
+        - name: ANN_FALLBACK
+          value: "snap.weaversoft.io/fallback"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        securityContext:
+          # Compatible with OpenShift restricted SCC
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+      securityContext:
+        runAsNonRoot: true
+        # OpenShift assigns a random UID; this is just a hint for compatibility
+        # runAsUser: 1001
+      volumes: []
