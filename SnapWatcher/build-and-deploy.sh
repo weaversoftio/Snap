@@ -4,10 +4,10 @@ set -euo pipefail
 
 # Configuration via env vars or flags
 REGISTRY="${REGISTRY:-192.168.33.204:8082}"
-IMAGE_NAME="${IMAGE_NAME:-checkpoint-watcher}"
+IMAGE_NAME="${IMAGE_NAME:-snap-watcher}"
 IMAGE_TAG="${IMAGE_TAG:-}"
 NAMESPACE="${NAMESPACE:-snap}"
-RELEASE_NAME="${RELEASE_NAME:-checkpoint-watcher}"
+RELEASE_NAME="${RELEASE_NAME:-snap-watcher}"
 CHART_DIR="${CHART_DIR:-../helmchart}"
 DOCKERFILE_DIR="${DOCKERFILE_DIR:-.}"
 DEPLOYMENT_FILE="${DEPLOYMENT_FILE:-yamls/deployment.yaml}"
@@ -53,42 +53,42 @@ while oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME 2>/dev/null | grep -qvE 'NA
 done
 echo " "
 
-echo "Building image: $FULL_IMAGE"
-podman build -t "$FULL_IMAGE" "$DOCKERFILE_DIR"
-echo " "
+# echo "Building image: $FULL_IMAGE"
+# podman build -t "$FULL_IMAGE" "$DOCKERFILE_DIR"
+# echo " "
 
-echo "Pushing image: $FULL_IMAGE"
-podman push "$FULL_IMAGE"
-echo " "
+# echo "Pushing image: $FULL_IMAGE"
+# podman push "$FULL_IMAGE"
+# echo " "
 
-echo "Updating $DEPLOYMENT_FILE with new image..."
-sed -i.bak "s|image: .*|image: $FULL_IMAGE|" "$DEPLOYMENT_FILE"
-echo " "
+# echo "Updating $DEPLOYMENT_FILE with new image..."
+# sed -i.bak "s|image: .*|image: $FULL_IMAGE|" "$DEPLOYMENT_FILE"
+# echo " "
 
-echo "Applying updated deployment..."
-oc apply -f "$DEPLOYMENT_FILE"
-sleep 3
-echo " "
+# echo "Applying updated deployment..."
+# oc apply -f "$DEPLOYMENT_FILE"
+# sleep 3
+# echo " "
 
-echo "Applying updated rbac..."
-oc apply -f "$RBAC_FILE"
-sleep 3
-echo " "
+# echo "Applying updated rbac..."
+# oc apply -f "$RBAC_FILE"
+# sleep 3
+# echo " "
 
-echo "Waiting for new pod to be ready..."
-while true; do
-  POD=$(oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-  if [[ -n "$POD" ]]; then
-    STATUS=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
-    if [[ "$STATUS" == "Running" ]]; then
-      echo "Pod $POD is running"
-      break
-    fi
-  fi
-  echo "  Waiting for pod..."
-  sleep 3
-done
-echo " "
+# echo "Waiting for new pod to be ready..."
+# while true; do
+#   POD=$(oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+#   if [[ -n "$POD" ]]; then
+#     STATUS=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
+#     if [[ "$STATUS" == "Running" ]]; then
+#       echo "Pod $POD is running"
+#       break
+#     fi
+#   fi
+#   echo "  Waiting for pod..."
+#   sleep 3
+# done
+# echo " "
 
-echo "Tailing logs from pod $POD..."
-oc logs -n "$NAMESPACE" "$POD" -f
+# echo "Tailing logs from pod $POD..."
+# oc logs -n "$NAMESPACE" "$POD" -f

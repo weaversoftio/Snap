@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: checkpoint-watcher
+  name: snap-watcher
   namespace: snap
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: checkpoint-watcher-clusterrole
+  name: snap-watcher-clusterrole
 rules:
   - apiGroups: [""]
     resources: ["pods"]
@@ -29,12 +29,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: checkpoint-watcher-clusterrolebinding
+  name: snap-watcher-clusterrolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: checkpoint-watcher-clusterrole
+  name: snap-watcher-clusterrole
 subjects:
   - kind: ServiceAccount
-    name: checkpoint-watcher
+    name: snap-watcher
     namespace: snap

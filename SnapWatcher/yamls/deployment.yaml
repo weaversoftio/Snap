@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: checkpoint-watcher
+  name: snap-watcher
   namespace: snap
   labels:
-    app: checkpoint-watcher
+    app: snap-watcher
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: checkpoint-watcher
+      app: snap-watcher
   template:
     metadata:
       labels:
-        app: checkpoint-watcher
+        app: snap-watcher
     spec:
-      serviceAccountName: checkpoint-watcher
+      serviceAccountName: snap-watcher
       # Attach image pull secret if your registry is private
       imagePullSecrets:
       - name: nexus-registry-secret
       containers:
       - name: operator
-        image: 192.168.33.204:8082/checkpoint-watcher:20250819160514-a0f3b5f
+        image: 192.168.33.204:8082/snap-watcher:20250819160514-a0f3b5f
         imagePullPolicy: IfNotPresent
         # Kopf CLI already set as ENTRYPOINT in Dockerfile; override/env is optional
         # command: ["kopf", "run", "--standalone", "/app/operator.py"]
