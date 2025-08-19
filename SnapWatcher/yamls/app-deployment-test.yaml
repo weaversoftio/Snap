@@ -8,16 +8,14 @@ spec:
   selector:
     matchLabels:
       app: nginx
-      snap.weaversoft.io/checkpoint-me: "true"   # <-- match the handler
+      snap.weaversoft.io/snap: "true"   # <-- match the handler
+      grus.weaversoft.io/mutated: "false"   # <-- match the handler
   template:
     metadata:
       labels:
         app: nginx
-        snap.weaversoft.io/checkpoint-me: "true" # <-- required
-      # remove these so the handler doesn't skip:
-      # annotations:
-      #   snap.weaversoft.io/repo: "snap-checkpoints/custom-namespace-nginx"
-      #   snap.weaversoft.io/fallback: "false"
+        snap.weaversoft.io/snap: "true" # <-- required
+        grus.weaversoft.io/mutated: "false" # <-- required
     spec:
       containers:
         - name: nginx

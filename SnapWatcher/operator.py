@@ -1,13 +1,22 @@
 import kopf
 import logging
-from datetime import datetime, timezone
+from kubernetes import client, config
 
-# In-memory dedupe: remember which Pod UIDs we've already checkpointed.
-# (Clears naturally when the operator restarts; good enough for ephemeral pods.)
+# Track checkpointed pods
 _ALREADY_CHECKPOINTED = set()
 
+# Make sure client is usable inside cluster
+config.load_incluster_config()
+apps_api = client.AppsV1Api()
 
-@kopf.on.event('pods', labels={'snap.weaversoft.io/checkpoint-me': 'true'})
+
+@kopf.on.event(
+    'pods',
+    labels={
+        'snap.weaversoft.io/snap': 'true',
+        'grus.weaversoft.io/mutated': 'false',
+    },
+)
 async def on_pod_event(event, body, logger, **kwargs):
     evt_type = (event or {}).get("type") or "UNKNOWN"
 
@@ -19,21 +28,8 @@ async def on_pod_event(event, body, logger, **kwargs):
     name  = metadata.get("name", "-")
     uid   = metadata.get("uid")
 
-    # --- ignore deletions & terminating pods entirely ---
+    # --- ignore deletions & terminating pods ---
     if evt_type == "DELETED" or metadata.get("deletionTimestamp"):
-        return
-
-    # Ignore pods that already carry repo & fallback annotations
-    annotations = metadata.get("annotations", {}) or {}
-    if "snap.weaversoft.io/repo" in annotations and "snap.weaversoft.io/fallback" in annotations:
-        logger.info(
-            f"Annotations Detected!!, I'm not going to checkpoint this...\n"
-            f"  Event:      {evt_type}\n"
-            f"  Namespace:  {ns}\n"
-            f"  Deployment: -\n"
-            f"  Pod:        {name}\n"
-            f"  Container:  {(spec.get('containers') or [{}])[0].get('name', '-')}"
-        )
         return
 
     # Must be Running
@@ -46,7 +42,7 @@ async def on_pod_event(event, body, logger, **kwargs):
     if not is_ready:
         return
 
-    # At least one container started & in "running" state
+    # At least one container started & running
     started = False
     for cs in status.get("containerStatuses", []) or []:
         state = cs.get("state", {}) or {}
@@ -56,23 +52,63 @@ async def on_pod_event(event, body, logger, **kwargs):
     if not started:
         return
 
-    # --- reduce duplicates: fire only once per Pod UID after it becomes Ready ---
+    # --- reduce duplicates ---
     if uid in _ALREADY_CHECKPOINTED:
         return
     _ALREADY_CHECKPOINTED.add(uid)
 
-    # Best-effort container name (first container)
+    # Extract container name (first container)
     container_name = "-"
     containers = spec.get("containers") or []
     if containers:
         container_name = containers[0].get("name", "-")
 
-    # Print the message (with event type first, as you asked)
+    # --- resolve Deployment owner ---
+    deployment_name = "-"
+    owner_refs = metadata.get("ownerReferences", []) or []
+    for ref in owner_refs:
+        if ref.get("kind") == "ReplicaSet":
+            rs_name = ref.get("name")
+            try:
+                rs = apps_api.read_namespaced_replica_set(rs_name, ns)
+                for rs_owner in rs.metadata.owner_references or []:
+                    if rs_owner.kind == "Deployment":
+                        deployment_name = rs_owner.name
+                        break
+            except Exception as e:
+                logger.warning(f"Failed to resolve Deployment from ReplicaSet {rs_name}: {e}")
+        elif ref.get("kind") == "Deployment":
+            deployment_name = ref.get("name")
+            break
+
     logger.info(
         f"Now we should checkpoint\n"
         f"  Event:      {evt_type}\n"
         f"  Namespace:  {ns}\n"
-        f"  Deployment: -\n"
+        f"  Deployment: {deployment_name}\n"
         f"  Pod:        {name}\n"
         f"  Container:  {container_name}"
     )
+    # -----------------------------------------------------------------
+    # Send checkpoint request to snap-back
+    #
+    # NOTE: This request will internally engage the kubelet endpoint at:
+    #   {kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}
+    # -----------------------------------------------------------------
+    # try:
+    #     req = PodCheckpointRequest(
+    #         pod_name=name,
+    #         namespace=ns,
+    #         node_name=node_name,
+    #         container_name=container_name,
+    #         kube_api_address="https://<cluster_kube_api:port>",
+    #     )
+    #     resp = requests.post(
+    #         "http://<snap-back-api>/kubelet/checkpoint",
+    #         json=req.dict(),
+    #         timeout=5,
+    #     )
+    #     resp.raise_for_status()
+    #     logger.info(f"Checkpoint request sent successfully: {resp.status_code}")
+    # except Exception as e:
+    #     logger.error(f"Failed to send checkpoint request: {e}")

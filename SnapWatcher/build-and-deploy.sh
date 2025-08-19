@@ -38,12 +38,10 @@ FULL_IMAGE="$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
 
 echo "Deleting existing deployment..."
 oc delete -f "$DEPLOYMENT_FILE" --ignore-not-found=true
-sleep 3
 echo " "
 
 echo "Deleting existing RBAC..."
 oc delete -f "$RBAC_FILE" --ignore-not-found=true
-sleep 3
 echo " "
 
 echo "Waiting for old pods to terminate..."
@@ -53,42 +51,41 @@ while oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME 2>/dev/null | grep -qvE 'NA
 done
 echo " "
 
-# echo "Building image: $FULL_IMAGE"
-# podman build -t "$FULL_IMAGE" "$DOCKERFILE_DIR"
-# echo " "
 
-# echo "Pushing image: $FULL_IMAGE"
-# podman push "$FULL_IMAGE"
-# echo " "
+echo "Building image: $FULL_IMAGE"
+podman build -t "$FULL_IMAGE" "$DOCKERFILE_DIR"
+echo " "
 
-# echo "Updating $DEPLOYMENT_FILE with new image..."
-# sed -i.bak "s|image: .*|image: $FULL_IMAGE|" "$DEPLOYMENT_FILE"
-# echo " "
+echo "Pushing image: $FULL_IMAGE"
+podman push "$FULL_IMAGE"
+echo " "
 
-# echo "Applying updated deployment..."
-# oc apply -f "$DEPLOYMENT_FILE"
-# sleep 3
-# echo " "
+echo "Updating $DEPLOYMENT_FILE with new image..."
+sed -i.bak "s|image: .*|image: $FULL_IMAGE|" "$DEPLOYMENT_FILE"
+echo " "
 
-# echo "Applying updated rbac..."
-# oc apply -f "$RBAC_FILE"
-# sleep 3
-# echo " "
+echo "Applying updated deployment..."
+oc apply -f "$DEPLOYMENT_FILE"
+echo " "
 
-# echo "Waiting for new pod to be ready..."
-# while true; do
-#   POD=$(oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-#   if [[ -n "$POD" ]]; then
-#     STATUS=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
-#     if [[ "$STATUS" == "Running" ]]; then
-#       echo "Pod $POD is running"
-#       break
-#     fi
-#   fi
-#   echo "  Waiting for pod..."
-#   sleep 3
-# done
-# echo " "
+echo "Applying updated rbac..."
+oc apply -f "$RBAC_FILE"
+echo " "
 
-# echo "Tailing logs from pod $POD..."
-# oc logs -n "$NAMESPACE" "$POD" -f
+echo "Waiting for new pod to be ready..."
+while true; do
+  POD=$(oc get pods -n "$NAMESPACE" -l app=$IMAGE_NAME -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$POD" ]]; then
+    STATUS=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.status.phase}')
+    if [[ "$STATUS" == "Running" ]]; then
+      echo "Pod $POD is running"
+      break
+    fi
+  fi
+  echo "  Waiting for pod..."
+  sleep 3
+done
+echo " "
+
+echo "Tailing logs from pod $POD..."
+oc logs -n "$NAMESPACE" "$POD" -f
