@@ -1,2 +1,4 @@
-kopf==1.37.4
+kopf>=1.37.2
 kubernetes>=26.1.0
+requests>=2.31.0
+pydantic>=2.0.0

@@ -1,6 +1,8 @@
 import kopf
 import logging
+import requests
 from kubernetes import client, config
+from pydantic import BaseModel
 
 # Track checkpointed pods
 _ALREADY_CHECKPOINTED = set()
@@ -8,6 +10,13 @@ _ALREADY_CHECKPOINTED = set()
 # Make sure client is usable inside cluster
 config.load_incluster_config()
 apps_api = client.AppsV1Api()
+
+class PodCheckpointRequest(BaseModel):
+    pod_name: str
+    namespace: str
+    node_name: str
+    container_name: str
+    kube_api_address: str
 
 
 @kopf.on.event(
@@ -27,6 +36,7 @@ async def on_pod_event(event, body, logger, **kwargs):
     ns    = metadata.get("namespace", "-")
     name  = metadata.get("name", "-")
     uid   = metadata.get("uid")
+    node_name = spec.get("nodeName", "-")   # <-- node name here
 
     # --- ignore deletions & terminating pods ---
     if evt_type == "DELETED" or metadata.get("deletionTimestamp"):
@@ -87,8 +97,10 @@ async def on_pod_event(event, body, logger, **kwargs):
         f"  Namespace:  {ns}\n"
         f"  Deployment: {deployment_name}\n"
         f"  Pod:        {name}\n"
-        f"  Container:  {container_name}"
+        f"  Container:  {container_name}\n"
+        f"  Node:       {node_name}"
     )
+
     # -----------------------------------------------------------------
     # Send checkpoint request to snap-back
     #

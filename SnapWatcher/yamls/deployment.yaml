@@ -21,7 +21,7 @@ spec:
       - name: nexus-registry-secret
       containers:
       - name: operator
-        image: 192.168.33.204:8082/snap-watcher:20250819173548-1e4ed9f
+        image: 192.168.33.204:8082/snap-watcher:20250819180011-1b65e13
         imagePullPolicy: IfNotPresent
         # Kopf CLI already set as ENTRYPOINT in Dockerfile; override/env is optional
         # command: ["kopf", "run", "--standalone", "/app/operator.py"]
