@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: 192.168.33.204:8082/snap-watcher
-  pullPolicy: IfNotPresent
+  repository: 192.168.33.204:8082/snapwatch
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "20250819180011-1b65e13"
+  tag: "latest"
 
 imagePullSecrets:
   - name: nexus-registry-secret
