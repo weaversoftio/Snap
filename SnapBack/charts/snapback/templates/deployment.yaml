@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snapback
+  namespace: snap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: snapback
+  template:
+    metadata:
+      labels:
+        app: snapback
+    spec:
+      serviceAccountName: snapback
+      imagePullSecrets:
+        - name: nexus-registry-secret
+      containers:
+      - name: snapback
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8443
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+      volumes:
+      - name: certs
+        secret:
+          secretName: snapback-tls

@@ -1,0 +1,130 @@
+---
+- name: Ensure CRIU, CRI-O, SELinux, and runc are properly configured
+  hosts: nodes
+  gather_facts: no
+  become: yes
+
+  vars:
+    crio_conf_path: /etc/crio/crio.conf.d/05-enable-criu
+    runc_version_required: "1.2.4"
+    runc_path: "/usr/bin/runc"
+    runc_url: "{{ fastapi_host }}/download/runc/{{ runc_version_required }}"
+    download_path: "/tmp/runc.amd64"
+
+  tasks:
+    - name: Get current runc version
+      shell: runc --version | head -n 1 | awk '{print $3}'
+      register: current_runc_version
+      changed_when: false
+
+    - name: Check if runc version is lower than required
+      set_fact:
+        current_runc_version_list: "{{ current_runc_version.stdout.split('.') }}"
+        runc_version_required_list: "{{ runc_version_required.split('.') }}"
+
+    - name: Compare versions
+      set_fact:
+        runc_version_update_needed: "{{ current_runc_version.stdout < runc_version_required }}"
+
+    - name: Update runc to a specific version
+      when: runc_version_update_needed
+      block:
+        - name: Download runc binary to /tmp
+          get_url:
+            url: "{{ runc_url }}"
+            dest: "{{ download_path }}"
+            mode: '0755'
+          register: download_result
+          failed_when: download_result is failed
+          changed_when: download_result is changed
+
+        - name: Remount /usr as writable
+          shell: mount -o remount,rw /usr
+          register: remount_rw_result
+          failed_when: remount_rw_result.rc != 0
+          changed_when: remount_rw_result.rc == 0
+
+        - name: Backup existing runc binary if it exists
+          shell: |
+            if [ -f "{{ runc_path }}" ]; then
+              cp "{{ runc_path }}" "{{ runc_path }}.bak"
+            fi
+          register: backup_result
+          failed_when: backup_result.rc != 0
+          changed_when: backup_result.rc == 0
+
+        - name: Replace the runc binary
+          shell: |
+            mv "{{ download_path }}" "{{ runc_path }}"
+            chmod +x "{{ runc_path }}"
+          register: replace_result
+          failed_when: replace_result.rc != 0
+          changed_when: replace_result.rc == 0
+
+        - name: Verify the runc installation
+          shell: "{{ runc_path }} --version"
+          register: verify_result
+          failed_when: verify_result.rc != 0
+          changed_when: false
+
+        - name: Display success message
+          debug:
+            msg: "runc has been successfully updated to version {{ runc_version_required }}."
+          when: verify_result.rc == 0
+
+    - name: Ensure CRI-O config file exists
+      ansible.builtin.file:
+        path: "{{ crio_conf_path }}"
+        state: touch
+        mode: '0644'
+
+    - name: Ensure '[crio.runtime]' and 'enable_criu_support = true' is present in CRI-O config
+      ansible.builtin.lineinfile:
+        path: "{{ crio_conf_path }}"
+        line: '[crio.runtime]'
+        create: yes
+        state: present
+
+    - name: Ensure 'enable_criu_support = true' is present under '[crio.runtime]'
+      ansible.builtin.lineinfile:
+        path: "{{ crio_conf_path }}"
+        line: 'enable_criu_support = true'
+        create: yes
+        insertafter: '[crio.runtime]'
+        state: present
+      notify: Restart CRI-O
+
+    - name: Ensure '/etc/criu/runc.conf' contains only 'tcp-close'
+      ansible.builtin.copy:
+        content: "tcp-close\nghost-limit 100M\n"
+        dest: /etc/criu/runc.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Get current SELinux mode
+      ansible.builtin.command: getenforce
+      register: selinux_status
+      changed_when: false
+
+    - name: Show current SELinux status
+      ansible.builtin.debug:
+        msg: "Current SELinux mode is: '{{ selinux_status.stdout }}'"
+
+    - name: Set SELinux to Permissive temporarily
+      ansible.builtin.command: setenforce 0
+      when: selinux_status.stdout | lower | trim != "permissive"
+
+    - name: Ensure SELinux is permanently set to Permissive in config
+      ansible.builtin.lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=permissive'
+        create: yes
+        state: present
+
+  handlers:
+    - name: Restart CRI-O
+      ansible.builtin.service:
+        name: crio
+        state: restarted
