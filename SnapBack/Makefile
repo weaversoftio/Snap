@@ -21,7 +21,7 @@ install: certs build push
 	--set webhook.caBundle="$$(cat tls.crt | base64 -w0)"
 
 clean:
-	helm delete snapback -n snap || true
+	helm delete snapback -n snap
 	rm -f tls.crt tls.key tls.csr
 
 .PHONY: certs build push install clean

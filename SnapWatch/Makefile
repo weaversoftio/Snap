@@ -10,6 +10,6 @@ install: build push
 	helm upgrade --install snapwatch ./charts/snapwatch -n snap 
 
 clean:
-	helm delete snapwatch -n snap || true
+	helm delete snapwatch -n snap
 
 .PHONY: build push install clean
