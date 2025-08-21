@@ -23,7 +23,7 @@ class PodCheckpointRequest(BaseModel):
     'pods',
     labels={
         'snap.weaversoft.io/snap': 'true',
-        'grus.weaversoft.io/mutated': 'false',
+        'snap.weaversoft.io/mutated': 'false',
     },
 )
 async def on_pod_event(event, body, logger, **kwargs):

@@ -22,6 +22,6 @@ webhooks:
         - key: snap.weaversoft.io/snap
           operator: In
           values: ["true"]
-        - key: grus.weaversoft.io/mutated
+        - key: snap.weaversoft.io/mutated
           operator: In
           values: ["false"]

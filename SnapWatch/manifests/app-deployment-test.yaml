@@ -9,13 +9,13 @@ spec:
     matchLabels:
       app: nginx
       snap.weaversoft.io/snap: "true"   # <-- match the handler
-      grus.weaversoft.io/mutated: "false"   # <-- match the handler
+      snap.weaversoft.io/mutated: "false"   # <-- match the handler
   template:
     metadata:
       labels:
         app: nginx
         snap.weaversoft.io/snap: "true" # <-- required
-        grus.weaversoft.io/mutated: "false" # <-- required
+        snap.weaversoft.io/mutated: "false" # <-- required
     spec:
       containers:
         - name: nginx

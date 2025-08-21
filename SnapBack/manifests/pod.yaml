@@ -4,7 +4,7 @@ metadata:
   name: snap-test
   labels:
     snap.weaversoft.io/snap: "true"
-    grus.weaversoft.io/mutated: "false"
+    snap.weaversoft.io/mutated: "false"
 spec:
   containers:
   - name: nginx

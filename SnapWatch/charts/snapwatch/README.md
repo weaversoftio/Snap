@@ -116,7 +116,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 SnapWatch monitors pods with the following labels:
 - `snap.weaversoft.io/snap: "true"`
-- `grus.weaversoft.io/mutated: "false"`
+- `snap.weaversoft.io/mutated: "false"`
 
 ### Checkpointing Process
 

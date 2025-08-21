@@ -24,7 +24,7 @@ SnapWatch operates as a Kubernetes operator that:
 
 1. **Monitors Pod Events**: Listens for pod events with labels:
    - `snap.weaversoft.io/snap: true`
-   - `grus.weaversoft.io/mutated: false`
+   - `snap.weaversoft.io/mutated: false`
 
 2. **Validates Pod State**: Ensures pods are:
    - In "Running" phase
@@ -144,7 +144,7 @@ metadata:
   name: my-app
   labels:
     snap.weaversoft.io/snap: "true"
-    grus.weaversoft.io/mutated: "false"
+    snap.weaversoft.io/mutated: "false"
 spec:
   containers:
   - name: app
@@ -168,7 +168,7 @@ spec:
       labels:
         app: checkpointed-app
         snap.weaversoft.io/snap: "true"
-        grus.weaversoft.io/mutated: "false"
+        snap.weaversoft.io/mutated: "false"
     spec:
       containers:
       - name: app

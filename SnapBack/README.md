@@ -97,7 +97,7 @@ DNS.2 = snapback-webhook.snap.svc.cluster.local
 ### Webhook Configuration
 The webhook is configured to intercept pods with specific labels:
 - `snap.weaversoft.io/snap: "true"`
-- `grus.weaversoft.io/mutated: "false"`
+- `snap.weaversoft.io/mutated: "false"`
 
 ### Image Registry Mapping
 The webhook automatically replaces:
@@ -123,7 +123,7 @@ oc apply -f pod.yaml
 Expected behavior:
 1. Pod creation request intercepted by webhook
 2. Container image modified from `docker.io/library/nginx:latest` to `registry.weaversoft.io/secure/nginx:latest`
-3. Label `grus.weaversoft.io/mutated` set to `"true"`
+3. Label `snap.weaversoft.io/mutated` set to `"true"`
 4. Pod created successfully with mutations applied
 
 ## Troubleshooting

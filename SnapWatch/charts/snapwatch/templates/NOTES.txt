@@ -29,7 +29,7 @@ To check if pods are being monitored:
 
 SnapWatch will automatically checkpoint pods with the following labels:
   - snap.weaversoft.io/snap: "true"
-  - grus.weaversoft.io/mutated: "false"
+  - snap.weaversoft.io/mutated: "false"
 
 Configuration:
   - Namespace: {{ include "snapwatch.namespace" . }}

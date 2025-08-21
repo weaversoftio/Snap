@@ -22,7 +22,7 @@ async def mutate_pods(request: Request):
     # Update label
     patches.append({
         "op": "replace",
-        "path": "/metadata/labels/grus.weaversoft.io~1mutated",
+        "path": "/metadata/labels/snap.weaversoft.io~1mutated",
         "value": "true"
     })
 
