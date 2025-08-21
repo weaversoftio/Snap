@@ -12,4 +12,4 @@ install: build push
 clean:
 	helm delete snapwatch -n snap || true
 
-.PHONY: certs build push install clean
+.PHONY: build push install clean
