@@ -3,7 +3,7 @@ import subprocess
 import json
 from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
-GRUS_API_URL = "http://192.168.33.216:8000"
+GRUS_API_URL = "http://snapapi.apps-crc.testing"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')

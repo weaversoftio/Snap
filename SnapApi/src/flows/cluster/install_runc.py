@@ -9,7 +9,7 @@ import socket
 from typing import List, Dict
 from routes.websocket import send_progress
 
-GRUS_API_URL = os.getenv("GRUS_API_URL", "http://192.168.33.216:8000")
+GRUS_API_URL = os.getenv("GRUS_API_URL", "http://snapapi.apps-crc.testing")
 
 
 class RunCResponse(BaseModel):

@@ -5,7 +5,7 @@ from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
 from routes.websocket import send_progress
 
-GRUS_API_URL = os.getenv("GRUS_API_URL", "http://192.168.33.216:8000")
+GRUS_API_URL = os.getenv("GRUS_API_URL", "http://snapapi.apps-crc.testing")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -32,9 +32,26 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
 
         await send_progress(username, {"progress": 15, "task_name": "Create Checkpoint", "message": f"Creating Checkpoint initiated, name: {pod_name}"})
 
-        # Get service account token
-        token = (await run(["oc", "whoami", "-t"])).stdout.strip()
-        print(f"Token: {token}")
+        # Get service account token - handle both in-cluster and external access
+        try:
+            # Try to read the service account token from the mounted volume (in-cluster)
+            with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as token_file:
+                token = token_file.read().strip()
+                print("Using in-cluster service account token")
+        except FileNotFoundError:
+            # Fallback to oc command for external access
+            token = (await run(["oc", "whoami", "-t"])).stdout.strip()
+            print("Using oc whoami token")
+        
+        print(f"Token: {token[:20]}...")  # Only show first 20 chars for security
+
+        # Handle different API address formats
+        if kube_api_address.startswith('kubernetes.default.svc'):
+            # Internal cluster access - ensure proper protocol and port
+            kube_api_address = f"https://kubernetes.default.svc:443"
+        elif not kube_api_address.startswith('http'):
+            # External access - ensure https protocol
+            kube_api_address = f"https://{kube_api_address}"
 
         # Construct the checkpoint endpoint
         kube_api_checkpoint_url = (
