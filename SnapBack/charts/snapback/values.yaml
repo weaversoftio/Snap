@@ -1,8 +1,0 @@
-image:
-  repository: 192.168.33.204:8082/snapback
-  tag: latest
-
-webhook:
-  tlsCrt: ""
-  tlsKey: ""
-  caBundle: ""

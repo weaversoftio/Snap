@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: snap-test
+  labels:
+    snap.weaversoft.io/snap: "true"
+spec:
+  containers:
+  - name: nginx
+    image: docker.io/library/nginx:latest

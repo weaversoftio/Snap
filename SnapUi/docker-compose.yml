@@ -1,20 +1,20 @@
 version: '3.8'
 
 services:
-  grus-admin:
+  snapapi-admin:
     build:
       context: .
       dockerfile: Dockerfile
-    image: localhost/grus-admin_frontend:latest 
+    image: localhost/snapapi-admin_frontend:latest 
     environment:
       - API_URL=http://192.168.33.216:8000
     ports:
       - "8080:80"
-    container_name: grus-admin
+    container_name: snapapi-admin
     restart: unless-stopped
     networks:
-      - grus-network
+      - snapapi-network
 
 networks:
-  grus-network:
+  snapapi-network:
     driver: bridge

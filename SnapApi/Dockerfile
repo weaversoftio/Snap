@@ -1,5 +1,5 @@
 # First stage: Build checkpointctl
-FROM golang:1.22.4 AS builder
+FROM golang:1.23 AS builder
 RUN git clone https://github.com/checkpoint-restore/checkpointctl.git && \
     cd checkpointctl && \
     make && \
@@ -34,16 +34,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Copy requirements file
-COPY requirements.txt .
+COPY src/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
-COPY . .
+COPY src/. .
 
 # Expose the port
 EXPOSE 8000
 
 # Run the application
-CMD ["/bin/bash", "/app/run-grus.sh"]
+CMD ["/bin/bash", "/app/run-snap.sh"]

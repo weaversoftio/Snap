@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "snapapi.fullname" . }}
+  labels:
+    {{- include "snapapi.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 8000
+      targetPort: api
+      protocol: TCP
+      name: api
+  selector:
+    {{- include "snapapi.selectorLabels" . | nindent 4 }}
