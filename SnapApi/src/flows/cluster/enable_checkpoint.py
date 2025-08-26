@@ -6,7 +6,7 @@ import re
 from typing import List, Dict, Any
 from routes.websocket import send_progress
 
-GRUS_API_URL = os.getenv("GRUS_API_URL", "http://snapapi.apps-crc.testing")
+SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
 
 class ClusterRequest(BaseModel):
     clusterType: str
@@ -29,7 +29,7 @@ async def enable_checkpointing(request: ClusterRequest, username: str):
     """
     Enables container checkpointing in an OpenShift or Kubernetes cluster.
     """
-    fastapi_host = GRUS_API_URL
+    fastapi_host = SNAP_API_URL
     await send_progress(username, {"progress": task_progress["Initiated"], "task_name": "Enabling Checkpointing", "message": f"Enabling checkpointing initiated with clusterName: {request.clusterName}"})
     try:
         if request.clusterType.lower() == "kubernetes":

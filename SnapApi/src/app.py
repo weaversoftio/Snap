@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
-import flows.grus_init
-flows.grus_init.grus_init()
+import flows.snap_init
+flows.snap_init.snap_init()
 
 # Import routers
 from routes.registry import router as registry_router
@@ -19,7 +19,7 @@ from routes.websocket import router as websocket_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
-origins_env = os.getenv("GRUS_ORIGINS", "http://localhost,http://localhost:3000,*")
+origins_env = os.getenv("SNAP_ORIGINS", "http://localhost,http://localhost:3000,*")
 origins = origins_env.split(",")
 
 # Initialize FastAPI app

@@ -22,6 +22,11 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8443
+        env:
+        - name: CLUSTER_NAME
+          value: {{ .Values.env.ClusterName | quote }}
+        - name: SNAPAPI_URL
+          value: {{ .Values.env.SnapApiUrl | quote }}
         volumeMounts:
         - name: certs
           mountPath: /certs

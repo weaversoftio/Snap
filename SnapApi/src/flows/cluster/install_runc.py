@@ -9,7 +9,7 @@ import socket
 from typing import List, Dict
 from routes.websocket import send_progress
 
-GRUS_API_URL = os.getenv("GRUS_API_URL", "http://snapapi.apps-crc.testing")
+SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
 
 
 class RunCResponse(BaseModel):
@@ -51,7 +51,7 @@ async def install_runc(request: RunCRequest, username: str):
 
         
         set_ansible_private_key_env(request.clusterName)
-        fastapi_host = GRUS_API_URL
+        fastapi_host = SNAP_API_URL
         try:
             # Run the Ansible playbook
             await send_progress(username, {"progress": 50,"task_name": "Installing RunC", "message": f"Running ansible playbook command"})

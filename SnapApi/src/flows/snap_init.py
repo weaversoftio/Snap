@@ -4,11 +4,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
-def grus_init():
+def snap_init():
     try:
-        # check if config/grus_init_done file exists
-        if os.path.exists("config/grus_init_done"):
-            print("GRUS is already initialized")
+        # check if config/snap_init_done file exists
+        if os.path.exists("config/snap_init_done"):
+            print("SNAP is already initialized")
             return
 
         # Ensure the required directories exist before creating files
@@ -52,13 +52,13 @@ def grus_init():
             json.dump({"userdetails": {"name": "Super Admin", "role": "admin", "username": "admin", "password": "admin"}, "name": "admin"}, f)
 
         # Mark initialization as done
-        with open("config/grus_init_done", "w") as f:
-            f.write("grus_init_done")
+        with open("config/snap_init_done", "w") as f:
+            f.write("snap_init_done")
 
-        print("GRUS initialization complete.")
+        print("SNAP initialization complete.")
 
     except Exception as e:
-        print("Failed to initialize grus, error: ", str(e))
+        print("Failed to initialize snap, error: ", str(e))
 
 # Run the function
-grus_init()
+snap_init()

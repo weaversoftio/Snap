@@ -97,7 +97,7 @@ const Login = () => {
             marginBottom: "-15px!important",
           }}
         >
-          GRUS
+          SNAP
         </Typography>
 
         <Box
@@ -107,7 +107,7 @@ const Login = () => {
             borderLeft: "1px solid white",
             paddingLeft: 1,
           }}
-          alt="GRUS logo"
+          alt="SNAP logo"
           src="/weaver_06.svg"
         />
 

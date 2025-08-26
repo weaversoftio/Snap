@@ -396,7 +396,7 @@ export default function AppContainer({ children }) {
                 Admin Panel
               </Typography>
               <Stack direction="row" spacing={1} alignItems="flex-end" divider={<Divider variant="inset" orientation="vertical" sx={{ borderColor: "white" }} flexItem />}>
-                <Typography variant="h6" sx={{ lineHeight: 1 }} noWrap component="div">GRUS</Typography>
+                <Typography variant="h6" sx={{ lineHeight: 1 }} noWrap component="div">SNAP</Typography>
                 <Box
                   component="img"
                   sx={{

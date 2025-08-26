@@ -124,8 +124,8 @@ affinity: {}
 
 # Environment variables for the application
 env:
-  API_URL: "http://snapapi.apps-crc.testing"
-  WS_URL: "ws://snapapi.apps-crc.testing"
+  API_URL: "http://127.0.0.1:8000"
+  WS_URL: "ws://127.0.0.1:8000"
 
 # This block is for setting up OpenShift routes for external access
 route:

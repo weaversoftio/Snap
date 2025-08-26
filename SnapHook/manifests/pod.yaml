@@ -1,10 +1,20 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: snap-test
   labels:
-    snap.weaversoft.io/snap: "true"
+    app: snap-test
 spec:
-  containers:
-  - name: nginx
-    image: docker.io/library/nginx:latest
+  replicas: 1
+  selector:
+    matchLabels:
+      app: snap-test
+  template:
+    metadata:
+      labels:
+        app: snap-test
+        snap.weaversoft.io/snap: "true"
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:latest

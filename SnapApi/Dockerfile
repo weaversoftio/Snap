@@ -11,7 +11,7 @@ FROM registry.access.redhat.com/ubi9/python-39
 USER root
 
 # Install system dependencies
-RUN dnf install -y wget buildah tar gzip --allowerasing curl libselinux-utils container-selinux \
+RUN dnf install -y wget buildah tar gzip skopeo --allowerasing curl libselinux-utils container-selinux \
     glibc glibc-langpack-en && dnf clean all
 
 # Set up environment

@@ -5,7 +5,7 @@ from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
 from routes.websocket import send_progress
 
-GRUS_API_URL = os.getenv("GRUS_API_URL", "http://snapapi.apps-crc.testing")
+SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -114,7 +114,7 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         debug_command = [
             "oc", "debug", f"node/{node_name}", "--",
             "chroot", "/host", "curl", "-X", "POST",
-            f"{GRUS_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}",
+            f"{SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}",
             "-H", "accept: application/json",
             "-H", "Content-Type: multipart/form-data",
             "-F", f"file=@{checkpoint_file_path}"

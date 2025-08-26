@@ -38,7 +38,7 @@ def upload_checkpoint(file: IO, checkpoint_path: Union[str, Path], pod_name: str
         if not filename.endswith('.tar'):
             filename = f"{filename}.tar"
         # normalize the filename and remove any special characters
-        # example name : checkpoint-spring-music-deployment-6c584545fc-xwszv_grus-spring-music-2025-02-06T16:37:19Z
+        # example name : checkpoint-spring-music-deployment-6c584545fc-xwszv_snap-spring-music-2025-02-06T16:37:19Z
         filename = filename.replace('-', '_').replace(':', '_').replace('+', '_')
         print(f"Final filename: {filename}")
 
