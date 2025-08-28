@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request, UploadFile, File
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from pydantic import BaseModel
 from flows.config.registry.create_registry_config import create_registry_config , RegistryConfigRequest
 from flows.config.registry.update_registry_config import update_registry_config , RegistryConfigRequest
 from flows.config.registry.delete_registry_config import delete_registry_config , DeleteRegistryConfigRequest
@@ -205,6 +206,3 @@ async def update_playbook_config_endpoint(request: UpdatePlaybookRequest):
         return await update_playbook_config(request)
     except Exception as error:
         return {"success": False, "message": str(error)}
-
-
-

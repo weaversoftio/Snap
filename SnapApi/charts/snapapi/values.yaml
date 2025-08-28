@@ -12,6 +12,7 @@ image:
     pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
 checkpointPath: /opt/checkpoints
+configPath: /opt/config
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets:
   - name: nexus-registry-secret

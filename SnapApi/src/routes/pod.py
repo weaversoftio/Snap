@@ -7,6 +7,9 @@ from typing import Any, Dict, Optional, List
 import os
 import json
 import logging
+import glob
+import re
+from classes.imagetag import generate_image_tag, parse_image_tag, get_image_component
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -18,14 +21,14 @@ class PodWebhookData(BaseModel):
 
 # ------------------ helpers ------------------
 
-def _strip_sha_prefix(digest: str, short: bool = True) -> str:
+def _strip_sha_repo(digest: str, short: bool = True) -> str:
     """
-    Return the digest without the 'sha256:' prefix.
+    Return the digest without the 'sha256:' repo.
     If short=True, also truncate to first 12 chars.
     """
     if not digest:
         return "unknown"
-    # Remove sha256: prefix if present
+    # Remove sha256: repo if present
     digest = digest.split("sha256:", 1)[-1] if digest.startswith("sha256:") else digest
     return digest[:12] if short else digest
 
@@ -99,29 +102,66 @@ def _parse_registry_host_from_image(image: str) -> str:
         return first
     return "docker.io"
 
+def _normalize_registry_host(val: str) -> str:
+    """
+    Normalize registry host strings for comparison:
+    - strip scheme (http[s]://)
+    - trim trailing slashes/whitespace
+    - lowercase host portion (safe for hostnames; ports unaffected)
+    """
+    if not val:
+        return ""
+    # Remove scheme if present
+    val = re.sub(r"^[a-z]+://", "", val.strip(), flags=re.IGNORECASE)
+    # Drop any trailing slash
+    val = val.rstrip("/")
+    return val.lower()
+
+def _find_registry_creds(registry_host: str, base_dir: str = "/app/config/registry") -> Optional[Dict[str, str]]:
+    """
+    Scan all JSON files in base_dir for a matching registry host.
+    Match against `registry_config_details.registry` first, then `name`.
+    Returns dict with username/password if found (even if one is empty), else None.
+    """
+    try:
+        target = _normalize_registry_host(registry_host)
+        pattern = os.path.join(base_dir, "*.json")
+        for path in glob.glob(pattern):
+            try:
+                with open(path, "r") as f:
+                    cfg = json.load(f) or {}
+                details = (cfg.get("registry_config_details") or {})
+                # prefer explicit `registry` field; fallback to `name`
+                reg_val = details.get("registry") or cfg.get("name") or ""
+                if _normalize_registry_host(reg_val) == target:
+                    username = (details.get("username") or "").strip()
+                    password = (details.get("password") or "").strip()
+                    print(f"[skopeo] Matched registry config: {path} for host {registry_host}")
+                    return {"username": username, "password": password}
+            except Exception as e:
+                print(f"[skopeo] Could not parse config {path}: {e}")
+    except Exception as e:
+        print(f"[skopeo] Error scanning registry configs in {base_dir}: {e}")
+    return None
+
 async def _resolve_digest_with_skopeo(image_url: str) -> str:
     if not image_url:
         print("[skopeo] No image_url provided")
         return "unknown"
 
     registry_host = _parse_registry_host_from_image(image_url)
-    config_path = f"/app/config/registry/{registry_host}.json"
-    creds = None
 
     print(f"[skopeo] Trying to resolve digest for image: {image_url}")
-    print(f"[skopeo] Looking for config: {config_path}")
+    print(f"[skopeo] Looking for configs under /app/config/registry matching host: {registry_host}")
 
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r") as f:
-                cfg = json.load(f)
-            username = ((cfg.get("registry_config_details") or {}).get("username")) or ""
-            password = ((cfg.get("registry_config_details") or {}).get("password")) or ""
-            if username or password:
-                creds = f"{username}:{password}"
-                print(f"[skopeo] Found credentials for {registry_host}: {username}/***")
-        except Exception as e:
-            print(f"[skopeo] Could not parse config {config_path}: {e}")
+    creds = None
+    cred_obj = _find_registry_creds(registry_host)
+    if cred_obj is not None:
+        username = cred_obj.get("username", "")
+        password = cred_obj.get("password", "")
+        if username or password:
+            creds = f"{username}:{password}"
+            print(f"[skopeo] Found credentials for {registry_host}: {username}/***")
 
     cmd = ["skopeo", "inspect"]
     if creds:
@@ -142,7 +182,7 @@ async def _resolve_digest_with_skopeo(image_url: str) -> str:
             data = json.loads(proc.stdout)
             digest_full = data.get("Digest", "")
             print(f"[skopeo] Parsed Digest: {digest_full}")
-            return _strip_sha_prefix(digest_full) if digest_full else "unknown"
+            return _strip_sha_repo(digest_full) if digest_full else "unknown"
     except Exception as e:
         print(f"[skopeo] Exception running skopeo: {e}")
 
@@ -160,7 +200,7 @@ async def _extract_digest(pod: Dict[str, Any]) -> str:
     in_pod = _extract_digest_from_pod_obj(pod, prefer_container_name)
     print(f"[digest] From containerStatuses/spec pinned: {in_pod}")
     if in_pod:
-        return _strip_sha_prefix(in_pod)
+        return _strip_sha_repo(in_pod)
 
     # Step 2: fallback to skopeo
     image_ref = containers[0].get("image", "") if containers else ""
@@ -186,7 +226,8 @@ async def list_pods():
         if result.returncode == 0:
             return {"pods": result.stdout}
         else:
-            raise HTTPEngineError(status_code=500, detail="Failed to list pods")
+            # Fixed: use HTTPException (typo previously HTTPEngineError)
+            raise HTTPException(status_code=500, detail="Failed to list pods")
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Error executing kubectl command: {str(e)}")
     except Exception as e:
@@ -214,8 +255,34 @@ async def receive_pod_webhook(data: PodWebhookData):
         app = labels.get("app", "unknown")
         pod_template_hash = labels.get("pod-template-hash", "unknown")
 
-        # Resolve digest (without 'sha256:' prefix), or 'unknown'
+        # Resolve digest (without 'sha256:' repo), or 'unknown'
         orig_image_short_digest = await _extract_digest(pod)
+
+        # Extract registry from the first container's image
+        containers = spec.get("containers", [])
+        registry = "docker.io"  # default
+        if containers:
+            image_ref = containers[0].get("image", "")
+            registry = _parse_registry_host_from_image(image_ref)
+
+        # Use "snap" as default repo - could be made configurable
+        repo = "snap"
+
+        # Generate the complete image tag using our ImageTag class
+        generated_image_tag = None
+        try:
+            generated_image_tag = generate_image_tag(
+                registry=registry,
+                repo=repo,
+                cluster=data.cluster_name,
+                namespace=namespace,
+                app=app,
+                origImageShortDigest=orig_image_short_digest,
+                PodTemplateHash=pod_template_hash
+            )
+        except Exception as tag_error:
+            logger.warning(f"Failed to generate image tag: {tag_error}")
+            generated_image_tag = "generation-failed"
 
         # Pretty echo
         print(
@@ -226,6 +293,9 @@ async def receive_pod_webhook(data: PodWebhookData):
             f"- app: {app}\n"
             f"- origImageShortDigest: {orig_image_short_digest}\n"
             f"- PodTemplateHash: {pod_template_hash}\n"
+            f"- registry: {registry}\n"
+            f"- repo: {repo}\n"
+            f"- generated_image_tag: {generated_image_tag}\n"
             "-----------------------------------------------------------------------------"
         )
 
@@ -237,6 +307,9 @@ async def receive_pod_webhook(data: PodWebhookData):
             "origImageShortDigest": orig_image_short_digest,
             "app": app,
             "podTemplateHash": pod_template_hash,
+            "registry": registry,
+            "repo": repo,
+            "generated_image_tag": generated_image_tag,
         }
 
     except Exception as e:

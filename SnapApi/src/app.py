@@ -16,6 +16,7 @@ from routes.config import router as config_router
 from routes.cluster import router as cluster_router
 from routes.download import router as cluster_download
 from routes.websocket import router as websocket_router
+from routes.imagetag import router as imagetag_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -57,3 +58,4 @@ app.include_router(kubectl_router, prefix="/kubectl", tags=["kubectl"])
 app.include_router(config_router, prefix="/config", tags=["config"])
 app.include_router(cluster_download, prefix="/download", tags=["download"])
 app.include_router(websocket_router, prefix="/ws", tags=["websocket"])
+app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])

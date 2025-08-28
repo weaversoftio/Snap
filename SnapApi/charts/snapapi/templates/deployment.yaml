@@ -60,6 +60,8 @@ spec:
           volumeMounts:
             - name: app-volume
               mountPath: /app/checkpoints
+            - name: config-volume
+              mountPath: /app/config
             - name: crio-socket
               mountPath: /run/crio/crio.sock
           {{- with .Values.resources }}
@@ -70,6 +72,10 @@ spec:
         - name: app-volume
           hostPath:
             path: {{ .Values.checkpointPath }}
+            type: DirectoryOrCreate
+        - name: config-volume
+          hostPath:
+            path: {{ .Values.configPath }}
             type: DirectoryOrCreate
         - name: crio-socket
           hostPath:
