@@ -127,6 +127,13 @@ tolerations: []
 
 affinity: {}
 
+# Environment variables for snap registry configuration
+env:
+  snap_registry: "192.168.33.204:8082"
+  snap_repo: "snap_images"
+  snap_registry_user: "k8s"
+  snap_registry_pass: "k8s"
+
 # This block is for setting up OpenShift routes for external access
 route:
   enabled: true

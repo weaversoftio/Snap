@@ -57,6 +57,14 @@ spec:
               value: remote
             - name: CHECKPOINT_PATH
               value: {{ .Values.checkpointPath }}
+            - name: snap_registry
+              value: {{ .Values.env.snap_registry }}
+            - name: snap_repo
+              value: {{ .Values.env.snap_repo }}
+            - name: snap_registry_user
+              value: {{ .Values.env.snap_registry_user }}
+            - name: snap_registry_pass
+              value: {{ .Values.env.snap_registry_pass }}
           volumeMounts:
             - name: app-volume
               mountPath: /app/checkpoints

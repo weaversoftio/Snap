@@ -20,7 +20,11 @@ async def mutate_pods(request: Request):
 
     # Send pod data to SnapApi service
     cluster_name = os.getenv("CLUSTER_NAME", "Unknown")
-    snapapi_url = os.getenv("SNAPAPI_URL", "http://snapapi-service:8000")
+    snapapi_url = os.getenv("SNAPAPI_URL", "http://snapapi:8000")
+    
+    patches = []
+    should_patch_image = False
+    generated_image_tag = None
     
     try:
         # Send pod data as JSON to SnapApi
@@ -37,7 +41,18 @@ async def mutate_pods(request: Request):
             )
             
         if response.status_code == 200:
+            api_response = response.json()
             logger.info(f"Successfully sent pod data to SnapApi for cluster: {cluster_name}")
+            logger.info(f"SnapApi response: {api_response}")
+            
+            # Check if image exists in registry
+            if api_response.get("exist") == "True":
+                should_patch_image = True
+                generated_image_tag = api_response.get("generated_image_tag")
+                logger.info(f"Image exists in registry, will patch with: {generated_image_tag}")
+            else:
+                logger.info("Image does not exist in registry, skipping image patch")
+                
         else:
             logger.error(f"Failed to send pod data to SnapApi. Status: {response.status_code}")
             
@@ -45,14 +60,15 @@ async def mutate_pods(request: Request):
         logger.error(f"Error sending pod data to SnapApi: {str(e)}")
         # Continue with webhook processing even if API call fails
 
-    patches = []
+    # Only patch container images if the generated image exists in the registry
+    if should_patch_image and generated_image_tag:
+        for i, container in enumerate(pod["spec"].get("containers", [])):
+            logger.info(f"Patching container {i} image to: {generated_image_tag}")
+            patches.append({"op": "replace", "path": f"/spec/containers/{i}/image", "value": generated_image_tag})
+    else:
+        logger.info("Skipping image patching - image does not exist in registry or API call failed")
 
-    # Example: rewrite all container images
-    for i, container in enumerate(pod["spec"].get("containers", [])):
-        new = "docker.io/library/nginx:latest"
-        patches.append({"op": "replace", "path": f"/spec/containers/{i}/image", "value": new})
-
-    # Update label
+    # Always update the mutation label to indicate the webhook processed this pod
     patches.append({
         "op": "replace",
         "path": "/metadata/labels/snap.weaversoft.io~1mutated",
