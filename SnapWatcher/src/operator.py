@@ -1,6 +1,7 @@
 import kopf
 import logging
 import requests
+import os
 from kubernetes import client, config
 from pydantic import BaseModel
 
@@ -10,13 +11,10 @@ _ALREADY_CHECKPOINTED = set()
 # Make sure client is usable inside cluster
 config.load_incluster_config()
 apps_api = client.AppsV1Api()
+v1_api = client.CoreV1Api()
 
-class PodCheckpointRequest(BaseModel):
-    pod_name: str
-    namespace: str
-    node_name: str
-    container_name: str
-    kube_api_address: str
+class PodSpecCheckpointRequest(BaseModel):
+    pod_spec: dict
 
 
 @kopf.on.event(
@@ -91,7 +89,7 @@ async def on_pod_event(event, body, logger, **kwargs):
             deployment_name = ref.get("name")
             break
 
-    logger.info(
+    print(
         f"Now we should checkpoint\n"
         f"  Event:      {evt_type}\n"
         f"  Namespace:  {ns}\n"
@@ -102,25 +100,50 @@ async def on_pod_event(event, body, logger, **kwargs):
     )
 
     # -----------------------------------------------------------------
-    # Send checkpoint request to snap-back
-    #
-    # NOTE: This request will internally engage the kubelet endpoint at:
-    #   {kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}
+    # Send checkpoint request to SnapApi using new pod-spec endpoint
     # -----------------------------------------------------------------
-    # try:
-    #     req = PodCheckpointRequest(
-    #         pod_name=name,
-    #         namespace=ns,
-    #         node_name=node_name,
-    #         container_name=container_name,
-    #         kube_api_address="https://<cluster_kube_api:port>",
-    #     )
-    #     resp = requests.post(
-    #         "http://<snap-back-api>/kubelet/checkpoint",
-    #         json=req.dict(),
-    #         timeout=5,
-    #     )
-    #     resp.raise_for_status()
-    #     logger.info(f"Checkpoint request sent successfully: {resp.status_code}")
-    # except Exception as e:
-    #     logger.error(f"Failed to send checkpoint request: {e}")
+    try:
+        # Get SnapApi service URL from environment variable
+        snap_api_url = os.getenv("SNAP_API_URL", "http://snapapi.snap.svc.cluster.local:8000")
+        
+        # Get authentication token from service account
+        try:
+            with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as token_file:
+                auth_token = token_file.read().strip()
+        except FileNotFoundError:
+            logger.error("Service account token not found")
+            return
+        
+        # Prepare the complete pod specification for the request
+        pod_spec_request = PodSpecCheckpointRequest(pod_spec=body)
+        
+        # Prepare headers with authentication
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {auth_token}"
+        }
+        
+        # Send request to new pod-spec checkpoint endpoint
+        logger.info(f"Sending checkpoint request to SnapApi: {snap_api_url}")
+        resp = requests.post(
+            f"{snap_api_url}/checkpoint/pod-spec/checkpoint-and-push",
+            json=pod_spec_request.dict(),
+            headers=headers,
+            timeout=120,  # Increased timeout for checkpoint operations
+        )
+        resp.raise_for_status()
+        
+        response_data = resp.json()
+        logger.info(f"Checkpoint request sent successfully: {resp.status_code}")
+        logger.info(f"Response: {response_data}")
+        
+        if response_data.get("success"):
+            logger.info(f"Checkpoint and push completed successfully for pod {name}")
+            logger.info(f"Image tag: {response_data.get('image_tag', 'N/A')}")
+        else:
+            logger.error(f"Checkpoint operation failed: {response_data.get('message', 'Unknown error')}")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to send checkpoint request to SnapApi: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error during checkpoint request: {e}")

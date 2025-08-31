@@ -15,6 +15,8 @@ class PodCheckpointResponse(BaseModel):
     pod_id: Optional[str] = None
     container_ids: Optional[str] = None
     checkpoint_details: Optional[str] = None
+    checkpoint_path: Optional[str] = None
+    pod_name: Optional[str] = None
 
 class RegistryLoginRequest(BaseModel):
     registry_config_name: str
@@ -41,3 +43,13 @@ class CheckpointctlRequest(BaseModel):
     pod_name: str
     checkpoint_name: str
 
+class PodCheckpointAndPushRequest(BaseModel):
+    namespace: str
+    kube_api_address: str
+    cluster: str
+    app: str
+    origImageShortDigest: str
+    PodTemplateHash: str
+
+class PodSpecCheckpointRequest(BaseModel):
+    pod_spec: dict

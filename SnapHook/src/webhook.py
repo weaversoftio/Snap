@@ -42,16 +42,16 @@ async def mutate_pods(request: Request):
             
         if response.status_code == 200:
             api_response = response.json()
-            logger.info(f"Successfully sent pod data to SnapApi for cluster: {cluster_name}")
-            logger.info(f"SnapApi response: {api_response}")
+            print(f"Successfully sent pod data to SnapApi for cluster: {cluster_name}")
+            print(f"SnapApi response: {api_response}")
             
             # Check if image exists in registry
             if api_response.get("exist") == "True":
                 should_patch_image = True
                 generated_image_tag = api_response.get("generated_image_tag")
-                logger.info(f"Image exists in registry, will patch with: {generated_image_tag}")
+                print(f"Image exists in registry, will patch with: {generated_image_tag}")
             else:
-                logger.info("Image does not exist in registry, skipping image patch")
+                print("Image does not exist in registry, skipping image patch")
                 
         else:
             logger.error(f"Failed to send pod data to SnapApi. Status: {response.status_code}")
@@ -63,17 +63,21 @@ async def mutate_pods(request: Request):
     # Only patch container images if the generated image exists in the registry
     if should_patch_image and generated_image_tag:
         for i, container in enumerate(pod["spec"].get("containers", [])):
-            logger.info(f"Patching container {i} image to: {generated_image_tag}")
+            print(f"Patching container {i} image to: {generated_image_tag}")
             patches.append({"op": "replace", "path": f"/spec/containers/{i}/image", "value": generated_image_tag})
     else:
-        logger.info("Skipping image patching - image does not exist in registry or API call failed")
+        print("Skipping image patching - image does not exist in registry or API call failed")
 
-    # Always update the mutation label to indicate the webhook processed this pod
-    patches.append({
-        "op": "replace",
-        "path": "/metadata/labels/snap.weaversoft.io~1mutated",
-        "value": "true"
-    })
+    # Only add the mutation label if we actually patched the image
+    if should_patch_image and generated_image_tag:
+        patches.append({
+            "op": "replace",
+            "path": "/metadata/labels/snap.weaversoft.io~1mutated",
+            "value": "true"
+        })
+        print("Added mutated=true label because image was patched")
+    else:
+        print("Skipping mutated=true label - no image patching occurred")
 
     return JSONResponse({
         "apiVersion": "admission.k8s.io/v1",

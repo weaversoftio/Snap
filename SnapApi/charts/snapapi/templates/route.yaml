@@ -5,6 +5,9 @@ metadata:
   name: {{ include "snapapi.fullname" . }}-route
   labels:
     {{- include "snapapi.labels" . | nindent 4 }}
+  annotations:
+    haproxy.router.openshift.io/timeout: "300s"
+    haproxy.router.openshift.io/proxy-body-size: "500m"
 spec:
   host: {{ .Values.route.host }}
   to:

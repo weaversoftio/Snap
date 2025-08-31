@@ -17,4 +17,6 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: docker.io/library/nginx:latest
+        image: docker.io/nginxinc/nginx-unprivileged:stable
+        ports:
+        - containerPort: 8080

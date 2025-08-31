@@ -4,8 +4,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import FileResponse
 import shutil
-from classes.apirequests import PodCheckpointRequest, CheckpointctlRequest
+from classes.apirequests import PodCheckpointRequest, CheckpointctlRequest, PodCheckpointAndPushRequest, PodSpecCheckpointRequest
 from flows.checkpoint_container_kubelet import checkpoint_container_kubelet
+from flows.checkpoint_and_push_combined import checkpoint_and_push_combined_from_pod_spec
 from flows.proccess_utils import run
 from flows.upload_checkpoint import upload_checkpoint
 from flows.analytics.checkpoint_insights import CheckpointInsightsUseCase, CheckpointInsightsRequest
@@ -22,6 +23,54 @@ checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
 @router.post("/kubelet/checkpoint")
 async def create_checkpoint_kubelet(request: PodCheckpointRequest, username: str = Depends(verify_token)):
     return await checkpoint_container_kubelet(request, username)
+
+@router.post("/kubelet/checkpoint-and-push")
+async def create_checkpoint_and_push_combined(
+    request: PodCheckpointAndPushRequest, 
+    pod_name: str,
+    node_name: str,
+    container_name: str,
+    checkpoint_config_name: str,
+    username: str = Depends(verify_token)
+):
+    """
+    Combined endpoint that creates a checkpoint via kubelet and then creates and pushes a container image.
+    This performs both operations in a single API call with new tagging format.
+    Required parameters are passed as query parameters or path parameters.
+    """
+    
+    # Create a PodCheckpointRequest for the checkpoint operation
+    checkpoint_request = PodCheckpointRequest(
+        pod_name=pod_name,
+        namespace=request.namespace,
+        node_name=node_name,
+        container_name=container_name,
+        kube_api_address=request.kube_api_address
+    )
+    
+    # Call the combined function with new tagging parameters
+    return await checkpoint_and_push_combined(
+        checkpoint_request, 
+        checkpoint_config_name, 
+        username,
+        cluster=request.cluster,
+        namespace=request.namespace,
+        app=request.app,
+        origImageShortDigest=request.origImageShortDigest,
+        PodTemplateHash=request.PodTemplateHash
+    )
+
+@router.post("/pod-spec/checkpoint-and-push")
+async def create_checkpoint_and_push_from_pod_spec(
+    request: PodSpecCheckpointRequest,
+    username: str = Depends(verify_token)
+):
+    """
+    New combined endpoint that creates a checkpoint via kubelet and then creates and pushes a container image.
+    Extracts all required information from the pod specification and environment variables.
+    Uses environment variables for registry configuration and cluster information.
+    """
+    return await checkpoint_and_push_combined_from_pod_spec(request, username)
 
 
 
@@ -67,7 +116,7 @@ async def upload_checkpoint_route(pod_name: str, file: UploadFile = File(...)):
         if not filename:
             raise HTTPException(status_code=400, detail="No filename found in upload")
             
-        print(f"Extracted filename: {filename}")
+        print(f"Uploading: {filename}")
         result = upload_checkpoint(file.file, checkpoint_path, pod_name, filename)
         return result
     except Exception as e:
@@ -98,8 +147,7 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
         checkpoint_name = request.checkpoint_name
         checkpoint_dir = os.path.join(checkpoint_path, pod_name)
         checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.tar")
-        print(f"checkpointctl {checkpoint_file_path}")
-        logger.info(f"path: {checkpoint_file_path}")
+        print(f"Inspecting checkpoint: {checkpoint_name}")
         # Run the `checkpointctl` command
         await send_progress(username, {"progress": 70, "task_name": "Inspecting Checkpoint", "message": f"Running command checkpointctl inspect {checkpoint_file_path} --all --format json"})
         inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)

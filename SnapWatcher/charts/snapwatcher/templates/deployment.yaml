@@ -37,10 +37,10 @@ spec:
           env:
             - name: SNAPWATCH_LOG_LEVEL
               value: {{ .Values.snapwatcher.operator.logLevel | quote }}
-            - name: SNAPBACK_API_URL
-              value: {{ .Values.snapwatcher.checkpoint.snapBackApiUrl | quote }}
+            - name: SNAP_API_URL
+              value: {{ .Values.snapwatcher.checkpoint.SNAP_API_URL | quote }}
             - name: KUBE_API_ADDRESS
-              value: {{ .Values.snapwatcher.checkpoint.kubeApiAddress | quote }}
+              value: {{ .Values.snapwatcher.checkpoint.KUBE_API_ADDRESS | quote }}
             - name: REQUEST_TIMEOUT
               value: {{ .Values.snapwatcher.checkpoint.requestTimeout | quote }}
             {{- with .Values.env }}

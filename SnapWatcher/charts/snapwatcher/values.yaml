@@ -111,9 +111,9 @@ snapwatcher:
   # Configuration for checkpoint requests
   checkpoint:
     # SnapHook API endpoint for checkpoint requests
-    snapBackApiUrl: "http://snap-back-api"
+    SNAP_API_URL: "http://snapapi:8000"
     # Kubernetes API server address
-    kubeApiAddress: "https://kubernetes.default.svc"
+    KUBE_API_ADDRESS: "https://kubernetes.default.svc"
     # Request timeout in seconds
     requestTimeout: 5
 

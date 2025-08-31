@@ -12,4 +12,7 @@ install: build push
 clean:
 	helm delete snapapi -n snap
 
-.PHONY: build push install clean
+rebuild: clean install
+
+.PHONY: build push install clean rebuild
+

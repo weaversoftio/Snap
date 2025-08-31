@@ -8,11 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 
-COPY requirements.txt /app/
+COPY src/requirements.txt /app/
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY operator.py /app/
+COPY src/operator.py /app/
 
 RUN chmod -R g=u /app
 

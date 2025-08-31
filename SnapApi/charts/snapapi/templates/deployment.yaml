@@ -65,6 +65,9 @@ spec:
               value: {{ .Values.env.snap_registry_user }}
             - name: snap_registry_pass
               value: {{ .Values.env.snap_registry_pass }}
+            - name: SNAP_API_URL
+              value: {{ .Values.env.SNAP_API_URL }}
+
           volumeMounts:
             - name: app-volume
               mountPath: /app/checkpoints
