@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # --- settings you asked for ---
 RUNC_VERSION="1.2.4"
-RUNC_URL="https://snapapi.apps-crc.testing/download/runc/${RUNC_VERSION}"
+RUNC_URL="http://snapapi.apps-crc.testing/download/runc/${RUNC_VERSION}"
 RUNC_DIR="/opt/bin"
 RUNC_BIN="${RUNC_DIR}/runc"
 RUNC_VER_BIN="${RUNC_DIR}/runc-${RUNC_VERSION}"

@@ -45,49 +45,6 @@ async def _skopeo_extract_digest(image_ref: str) -> str:
     data = json.loads(out.stdout)
     return data.get("Digest", "")
 
-async def _image_exists_in_registry(full_ref: str, creds_user: str = "", creds_pass: str = "") -> bool:
-    """
-    Return True if image exists, False if 'manifest unknown'.
-    Any other error raises.
-    """
-    base_cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false"]
-    if creds_user and creds_pass:
-        base_cmd += ["--creds", f"{creds_user}:{creds_pass}"]
-    base_cmd += [f"docker://{full_ref}"]
-
-    try:
-        await run(base_cmd)
-        return True
-    except RuntimeError as e:
-        stderr = str(e)
-        # Treat 'manifest unknown' as NOT FOUND, not as a hard error
-        if "manifest unknown" in stderr.lower():
-            return False
-        # bubble up actual failures (auth, DNS, etc.)
-        raise
-
-async def _cluster_native_upload_checkpoint(
-    node_name: str,
-    namespace: str,
-    snapapi_deploy: str,
-    checkpoint_file_path: str,
-    dest_filename: str,
-):
-    """
-    Streams the checkpoint tar from the node to the SnapAPI POD (cluster network),
-    then POSTs to SnapAPI via localhost:8000 inside the pod.
-
-    Steps:
-      1) oc debug node/<node> -- chroot /host cat "<checkpoint_file_path>"
-      2) pipe into oc exec -n <namespace> deploy/<snapapi_deploy> -- sh -c 'cat > /tmp/<dest_filename>'
-      3) POST from inside the pod to http://localhost:8000/checkpoint/upload/<pod>?filename=<dest_filename>
-    """
-    # write file inside the pod
-    write_cmd = (
-        f"oc debug node/{node_name} -- chroot /host cat '{checkpoint_file_path}'"
-        f" | oc exec -n {namespace} deploy/{snapapi_deploy} -- sh -c 'cat > /tmp/{dest_filename}'"
-    )
-    await run(["/bin/sh", "-lc", write_cmd])
 
 # ----------------------------
 # Main entrypoint (DROP-IN)
@@ -151,8 +108,18 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
 
         # NEW: where our SnapAPI deployment lives (for oc exec / cluster-local service)
         snapapi_namespace = os.getenv("SNAPAPI_NAMESPACE", "snap")
-        snapapi_deploy_name = os.getenv("SNAPAPI_DEPLOYMENT", "snapapi")
-        SNAP_API_URL = os.getenv("SNAP_API_URL", "snapui.apps-crc.testing")
+         
+        # Dynamically get snapapi service cluster IP
+        try:
+            svc_cmd = ["oc", "get", "svc", "snapapi", "-n", snapapi_namespace, "-o", "jsonpath={.spec.clusterIP}"]
+            svc_result = await run(svc_cmd)
+            snapapi_cluster_ip = svc_result.stdout.strip()
+            SNAP_API_URL = f"http://{snapapi_cluster_ip}:8000"
+            print(f"Dynamically configured SNAP_API_URL: {SNAP_API_URL}")
+        except Exception as e:
+            # Fallback to environment variable or default
+            SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
+            print(f"Failed to get snapapi cluster IP, using fallback: {SNAP_API_URL}. Error: {e}")
 
         await send_progress(username, {
             "progress": 5,
@@ -186,6 +153,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         kube_api_checkpoint_url = (
             f"{kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}"
         )
+        print(kube_api_checkpoint_url)
         checkpoint_cmd = [
             "curl", "-k", "-X", "POST",
             "--header", f"Authorization: Bearer {token}",
@@ -237,11 +205,11 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             "message": f"Uploading checkpoint file from node: {checkpoint_file_path}"
         })
 
-        # Upload the checkpoint file from the node - exact copy from checkpoint_container_kubelet.py
-        SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
+        # Upload the checkpoint file from the node - use the dynamically configured SNAP_API_URL
+        # (SNAP_API_URL was already set above with the cluster IP)
         debug_command = [
             "oc", "debug", f"node/{node_name}", "--",
-            "chroot", "/host", "curl", "-v", "-X", "POST", "--max-time", "60", "--connect-timeout", "30",
+            "chroot", "/host", "curl", "-X", "POST",
             f"{SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}",
             "-H", "accept: application/json",
             "-H", "Content-Type: multipart/form-data",
@@ -250,6 +218,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         try:
             await send_progress(username, {"progress": 60, "task_name": "Create Checkpoint", "message": f"Uploading checkpoint file..."})
             print(f"Uploading checkpoint from node: {checkpoint_file_path}")
+            print(f"Curl Command: {debug_command}")
             print(f"Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
             
             # Add shorter timeout to prevent hanging
