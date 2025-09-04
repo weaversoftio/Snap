@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snap-test2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "snap-test2"
+  template:
+    metadata:
+      labels:
+        app: "snap-test2"
+        snap.weaversoft.io/snap: "true"
+    spec:
+      containers:
+      - name: time-printer
+        image: busybox:stable
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do date; sleep 1; done
+      imagePullSecrets:
+      - name: nexus-registry-secret 

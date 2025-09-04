@@ -19,7 +19,7 @@ async def mutate_pods(request: Request):
     pod = body["request"]["object"]
 
     # Send pod data to SnapApi service
-    cluster_name = os.getenv("CLUSTER_NAME", "Unknown")
+    cluster_name = os.getenv("CLUSTER_NAME", "Unknown").lower()
     snapapi_url = os.getenv("SNAPAPI_URL", "http://snapapi:8000")
     
     patches = []
@@ -79,13 +79,19 @@ async def mutate_pods(request: Request):
     else:
         print("Skipping mutated=true label - no image patching occurred")
 
-    return JSONResponse({
+    # Build response conditionally based on whether patches exist
+    response_data = {
         "apiVersion": "admission.k8s.io/v1",
         "kind": "AdmissionReview",
         "response": {
             "uid": uid,
-            "allowed": True,
-            "patchType": "JSONPatch",
-            "patch": b64encode(json.dumps(patches).encode()).decode()
+            "allowed": True
         }
-    })
+    }
+    
+    # Only include patch fields if we have patches to apply
+    if patches:
+        response_data["response"]["patchType"] = "JSONPatch"
+        response_data["response"]["patch"] = b64encode(json.dumps(patches).encode()).decode()
+    
+    return JSONResponse(response_data)

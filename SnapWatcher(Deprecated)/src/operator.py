@@ -1,12 +1,9 @@
 import kopf
-import logging
 import requests
 import os
 from kubernetes import client, config
 from pydantic import BaseModel
 
-# Track checkpointed pods
-_ALREADY_CHECKPOINTED = set()
 
 # Make sure client is usable inside cluster
 config.load_incluster_config()
@@ -20,8 +17,8 @@ class PodSpecCheckpointRequest(BaseModel):
 @kopf.on.event(
     'pods',
     labels={
-        'snap.weaversoft.io/snap': kopf.PRESENT,   # key exists
-        'snap.weaversoft.io/mutated': kopf.ABSENT # key does not exist
+        'snap.weaversoft.io/snap': kopf.PRESENT,   
+        'snap.weaversoft.io/mutated': kopf.ABSENT 
     },
 )
 async def on_pod_event(event, body, logger, **kwargs):
@@ -32,9 +29,8 @@ async def on_pod_event(event, body, logger, **kwargs):
     spec     = body.get("spec", {}) or {}
 
     ns    = metadata.get("namespace", "-")
-    name  = metadata.get("name", "-")
-    uid   = metadata.get("uid")
-    node_name = spec.get("nodeName", "-")   # <-- node name here
+    pod  = metadata.get("name", "-")
+    node_name = spec.get("nodeName", "-")   
 
     # --- ignore deletions & terminating pods ---
     if evt_type == "DELETED" or metadata.get("deletionTimestamp"):
@@ -60,41 +56,18 @@ async def on_pod_event(event, body, logger, **kwargs):
     if not started:
         return
 
-    # --- reduce duplicates ---
-    if uid in _ALREADY_CHECKPOINTED:
-        return
-    _ALREADY_CHECKPOINTED.add(uid)
-
     # Extract container name (first container)
     container_name = "-"
     containers = spec.get("containers") or []
     if containers:
         container_name = containers[0].get("name", "-")
 
-    # --- resolve Deployment owner ---
-    deployment_name = "-"
-    owner_refs = metadata.get("ownerReferences", []) or []
-    for ref in owner_refs:
-        if ref.get("kind") == "ReplicaSet":
-            rs_name = ref.get("name")
-            try:
-                rs = apps_api.read_namespaced_replica_set(rs_name, ns)
-                for rs_owner in rs.metadata.owner_references or []:
-                    if rs_owner.kind == "Deployment":
-                        deployment_name = rs_owner.name
-                        break
-            except Exception as e:
-                logger.warning(f"Failed to resolve Deployment from ReplicaSet {rs_name}: {e}")
-        elif ref.get("kind") == "Deployment":
-            deployment_name = ref.get("name")
-            break
 
     print(
         f"Now we should checkpoint\n"
         f"  Event:      {evt_type}\n"
         f"  Namespace:  {ns}\n"
-        f"  Deployment: {deployment_name}\n"
-        f"  Pod:        {name}\n"
+        f"  Pod:        {pod}\n"
         f"  Container:  {container_name}\n"
         f"  Node:       {node_name}"
     )
@@ -106,30 +79,14 @@ async def on_pod_event(event, body, logger, **kwargs):
         # Get SnapApi service URL from environment variable
         snap_api_url = os.getenv("SNAP_API_URL", "http://snapapi.snap.svc.cluster.local:8000")
         
-        # Get authentication token from service account
-        try:
-            with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as token_file:
-                auth_token = token_file.read().strip()
-        except FileNotFoundError:
-            logger.error("Service account token not found")
-            return
-        
         # Prepare the complete pod specification for the request
         pod_spec_request = PodSpecCheckpointRequest(pod_spec=body)
-        
-        # Prepare headers with authentication
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {auth_token}"
-        }
         
         # Send request to new pod-spec checkpoint endpoint
         logger.info(f"Sending checkpoint request to SnapApi: {snap_api_url}")
         resp = requests.post(
             f"{snap_api_url}/checkpoint/pod-spec/checkpoint-and-push",
-            json=pod_spec_request.dict(),
-            headers=headers,
-            timeout=120,  # Increased timeout for checkpoint operations
+            json=pod_spec_request.dict()
         )
         resp.raise_for_status()
         
@@ -138,7 +95,7 @@ async def on_pod_event(event, body, logger, **kwargs):
         logger.info(f"Response: {response_data}")
         
         if response_data.get("success"):
-            logger.info(f"Checkpoint and push completed successfully for pod {name}")
+            logger.info(f"Checkpoint and push completed successfully for pod {pod}")
             logger.info(f"Image tag: {response_data.get('image_tag', 'N/A')}")
         else:
             logger.error(f"Checkpoint operation failed: {response_data.get('message', 'Unknown error')}")

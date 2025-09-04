@@ -45,7 +45,9 @@ class ImageTagParser(BaseModel):
             components_dict = components.dict()
             
             # Build the tag according to the specified format
-            image_part = f"{components.registry}/{components.repo}/{components.cluster}-{components.namespace}-{components.app}"
+            # Convert repository portion to lowercase for Docker registry compatibility
+            repo_path = f"{components.cluster}-{components.namespace}-{components.app}".lower()
+            image_part = f"{components.registry}/{components.repo}/{repo_path}"
             tag_part = f"{components.origImageShortDigest}-{components.PodTemplateHash}"
             
             return f"{image_part}:{tag_part}"

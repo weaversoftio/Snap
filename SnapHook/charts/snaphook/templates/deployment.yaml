@@ -24,7 +24,7 @@ spec:
         - containerPort: 8443
         env:
         - name: CLUSTER_NAME
-          value: {{ .Values.env.ClusterName | quote }}
+          value: {{ .Values.env.snap_cluster | quote }}
         - name: SNAPAPI_URL
           value: {{ .Values.env.SnapApiUrl | quote }}
         volumeMounts:

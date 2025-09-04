@@ -1,49 +1,9 @@
 import os
-import subprocess
 import json
 from fastapi import HTTPException
 from classes.apirequests import PodSpecCheckpointRequest, PodCheckpointResponse
-from routes.websocket import send_progress
-
-# ----------------------------
-# Subprocess helper
-# ----------------------------
-async def run(command, capture_output=True, text=True, check=True):
-    """
-    Utility function to run subprocess commands.
-    IMPORTANT: To use pipes or shell features, pass:
-        run(["/bin/sh", "-lc", "<your shell cmd>"])
-    """
-    try:
-        result = subprocess.run(command, capture_output=capture_output, text=text, check=check)
-        return result
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Command failed: {' '.join(command)}\nExitCode: {e.returncode}\nSTDOUT:\n{e.stdout}\nSTDERR:\n{e.stderr}")
-
-# ----------------------------
-# Helpers
-# ----------------------------
-def _short_digest_from_full(full_digest: str) -> str:
-    """
-    full_digest like 'sha256:4833e2f3ecd4a163...'
-    returns '4833e2f3ecd4'
-    """
-    if not full_digest:
-        return ""
-    try:
-        return full_digest.split(":")[-1][:12]
-    except Exception:
-        return full_digest[:12]
-
-async def _skopeo_extract_digest(image_ref: str) -> str:
-    """
-    image_ref example: docker://docker.io/nginxinc/nginx-unprivileged:stable
-    returns full digest like 'sha256:4833e2f3...'
-    """
-    cmd = ["skopeo", "inspect", image_ref]
-    out = await run(cmd)
-    data = json.loads(out.stdout)
-    return data.get("Digest", "")
+from flows.proccess_utils import run
+from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod
 
 
 # ----------------------------
@@ -67,8 +27,23 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         pod_name = metadata.get("name")
         namespace = metadata.get("namespace")
         node_name = spec.get("nodeName")
-        app = labels.get("app")
-        pod_template_hash = labels.get("pod-template-hash")
+        
+        # If pod_name is None or empty, try to use generateName
+        if not pod_name:
+            generate_name = metadata.get("generateName", "")
+            if generate_name:
+                # Remove trailing dash from generateName
+                pod_name = generate_name.rstrip("-")
+                print(f"DEBUG - Checkpoint using generateName: '{generate_name}' -> pod_name: '{pod_name}'")
+        
+        # Extract app name using helper function
+        app = extract_app_name_from_pod(pod_name, labels)
+            
+        pod_template_hash = labels.get("pod-template-hash", "")
+        
+        # Provide default value for pod_template_hash if empty
+        if not pod_template_hash:
+            pod_template_hash = "no-hash"
 
         if not containers:
             raise ValueError("No containers found in pod spec")
@@ -85,7 +60,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             except Exception:
                 orig_image_short_digest = ""
 
-        # Validate required fields
+        # Validate required fields (now with defaults applied)
         required_fields = {
             "pod_name": pod_name,
             "namespace": namespace,
@@ -99,7 +74,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             raise ValueError(f"Missing required fields from pod spec: {missing}")
 
         # ----- Env/config -----
-        snap_cluster = os.getenv("snap_cluster", "crc")          # cluster identifier
+        snap_cluster = os.getenv("snap_cluster", "crc").lower()  # cluster identifier
         snap_registry = os.getenv("snap_registry", "docker.io")
         snap_repo = os.getenv("snap_repo", "snap_images")
         snap_registry_user = os.getenv("snap_registry_user", "")
@@ -121,20 +96,11 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
             print(f"Failed to get snapapi cluster IP, using fallback: {SNAP_API_URL}. Error: {e}")
 
-        await send_progress(username, {
-            "progress": 5,
-            "task_name": "Checkpoint and Push Combined",
-            "message": f"Starting combined checkpoint+push for pod: {pod_name}"
-        })
 
         # =========================
         # Phase 1: Create checkpoint
         # =========================
-        await send_progress(username, {
-            "progress": 10,
-            "task_name": "Create Checkpoint",
-            "message": "Creating checkpoint via kubelet"
-        })
+
 
         # Get service account token for kube-api call
         try:
@@ -159,11 +125,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             "--header", f"Authorization: Bearer {token}",
             kube_api_checkpoint_url
         ]
-        await send_progress(username, {
-            "progress": 30,
-            "task_name": "Create Checkpoint",
-            "message": f"Calling kubelet checkpoint API for {pod_name}/{container_name}"
-        })
+
         print(f"Creating checkpoint: {pod_name}/{container_name}")
         print(f"Checkpoint API URL: {kube_api_checkpoint_url}")
         
@@ -190,20 +152,12 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         
         print(f"Checkpoint created at: {checkpoint_file_path}")
 
-        await send_progress(username, {
-            "progress": 45,
-            "task_name": "Create Checkpoint",
-            "message": f"Checkpoint created: {checkpoint_file_path}"
-        })
+
 
         # =========================
         # Phase 1.5: Upload checkpoint file from the node (matching checkpoint_container_kubelet.py)
         # =========================
-        await send_progress(username, {
-            "progress": 55,
-            "task_name": "Create Checkpoint",
-            "message": f"Uploading checkpoint file from node: {checkpoint_file_path}"
-        })
+
 
         # Upload the checkpoint file from the node - use the dynamically configured SNAP_API_URL
         # (SNAP_API_URL was already set above with the cluster IP)
@@ -216,29 +170,22 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             "-F", f"file=@{checkpoint_file_path}"
         ]
         try:
-            await send_progress(username, {"progress": 60, "task_name": "Create Checkpoint", "message": f"Uploading checkpoint file..."})
             print(f"Uploading checkpoint from node: {checkpoint_file_path}")
             print(f"Curl Command: {debug_command}")
             print(f"Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
             
-            # Add shorter timeout to prevent hanging
-            import asyncio
-            try:
-                debug_output = await asyncio.wait_for(run(debug_command), timeout=90)  # 90 second timeout
-            except asyncio.TimeoutError:
-                print("Upload timeout after 90 seconds - trying alternative approach")
-                raise RuntimeError("Upload timeout - curl command hung")
-                
+            # Call debug command
+            print(f"Executing debug command: {debug_command}")
+            debug_output = await run(debug_command)
+            
             if debug_output.stdout:
                 print(f"Upload result: {debug_output.stdout[:200]}...")
             if debug_output.stderr:
                 print(f"Upload stderr: {debug_output.stderr[:200]}...")
-            await send_progress(username, {"progress": 65, "task_name": "Create Checkpoint", "message": f"Upload completed"})
             
             if debug_output.returncode != 0:
                 error_msg = f"Upload failed: {debug_output.stderr[:100]}..."
                 print(error_msg)
-                await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: {error_msg}"})
                 return {
                     "success": False,
                     "message": error_msg,
@@ -248,7 +195,6 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         except Exception as e:
             error_msg = f"Upload error: {str(e)}"
             print(error_msg)
-            await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: {error_msg}"})
             return {
                 "success": False,
                 "message": error_msg,
@@ -267,11 +213,6 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         # =========================
         # Phase 2: Build & Push image
         # =========================
-        await send_progress(username, {
-            "progress": 72,
-            "task_name": "Create and Push Checkpoint Container",
-            "message": "Preparing buildah container"
-        })
 
         # Resolve digest with skopeo if we don't have one from the image string
         if not orig_image_short_digest:
@@ -290,20 +231,21 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
 
         # Registry login (optional)
         if snap_registry_user and snap_registry_pass:
-            try:
-                await run(["buildah", "login", "--username", snap_registry_user, "--password", snap_registry_pass, snap_registry], check=True)
-            except Exception as e:
-                # Log but continue (might be a public/insecure registry)
-                await send_progress(username, {
-                    "progress": 74,
-                    "task_name": "Create and Push Checkpoint Container",
-                    "message": f"Registry login failed (continuing): {e}"
-                })
+            await run(["buildah", "login", "--username", snap_registry_user, "--password", snap_registry_pass, "--tls-verify=false", snap_registry], check=True)
+
 
         # Create scratch container, add checkpoint bits, annotate, commit, push
         newcontainer = (await run(["buildah", "from", "scratch"])).stdout.strip()
         try:
-            await run(["buildah", "add", newcontainer, f"./checkpoints/{pod_name}/{container_name}", "/"])
+            # Use the processed filename instead of container name
+            processed_filename = checkpoint_filename.replace('-', '_').replace(':', '_').replace('+', '_')
+            if not processed_filename.endswith('.tar'):
+                processed_filename = f"{processed_filename}.tar"
+            
+            checkpoint_file_in_pod = f"./checkpoints/{pod_name}/{processed_filename}"
+            print(f"Looking for checkpoint file at: {checkpoint_file_in_pod}")
+            
+            await run(["buildah", "add", newcontainer, checkpoint_file_in_pod, "/"])
             await run([
                 "buildah", "config",
                 f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={container_name}",
@@ -317,20 +259,9 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             except Exception:
                 pass
 
-        await send_progress(username, {
-            "progress": 90,
-            "task_name": "Create and Push Checkpoint Container",
-            "message": f"Pushing image: {image_tag}"
-        })
 
         # Push
         await run(["buildah", "push", "--tls-verify=false", image_tag], capture_output=True, text=True, check=True)
-
-        await send_progress(username, {
-            "progress": 100,
-            "task_name": "Create and Push Checkpoint Container",
-            "message": "Checkpoint image successfully committed and pushed"
-        })
 
         push_result = {"message": "Checkpoint image successfully committed and pushed", "image_tag": image_tag}
 
@@ -346,11 +277,6 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
 
     except Exception as e:
         err = f"Combined operation failed: {e}"
-        await send_progress(username, {
-            "progress": "failed",
-            "task_name": "Checkpoint and Push Combined",
-            "message": err
-        })
         return {
             "success": False,
             "message": err,

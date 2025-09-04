@@ -9,3 +9,5 @@ openai
 volatility3
 ansible
 pyyaml
+kopf>=1.37.2
+kubernetes>=26.1.0

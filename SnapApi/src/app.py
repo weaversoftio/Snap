@@ -3,8 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
+import threading
+import kopf
 import flows.snap_init
 flows.snap_init.snap_init()
+
+# Import operator functionality - this registers the kopf event handlers with the framework
+import flows.operator_watcher  # noqa: F401
 
 # Import routers
 from routes.registry import router as registry_router
@@ -59,3 +64,18 @@ app.include_router(config_router, prefix="/config", tags=["config"])
 app.include_router(cluster_download, prefix="/download", tags=["download"])
 app.include_router(websocket_router, prefix="/ws", tags=["websocket"])
 app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])
+
+# Start the integrated SnapWatcher operator
+@app.on_event("startup")
+async def startup_event():
+    """Start the integrated SnapWatcher operator in a background thread"""
+    def run_operator():
+        logger.info("Starting integrated SnapWatcher operator...")
+        kopf.run(
+            clusterwide=True
+        )
+    
+    # Start operator in a daemon thread
+    operator_thread = threading.Thread(target=run_operator, daemon=True)
+    operator_thread.start()
+    logger.info("SnapApi with integrated SnapWatcher operator started successfully")

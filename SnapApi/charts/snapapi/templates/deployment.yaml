@@ -57,6 +57,8 @@ spec:
               value: remote
             - name: CHECKPOINT_PATH
               value: {{ .Values.checkpointPath }}
+            - name: snap_cluster
+              value: {{ .Values.env.snap_cluster }}
             - name: snap_registry
               value: {{ .Values.env.snap_registry }}
             - name: snap_repo
