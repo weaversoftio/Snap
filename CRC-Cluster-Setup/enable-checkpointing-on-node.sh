@@ -129,13 +129,21 @@ show_effective_config() {
 
 main() {
   need_root
+  echo ""
   ensure_prereqs
+  echo ""
   ensure_dirs
+  echo ""
   ensure_criu_enabled
+  echo ""
   install_runc
+  echo ""
   point_crio_to_runc_path
+  echo ""
   maybe_restart_crio
+  echo ""
   show_effective_config
+  echo ""
   echo "DONE. You can now checkpoint containers using the Kubelet Checkpoint API."
 }
 

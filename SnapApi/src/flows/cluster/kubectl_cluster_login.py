@@ -29,20 +29,28 @@ async def kubectl_cluster_login(cluster_config_name: str, username: str):
         kube_api_url = cluster_config.cluster_config_details.kube_api_url
         kube_username = cluster_config.cluster_config_details.kube_username
         kube_password = cluster_config.cluster_config_details.kube_password
-        # ssh_key = base64.b64decode(cluster_config.cluster_config_details.ssh_key).decode()
+        auth_method = getattr(cluster_config.cluster_config_details, 'auth_method', 'username_password')
+        
         message=f"Logging in to the kubernetes cluster"
         await send_progress(username, {"progress": 16, "task_name": "Cluster Login", "message": message})
         print(f"Logging in to the kubernetes cluster with the given credentials: {kube_api_url}, {kube_username}, {kube_password}")
-        # await run(["oc", "login", kube_api_url, "--token", ssh_key, "--insecure-skip-tls-verify=true"])
-        if kube_username == "":
+        print(f"Authentication method: {auth_method}")
+        
+        # Determine authentication method - check auth_method field first, then fallback to username presence
+        use_token_auth = (auth_method == "token") or (not kube_username)
+        
+        if use_token_auth:
             # Use token-based login
+            print("Using token-based authentication")
             await run([
-                "oc", "login", kube_api_url,
+                "oc", "login", 
                 "--token", kube_password,
+                "--server", kube_api_url,
                 "--insecure-skip-tls-verify=true"
             ])
         else:
             # Use username/password-based login
+            print("Using username/password authentication")
             await run([
                 "oc", "login", kube_api_url,
                 "--username", kube_username,

@@ -19,6 +19,6 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            while true; do date; sleep 1; done
-      imagePullSecrets:
-      - name: nexus-registry-secret 
+            while true; do mount; sleep 60; done
+        imagePullSecrets:
+        - name: nexus-registry-secret 

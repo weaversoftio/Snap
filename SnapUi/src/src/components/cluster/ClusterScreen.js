@@ -47,7 +47,7 @@ const ClusterScreen = () => {
   const [statLoading, setStatLoading] = useState(false)
   const [stats, setStats] = useState({ total_pods: 0, total_checkpoints: 0 });
   const [playbookConfigs, setPlaybookConfigs] = useState([])
-  const [authenticationMethod, setAuthenticationMethod] = useState("username+password")
+  const [authenticationMethod, setAuthenticationMethod] = useState("username_password")
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -67,42 +67,70 @@ const ClusterScreen = () => {
   }, [kubeAuthenticated]);
 
   const handleSubmitCluster = async () => {
+    // Clear previous errors
+    setClusterFormErrors({})
+    
+    // Validation
+    const errors = {}
+    if (!clusterName.trim()) errors.name = "Cluster name is required"
+    if (!clusterUrl.trim()) errors.url = "Cluster API URL is required"
+    if (!nodesUsername.trim()) errors.nodesUsername = "Nodes username is required"
+    if (!clusterPassword.trim()) {
+      errors.password = authenticationMethod === "token" ? "Token is required" : "Password is required"
+    }
+    
+    if (authenticationMethod === "username_password") {
+      if (!clusterUsername.trim()) errors.username = "Username is required"
+      if (clusterPassword !== clusterConfirmPassword) errors.confirmPassword = "Passwords do not match"
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setClusterFormErrors(errors)
+      return
+    }
+
     const clusterData = {
       name: clusterName,
       kube_api_url: clusterUrl,
-      kube_username: authenticationMethod === "token" ? "" : clusterUsername,
+      kube_username: authenticationMethod === "token" ? null : clusterUsername,
       kube_password: clusterPassword,
       nodes_username: nodesUsername,
+      auth_method: authenticationMethod
     }
-    if (authenticationMethod !== "token" && clusterPassword !== clusterConfirmPassword) return setClusterFormErrors({ confirmPassword: "Password mismatch" })
-    if (!clusterPassword.trim()) return setClusterFormErrors(authenticationMethod === "token" ? {token: "Token is required"} : {confirmPassword: "Password mismatch"})
-    if (clusterEditing) {
-      enqueueSnackbar("Update cluster initiated...", { variant: "info" })
-      await clusterApi.update(clusterData)
-    } else {
-      enqueueSnackbar("Creating cluster initiated...", { variant: "info" })
-      await clusterApi.create(clusterData)
-    }
+    
+    try {
+      if (clusterEditing) {
+        enqueueSnackbar("Update cluster initiated...", { variant: "info" })
+        await clusterApi.update(clusterData)
+      } else {
+        enqueueSnackbar("Creating cluster initiated...", { variant: "info" })
+        await clusterApi.create(clusterData)
+      }
 
-    if (sshKey) {
-      const formData = new FormData()
-      formData.append("file", sshKey)
-      await clusterApi.uploadSshkey(clusterName, formData)
-      dispatch(clusterActions.getList())
+      if (sshKey) {
+        const formData = new FormData()
+        formData.append("file", sshKey)
+        await clusterApi.uploadSshkey(clusterName, formData)
+        dispatch(clusterActions.getList())
+      }
+      handleClearDialog()
+      enqueueSnackbar(`Cluster ${clusterEditing ? "updated" : "added"} successfully`, { variant: "success" })
+    } catch (error) {
+      console.error("Cluster operation error:", error)
+      enqueueSnackbar(`Failed to ${clusterEditing ? "update" : "create"} cluster`, { variant: "error" })
     }
-    handleClearDialog()
-    enqueueSnackbar(`Cluster ${clusterEditing ? "updated" : "added"} successfully`, { variant: "success" })
   }
 
   const handleShowClusterConfig = () => {
     const { name, cluster_config_details } = selectedCluster || {}
-    const { kube_api_url, kube_username, nodes_username } = cluster_config_details || {}
+    const { kube_api_url, kube_username, nodes_username, auth_method } = cluster_config_details || {}
     setClusterEditing(true)
     setClusterName(name)
     setClusterUrl(kube_api_url)
-    setAuthenticationMethod(kube_username ? "username+password" : "token")
-    setClusterUsername(kube_username)
-    setNodesUsername(nodes_username)
+    // Use auth_method if available, otherwise determine from username presence for backward compatibility
+    setAuthenticationMethod(auth_method || (kube_username ? "username_password" : "token"))
+    setClusterUsername(kube_username || "")
+    setNodesUsername(nodes_username || "")
     setDialogType("clusterForm")
   }
 
@@ -229,10 +257,11 @@ const ClusterScreen = () => {
       return (
         <TextField
           label="Token"
+          type="password"
           onChange={(e) => setClusterPassword(e.target.value)}
           value={clusterPassword}
-          helperText={clusterFormErrors?.token}
-          error={clusterFormErrors?.token}
+          helperText={clusterFormErrors?.password}
+          error={!!clusterFormErrors?.password}
         />
       )
     }
@@ -242,20 +271,23 @@ const ClusterScreen = () => {
           label="Cluster Username"
           onChange={(e) => setClusterUsername(e.target.value)}
           value={clusterUsername}
+          helperText={clusterFormErrors?.username}
+          error={!!clusterFormErrors?.username}
         />
         <TextField
           label="Password"
           type={"password"}
           onChange={(e) => setClusterPassword(e.target.value)}
           value={clusterPassword}
-          error={clusterFormErrors?.confirmPassword}
+          helperText={clusterFormErrors?.password}
+          error={!!clusterFormErrors?.password}
         />
         <TextField
           label="Confirm Password"
           type={"password"}
           onChange={(e) => setClusterConfirmPassword(e.target.value)}
           value={clusterConfirmPassword}
-          error={clusterFormErrors?.confirmPassword}
+          error={!!clusterFormErrors?.confirmPassword}
           helperText={clusterFormErrors?.confirmPassword}
         />
       </>
@@ -283,11 +315,15 @@ const ClusterScreen = () => {
             onChange={(e) => setClusterName(e.target.value)}
             value={clusterName}
             disabled={clusterEditing}
+            helperText={clusterFormErrors?.name}
+            error={!!clusterFormErrors?.name}
           />
           <TextField
             label="Cluster Api Url"
             onChange={(e) => setClusterUrl(e.target.value)}
             value={clusterUrl}
+            helperText={clusterFormErrors?.url}
+            error={!!clusterFormErrors?.url}
           />
 
           <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
@@ -297,7 +333,7 @@ const ClusterScreen = () => {
               onChange={(e) => setAuthenticationMethod(e.target.value)}
               label="Authentication Method"
             >
-              <MenuItem value={"username+password"} key={"username+password"}>{"Username + Password (default)"}</MenuItem>
+              <MenuItem value={"username_password"} key={"username_password"}>{"Username + Password (default)"}</MenuItem>
               <MenuItem value={"token"} key={"token"}>{"Token"}</MenuItem>
             </Select>
           </FormControl>
@@ -316,6 +352,8 @@ const ClusterScreen = () => {
             label="Nodes Username"
             onChange={(e) => setNodesUsername(e.target.value)}
             value={nodesUsername}
+            helperText={clusterFormErrors?.nodesUsername}
+            error={!!clusterFormErrors?.nodesUsername}
           />
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleSubmitCluster}>Submit</Button>
         </Box>
