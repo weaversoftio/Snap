@@ -337,12 +337,12 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
         return False
 
 
-def load_cluster_cache_config(snap_cluster: str) -> Dict[str, Any]:
+def load_cluster_cache_config(cluster_cache: str) -> Dict[str, Any]:
     """
-    Load cluster cache configuration from /config/clusterCache/{snap_cluster}.json
+    Load cluster cache configuration from /config/clusterCache/{cluster_cache}.json
     
     Args:
-        snap_cluster: The cluster name to load configuration for
+        cluster_cache: The cluster name to load configuration for
         
     Returns:
         Dictionary containing cluster cache configuration
@@ -350,9 +350,9 @@ def load_cluster_cache_config(snap_cluster: str) -> Dict[str, Any]:
     Raises:
         ValueError: If cluster cache configuration is not found
     """
-    cluster_cache_path = f"config/clusterCache/{snap_cluster}.json"
+    cluster_cache_path = f"config/clusterCache/{cluster_cache}.json"
     if not os.path.exists(cluster_cache_path):
-        raise ValueError(f"Cluster cache configuration not found for cluster: {snap_cluster}")
+        raise ValueError(f"Cluster cache configuration not found for cluster: {cluster_cache}")
     
     with open(cluster_cache_path, 'r') as f:
         cluster_cache_data = json.load(f)
@@ -410,12 +410,12 @@ def load_cluster_config(cluster_name: str) -> str:
     return cluster_data["cluster_config_details"]["kube_api_url"]
 
 
-def get_snap_config_from_cluster_cache(snap_cluster: str) -> Dict[str, str]:
+def get_snap_config_from_cluster_cache(cluster_cache: str) -> Dict[str, str]:
     """
     Get all snap configuration values from cluster cache, registry, and cluster configs.
     
     Args:
-        snap_cluster: The cluster name to load configuration for
+        cluster_cache: The cluster name to load configuration for
         
     Returns:
         Dictionary containing all snap configuration values:
@@ -424,12 +424,15 @@ def get_snap_config_from_cluster_cache(snap_cluster: str) -> Dict[str, str]:
         - cache_registry_pass: Registry password
         - cache_repo: Repository name
         - kube_api_address: Kubernetes API address
+        - kube_username: Kubernetes username
+        - kube_password: Kubernetes password
+        - auth_method: Authentication method
         
     Raises:
         ValueError: If any required configuration is not found
     """
     # Load cluster cache configuration
-    cluster_cache_data = load_cluster_cache_config(snap_cluster)
+    cluster_cache_data = load_cluster_cache_config(cluster_cache)
     
     # Extract registry, cluster, and repo names from cluster cache
     registry_name = cluster_cache_data["cluster_cache_details"]["registry"]
@@ -442,21 +445,32 @@ def get_snap_config_from_cluster_cache(snap_cluster: str) -> Dict[str, str]:
     # Load cluster configuration
     kube_api_address = load_cluster_config(cluster_name)
     
+    # Load cluster authentication details
+    cluster_config_path = f"config/clusters/{cluster_name}.json"
+    
+    with open(cluster_config_path, 'r') as f:
+        cluster_config_data = json.load(f)
+    
+    cluster_auth = cluster_config_data["cluster_config_details"]
+    
     return {
         "cache_registry": registry_config["registry"],
         "cache_registry_user": registry_config["username"],
         "cache_registry_pass": registry_config["password"],
         "cache_repo": cache_repo,
-        "kube_api_address": kube_api_address
+        "kube_api_address": kube_api_address,
+        "kube_username": cluster_auth.get("kube_username", ""),
+        "kube_password": cluster_auth.get("kube_password", ""),
+        "auth_method": cluster_auth.get("auth_method", "username_password")
     }
 
 
-async def get_snap_config_from_cluster_cache_api(snap_cluster: str) -> Dict[str, str]:
+async def get_snap_config_from_cluster_cache_api(cluster_cache: str) -> Dict[str, str]:
     """
     Get all snap configuration values from cluster cache using the API endpoint.
     
     Args:
-        snap_cluster: The cluster name to load configuration for
+        cluster_cache: The cluster name to load configuration for
         
     Returns:
         Dictionary containing all snap configuration values:
@@ -465,6 +479,9 @@ async def get_snap_config_from_cluster_cache_api(snap_cluster: str) -> Dict[str,
         - cache_registry_pass: Registry password
         - cache_repo: Repository name
         - kube_api_address: Kubernetes API address
+        - kube_username: Kubernetes username
+        - kube_password: Kubernetes password
+        - auth_method: Authentication method
         
     Raises:
         ValueError: If any required configuration is not found
@@ -472,7 +489,7 @@ async def get_snap_config_from_cluster_cache_api(snap_cluster: str) -> Dict[str,
     from flows.config.clusterCache.get_cluster_cache import get_cluster_cache
     
     # Get cluster cache configuration using API
-    cluster_cache_response = await get_cluster_cache(snap_cluster)
+    cluster_cache_response = await get_cluster_cache(cluster_cache)
     
     if not cluster_cache_response.success:
         raise ValueError(f"Failed to get cluster cache: {cluster_cache_response.message}")
@@ -490,10 +507,23 @@ async def get_snap_config_from_cluster_cache_api(snap_cluster: str) -> Dict[str,
     # Load cluster configuration
     kube_api_address = load_cluster_config(cluster_name)
     
+    # Load cluster authentication details
+    cluster_data = load_cluster_cache_config(cluster_cache)
+    cluster_name_from_cache = cluster_data["cluster_cache_details"]["cluster"]
+    cluster_config_path = f"config/clusters/{cluster_name_from_cache}.json"
+    
+    with open(cluster_config_path, 'r') as f:
+        cluster_config_data = json.load(f)
+    
+    cluster_auth = cluster_config_data["cluster_config_details"]
+    
     return {
         "cache_registry": registry_config["registry"],
         "cache_registry_user": registry_config["username"],
         "cache_registry_pass": registry_config["password"],
         "cache_repo": cache_repo,
-        "kube_api_address": kube_api_address
+        "kube_api_address": kube_api_address,
+        "kube_username": cluster_auth.get("kube_username", ""),
+        "kube_password": cluster_auth.get("kube_password", ""),
+        "auth_method": cluster_auth.get("auth_method", "username_password")
     }

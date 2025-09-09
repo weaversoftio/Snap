@@ -129,7 +129,7 @@ affinity: {}
 
 # Environment variables for snap registry configuration
 env:
-  snap_cluster: "crc"
+  cluster_cache: "crc"
   WATCHER_CLUSTER_NAME: "crc"
 
 

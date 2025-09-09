@@ -80,21 +80,12 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         cache_registry_pass = snap_config["cache_registry_pass"]
         cache_repo = snap_config["cache_repo"]
         kube_api_address = snap_config["kube_api_address"]
+        kube_username = snap_config["kube_username"]
+        kube_password = snap_config["kube_password"]
+        auth_method = snap_config["auth_method"]
 
-        # NEW: where our SnapAPI deployment lives (for oc exec / cluster-local service)
-        snapapi_namespace = os.getenv("SNAPAPI_NAMESPACE", "snap")
          
-        # Dynamically get snapapi service cluster IP
-        try:
-            svc_cmd = ["oc", "get", "svc", "snapapi", "-n", snapapi_namespace, "-o", "jsonpath={.spec.clusterIP}"]
-            svc_result = await run(svc_cmd)
-            snapapi_cluster_ip = svc_result.stdout.strip()
-            SNAP_API_URL = f"http://{snapapi_cluster_ip}:8000"
-            print(f"Dynamically configured SNAP_API_URL: {SNAP_API_URL}")
-        except Exception as e:
-            # Fallback to environment variable or default
-            SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
-            print(f"Failed to get snapapi cluster IP, using fallback: {SNAP_API_URL}. Error: {e}")
+        SNAP_API_URL = os.getenv("SNAP_API_URL", "Unknown")
 
 
         # =========================
@@ -102,13 +93,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         # =========================
 
 
-        # Get service account token for kube-api call
-        try:
-            with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as f:
-                token = f.read().strip()
-        except FileNotFoundError:
-            token = (await run(["oc", "whoami", "-t"])).stdout.strip()
-
+        # Get authentication credentials from cluster cache
         # Normalize kube API address
         if kube_api_address.startswith('kubernetes.default.svc'):
             kube_api_address = "https://kubernetes.default.svc:443"
@@ -119,6 +104,29 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             f"{kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}"
         )
         print(kube_api_checkpoint_url)
+        
+        # Get proper Bearer token for authentication
+        if auth_method == "token":
+            # Use provided token directly
+            token = kube_password
+        else:
+            # For username/password auth, we need to get a Bearer token
+            # First try to login and get token using oc
+            try:
+                # Login using kubeadmin credentials and get token
+                login_cmd = ["oc", "login", kube_api_address, "-u", kube_username, "-p", kube_password, "--insecure-skip-tls-verify=true"]
+                await run(login_cmd)
+                
+                # Get the token
+                token_cmd = ["oc", "whoami", "--show-token"]
+                token_output = await run(token_cmd)
+                token = token_output.stdout.strip()
+            except Exception as e:
+                print(f"Failed to get token via oc login: {e}")
+                # Fallback to using password as token (may work in some cases)
+                token = kube_password
+        
+        # Build curl command with Bearer token
         checkpoint_cmd = [
             "curl", "-k", "-X", "POST",
             "--header", f"Authorization: Bearer {token}",

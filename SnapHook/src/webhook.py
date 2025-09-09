@@ -20,7 +20,7 @@ async def mutate_pods(request: Request):
 
     # Send pod data to SnapApi service
     cluster_name = os.getenv("CLUSTER_NAME", "Unknown").lower()
-    snapapi_url = os.getenv("SNAPAPI_URL", "http://snapapi:8000")
+    snapapi_url = os.getenv("SNAPAPI_URL", "Unknown")
     
     patches = []
     should_patch_image = False

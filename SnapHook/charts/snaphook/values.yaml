@@ -8,5 +8,5 @@ webhook:
   caBundle: ""
 
 env:
-  snap_cluster: "crc"
-  SnapApiUrl: "http://snapapi:8000"
+  CLUSTER_NAME: "crc"
+  SNAPAPI_URL: "http://snapapi:8000"
