@@ -22,6 +22,7 @@ RUN curl -L https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/lat
     && tar zxvf oc.tar.gz -C /usr/local/bin \
     && rm -f oc.tar.gz
 
+
 # Copy checkpointctl from builder stage
 COPY --from=builder /checkpointctl /usr/local/bin/
 

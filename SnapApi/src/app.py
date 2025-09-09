@@ -19,6 +19,7 @@ from routes.automation import router as automation_router
 from routes.kubectl import router as kubectl_router
 from routes.config import router as config_router
 from routes.cluster import router as cluster_router
+from routes.cluster_cache import router as cluster_cache_router
 from routes.download import router as cluster_download
 from routes.websocket import router as websocket_router
 from routes.imagetag import router as imagetag_router
@@ -56,6 +57,7 @@ logging.getLogger("uvicorn").setLevel(logging.ERROR)
 # Include routers
 app.include_router(registry_router, prefix="/registry", tags=["registry"])
 app.include_router(cluster_router, prefix="/cluster", tags=["cluster"])
+app.include_router(cluster_cache_router, prefix="/config/clusterCache", tags=["clusterCache"])
 app.include_router(checkpoint_router, prefix="/checkpoint", tags=["checkpoint"])
 app.include_router(pod_router, prefix="/pod", tags=["pod"])
 app.include_router(automation_router, prefix="/automation", tags=["automation"])
@@ -69,6 +71,13 @@ app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])
 @app.on_event("startup")
 async def startup_event():
     """Start the integrated SnapWatcher operator in a background thread"""
+    watcher_mode = os.getenv("WATCHER_MODE", "off").lower()
+    
+    if watcher_mode == "off":
+        logger.info("SnapWatcher: WatcherMode is 'off' - operator will not start")
+        logger.info("SnapApi started successfully (operator disabled)")
+        return
+    
     def run_operator():
         logger.info("Starting integrated SnapWatcher operator...")
         kopf.run(

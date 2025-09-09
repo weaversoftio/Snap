@@ -90,6 +90,7 @@ def snap_init():
         os.makedirs("config/security", exist_ok=True)
         os.makedirs("config/clusters", exist_ok=True)
         os.makedirs("config/registry", exist_ok=True)
+        os.makedirs("config/clusterCache", exist_ok=True)
         os.makedirs("config/security/users", exist_ok=True)
         os.makedirs("config/security/secrets", exist_ok=True)
         

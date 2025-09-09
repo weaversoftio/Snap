@@ -335,3 +335,117 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
         print(f"Image check error: {e}")
         logger.warning(f"Error checking image existence with skopeo: {str(e)}")
         return False
+
+
+def load_cluster_cache_config(snap_cluster: str) -> Dict[str, Any]:
+    """
+    Load cluster cache configuration from /config/clusterCache/{snap_cluster}.json
+    
+    Args:
+        snap_cluster: The cluster name to load configuration for
+        
+    Returns:
+        Dictionary containing cluster cache configuration
+        
+    Raises:
+        ValueError: If cluster cache configuration is not found
+    """
+    cluster_cache_path = f"config/clusterCache/{snap_cluster}.json"
+    if not os.path.exists(cluster_cache_path):
+        raise ValueError(f"Cluster cache configuration not found for cluster: {snap_cluster}")
+    
+    with open(cluster_cache_path, 'r') as f:
+        cluster_cache_data = json.load(f)
+    
+    return cluster_cache_data
+
+
+def load_registry_config(registry_name: str) -> Dict[str, str]:
+    """
+    Load registry configuration from /config/registry/{registry_name}.json
+    
+    Args:
+        registry_name: The registry name to load configuration for
+        
+    Returns:
+        Dictionary containing registry configuration (registry, username, password)
+        
+    Raises:
+        ValueError: If registry configuration is not found
+    """
+    registry_path = f"config/registry/{registry_name}.json"
+    if not os.path.exists(registry_path):
+        raise ValueError(f"Registry configuration not found: {registry_name}")
+    
+    with open(registry_path, 'r') as f:
+        registry_data = json.load(f)
+    
+    return {
+        "registry": registry_data["registry_config_details"]["registry"],
+        "username": registry_data["registry_config_details"]["username"],
+        "password": registry_data["registry_config_details"]["password"]
+    }
+
+
+def load_cluster_config(cluster_name: str) -> str:
+    """
+    Load cluster configuration from /config/clusters/{cluster_name}.json
+    
+    Args:
+        cluster_name: The cluster name to load configuration for
+        
+    Returns:
+        The kube API URL from cluster configuration
+        
+    Raises:
+        ValueError: If cluster configuration is not found
+    """
+    cluster_path = f"config/clusters/{cluster_name}.json"
+    if not os.path.exists(cluster_path):
+        raise ValueError(f"Cluster configuration not found: {cluster_name}")
+    
+    with open(cluster_path, 'r') as f:
+        cluster_data = json.load(f)
+    
+    return cluster_data["cluster_config_details"]["kube_api_url"]
+
+
+def get_snap_config_from_cluster_cache(snap_cluster: str) -> Dict[str, str]:
+    """
+    Get all snap configuration values from cluster cache, registry, and cluster configs.
+    
+    Args:
+        snap_cluster: The cluster name to load configuration for
+        
+    Returns:
+        Dictionary containing all snap configuration values:
+        - cache_registry: Registry URL
+        - cache_registry_user: Registry username
+        - cache_registry_pass: Registry password
+        - cache_repo: Repository name
+        - kube_api_address: Kubernetes API address
+        
+    Raises:
+        ValueError: If any required configuration is not found
+    """
+    # Load cluster cache configuration
+    cluster_cache_data = load_cluster_cache_config(snap_cluster)
+    
+    # Extract registry, cluster, and repo names from cluster cache
+    registry_name = cluster_cache_data["cluster_cache_details"]["registry"]
+    cluster_name = cluster_cache_data["cluster_cache_details"]["cluster"]
+    cache_repo = cluster_cache_data["cluster_cache_details"]["repo"]
+    
+    # Load registry configuration
+    registry_config = load_registry_config(registry_name)
+    
+    # Load cluster configuration
+    kube_api_address = load_cluster_config(cluster_name)
+    
+    return {
+        "cache_registry": registry_config["registry"],
+        "cache_registry_user": registry_config["username"],
+        "cache_registry_pass": registry_config["password"],
+        "cache_repo": cache_repo,
+        "kube_api_address": kube_api_address
+    }

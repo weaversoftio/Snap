@@ -1,0 +1,10 @@
+{
+    "cluster_config_details": {
+        "kube_api_url": "test",
+        "kube_username": "test",
+        "kube_password": "test",
+        "nodes_username": "test",
+        "auth_method": "username_password"
+    },
+    "name": "crc"
+}

@@ -12,18 +12,29 @@ from flows.checkpoint_and_push_combined import checkpoint_and_push_combined_from
 
 logger = logging.getLogger("automation_api")
 
-# Setup Kubernetes client for operator functionality
-try:
-    # Try to load in-cluster config first
-    config.load_incluster_config()
-    print("SnapWatcher: Loaded in-cluster Kubernetes configuration")
-except config.ConfigException:
+# Setup Kubernetes client for operator functionality based on WatcherMode
+watcher_mode = os.getenv("WATCHER_MODE", "off").lower()
+
+if watcher_mode == "off":
+    print("SnapWatcher: WatcherMode is 'off' - operator will not start")
+    # Don't load any Kubernetes config
+elif watcher_mode == "cluster":
     try:
-        # Fallback to local kubeconfig
-        config.load_kube_config()
-        print("SnapWatcher: Loaded local Kubernetes configuration")
+        # Load in-cluster config
+        config.load_incluster_config()
+        print("SnapWatcher: Loaded in-cluster Kubernetes configuration")
     except config.ConfigException:
-        print("SnapWatcher: Could not load Kubernetes configuration")
+        print("SnapWatcher: Could not load in-cluster Kubernetes configuration")
+elif watcher_mode == "compose":
+    try:
+        # Load kubeconfig for external cluster access using KUBECONFIG env
+        kubeconfig_path = os.getenv("KUBECONFIG", "/app/.kube/config")
+        config.load_kube_config(config_file=kubeconfig_path)
+        print(f"SnapWatcher: Loaded kubeconfig from {kubeconfig_path}")
+    except config.ConfigException:
+        print("SnapWatcher: Could not load kubeconfig")
+else:
+    print(f"SnapWatcher: Invalid WatcherMode '{watcher_mode}' - valid options are 'off', 'cluster', or 'compose'")
 
 # Define the pod event handler (integrated SnapWatcher functionality)
 @kopf.on.event(

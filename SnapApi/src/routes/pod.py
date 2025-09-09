@@ -5,7 +5,7 @@ from flows.helpers import (
     strip_sha_repo, pick_digest_from_image_id, extract_digest_from_pod_obj,
     parse_registry_host_from_image, normalize_registry_host, find_registry_creds,
     resolve_digest_with_skopeo, extract_digest, check_image_exists_multi_registry,
-    extract_app_name_from_pod
+    extract_app_name_from_pod, get_snap_config_from_cluster_cache
 )
 import subprocess
 from pydantic import BaseModel
@@ -115,18 +115,25 @@ async def receive_pod_webhook(data: PodWebhookData):
                 logger.warning(f"Failed to parse repo from image_ref {image_ref}: {e}")
                 repo = ""  # fallback to default
 
-        # Get registry and repo from environment variables for generated image tag
-        snap_registry = os.getenv("snap_registry", "docker.io")
-        snap_repo = os.getenv("snap_repo", "snap")
+        # Get registry and repo from cluster cache configuration
+        try:
+            snap_config = get_snap_config_from_cluster_cache(data.cluster_name)
+            cache_registry = snap_config["cache_registry"]
+            cache_repo = snap_config["cache_repo"]
+        except Exception as e:
+            logger.warning(f"Failed to load cluster cache config for {data.cluster_name}: {e}")
+            # Fallback to environment variables
+            cache_registry = os.getenv("snap_registry", "docker.io")
+            cache_repo = os.getenv("snap_repo", "snap")
         
-        print(f"Registry config: {snap_registry}/{snap_repo}")
+        print(f"Registry config: {cache_registry}/{cache_repo}")
 
-        # Generate the complete image tag using environment variables
+        # Generate the complete image tag using cluster cache configuration
         generated_image_tag = None
         try:
             generated_image_tag = generate_image_tag(
-                registry=snap_registry,
-                repo=snap_repo,
+                registry=cache_registry,
+                repo=cache_repo,
                 cluster=data.cluster_name,
                 namespace=namespace,
                 app=app,
@@ -139,9 +146,9 @@ async def receive_pod_webhook(data: PodWebhookData):
 
         print(f"Pod webhook: {data.cluster_name}/{namespace}/{app} | digest:{orig_image_short_digest} | tag:{generated_image_tag}")
 
-        # Check if the generated image exists in the registry using environment variables
+        # Check if the generated image exists in the registry using cluster cache configuration
         image_exists = await check_image_exists_multi_registry(
-            snap_registry, snap_repo, data.cluster_name, namespace, app, 
+            cache_registry, cache_repo, data.cluster_name, namespace, app, 
             orig_image_short_digest, pod_template_hash
         )
 

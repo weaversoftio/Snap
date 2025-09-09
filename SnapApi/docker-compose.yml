@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  snapapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: snapapi
+    ports:
+      - "8000:8000"
+    environment:
+      # SnapApi configuration
+      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,*
+      
+      # Registry configuration (adjust as needed)
+      - REGISTRY_URL=${REGISTRY_URL:-localhost:5000}
+      - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
+      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
+      - CLUSTER_NAME=${CLUSTER_NAME:-local-cluster}
+
+      - WATCHER_MODE=${WATCHER_MODE:-compose}
+      - KUBECONFIG=/app/.kube/config
+    volumes:
+      # Mount src folder for development
+      - ./src:/app:Z 
+      # Mount checkpoint storage
+      - snapapi-checkpoints:/app/checkpoints
+    networks:
+      - snapapi-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  snapapi-checkpoints:
+    driver: local
+
+networks:
+  snapapi-network:
+    driver: bridge

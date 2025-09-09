@@ -3,13 +3,13 @@ import json
 from fastapi import HTTPException
 from classes.apirequests import PodSpecCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
-from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod
+from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache
 
 
 # ----------------------------
 # Main entrypoint (DROP-IN)
 # ----------------------------
-async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointRequest, username: str) -> dict:
+async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointRequest, username: str, cluster: str) -> dict:
     """
     Combined function that performs both checkpoint creation and container push from pod spec.
     NOW USING CLUSTER-NATIVE UPLOAD PATH:
@@ -73,13 +73,13 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         if missing:
             raise ValueError(f"Missing required fields from pod spec: {missing}")
 
-        # ----- Env/config -----
-        snap_cluster = os.getenv("snap_cluster", "crc").lower()  # cluster identifier
-        snap_registry = os.getenv("snap_registry", "docker.io")
-        snap_repo = os.getenv("snap_repo", "snap_images")
-        snap_registry_user = os.getenv("snap_registry_user", "")
-        snap_registry_pass = os.getenv("snap_registry_pass", "")
-        snap_kube_api_address = os.getenv("snap_kube_api_address", "kubernetes.default.svc")
+        # ----- Load configuration from cache -----
+        snap_config = get_snap_config_from_cluster_cache(cluster)
+        cache_registry = snap_config["cache_registry"]
+        cache_registry_user = snap_config["cache_registry_user"]
+        cache_registry_pass = snap_config["cache_registry_pass"]
+        cache_repo = snap_config["cache_repo"]
+        kube_api_address = snap_config["kube_api_address"]
 
         # NEW: where our SnapAPI deployment lives (for oc exec / cluster-local service)
         snapapi_namespace = os.getenv("SNAPAPI_NAMESPACE", "snap")
@@ -110,7 +110,6 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             token = (await run(["oc", "whoami", "-t"])).stdout.strip()
 
         # Normalize kube API address
-        kube_api_address = snap_kube_api_address
         if kube_api_address.startswith('kubernetes.default.svc'):
             kube_api_address = "https://kubernetes.default.svc:443"
         elif not kube_api_address.startswith("http"):
@@ -226,12 +225,12 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             orig_image_short_digest = _short_digest_from_full(full_digest)
 
         # Normalize cluster casing to avoid CRC vs crc mismatches
-        cluster_norm = (snap_cluster or "").lower()
-        image_tag = f"{snap_registry}/{snap_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        cluster_norm = cluster.lower()
+        image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
 
         # Registry login (optional)
-        if snap_registry_user and snap_registry_pass:
-            await run(["buildah", "login", "--username", snap_registry_user, "--password", snap_registry_pass, "--tls-verify=false", snap_registry], check=True)
+        if cache_registry_user and cache_registry_pass:
+            await run(["buildah", "login", "--username", cache_registry_user, "--password", cache_registry_pass, "--tls-verify=false", cache_registry], check=True)
 
 
         # Create scratch container, add checkpoint bits, annotate, commit, push
