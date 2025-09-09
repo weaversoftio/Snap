@@ -135,11 +135,31 @@ export default function AppContainer({ children }) {
   const [sshKey, setSshkey] = useState(null);
   const [clusterFormErrors, setClusterFormErrors] = useState({});
   const [authenticationMethod, setAuthenticationMethod] = useState("username_password");
+  const [selectedRegistry, setSelectedRegistry] = useState("");
+  const [registryRepo, setRegistryRepo] = useState("snap_images");
+  const [availableRegistries, setAvailableRegistries] = useState([]);
 
   const [clusterOpen, setClusterOpen] = useState(false);
   const { list: clusterList = [], selectedCluster = "", checkpointingEnabled = false, kubeAuthenticated = false } = useSelector(state => state.cluster)
   const { authenticated = false, user } = useSelector(state => state.auth)
   const c_selectedCluster = getCookie("selectedCluster")
+
+  // Fetch available registries when component mounts
+  useEffect(() => {
+    const fetchRegistries = async () => {
+      try {
+        const response = await fetch(`${window.ENV.apiUrl}/config/registry/list`);
+        const data = await response.json();
+        if (data.success) {
+          setAvailableRegistries(data.registry_configs || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch registries:", error);
+      }
+    };
+
+    fetchRegistries();
+  }, []);
   const token = getCookie("token")
 
   useEffect(() => {
@@ -228,7 +248,9 @@ export default function AppContainer({ children }) {
       kube_username: authenticationMethod === "token" ? null : clusterUsername,
       kube_password: clusterPassword,
       nodes_username: nodesUsername,
-      auth_method: authenticationMethod
+      auth_method: authenticationMethod,
+      registry: selectedRegistry || null,
+      repo: registryRepo
     })
 
     if (sshKey) {
@@ -251,6 +273,8 @@ export default function AppContainer({ children }) {
     setClusterConfirmPassword("")
     setNodesUsername("")
     setSshkey(null)
+    setSelectedRegistry("")
+    setRegistryRepo("snap_images")
   }
 
   const renderSwitchCluster = () => {
@@ -366,6 +390,33 @@ export default function AppContainer({ children }) {
             helperText={clusterFormErrors?.nodesUsername}
             error={!!clusterFormErrors?.nodesUsername}
           />
+          
+          {/* Registry Selection */}
+          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+            <InputLabel>Registry (Optional)</InputLabel>
+            <Select
+              value={selectedRegistry}
+              onChange={(e) => setSelectedRegistry(e.target.value)}
+              label="Registry (Optional)"
+            >
+              <MenuItem value="">None (No cluster cache will be created)</MenuItem>
+              {availableRegistries.map((registry) => (
+                <MenuItem key={registry.name} value={registry.name}>
+                  {registry.name} ({registry.registry_config_details.registry})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {selectedRegistry && (
+            <TextField
+              label="Repository Name"
+              onChange={(e) => setRegistryRepo(e.target.value)}
+              value={registryRepo}
+              helperText="Repository name for storing checkpoint images"
+            />
+          )}
+          
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleAddCluster}>Submit</Button>
         </Box>
       </DialogComponent>
@@ -412,7 +463,23 @@ export default function AppContainer({ children }) {
               <ClusterIcon sx={{ color: isSelected("/") ? "white" : "inherit", }} />
             </Button>
           </ListItem>
-          {showNavigation && mainMenu.map(({ text, path, Icon }, index) => (
+          {/* Always show Registry menu item */}
+          <ListItem disablePadding sx={{ display: 'block', backgroundColor: isSelected("/registry") ? selectedBackgroundColor : "white" }}>
+            <ListItemButton
+              onClick={() => navigate("/registry")}
+              sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
+              <ListItemIcon
+                sx={[{ minWidth: 0, justifyContent: 'center' }, open ? { mr: 3 } : { mr: 'auto' }]}>
+                <StorageIcon sx={{ color: isSelected("/registry") ? "white" : "inherit" }} />
+              </ListItemIcon>
+              <ListItemText
+                primary="Registry"
+                sx={[{ opacity: open ? 1 : 0 }, isSelected("/registry") && { color: "white", fontWeight: "bold" }]} />
+            </ListItemButton>
+          </ListItem>
+          
+          {/* Show other menu items only when cluster is connected */}
+          {showNavigation && mainMenu.filter(item => item.text !== "Registry").map(({ text, path, Icon }, index) => (
             <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "white" }}>
               <ListItemButton
                 onClick={() => navigate(path)}

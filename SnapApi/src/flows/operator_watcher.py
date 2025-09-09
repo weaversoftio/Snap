@@ -105,10 +105,13 @@ async def on_pod_event(event, body, logger, **kwargs):
         # Use a default username for operator-triggered checkpoints
         username = "snapwatcher-operator"
         
-        logger.info(f"SnapWatcher: Calling checkpoint function directly for pod {pod}")
+        # Get cluster name from environment variable
+        cluster = os.getenv("WATCHER_CLUSTER_NAME", "crc")
+        
+        logger.info(f"SnapWatcher: Calling checkpoint function directly for pod {pod} in cluster {cluster}")
         
         # Call the checkpoint function directly
-        result = await checkpoint_and_push_combined_from_pod_spec(pod_spec_request, username)
+        result = await checkpoint_and_push_combined_from_pod_spec(pod_spec_request, cluster, username)
         
         print(f"SnapWatcher: Checkpoint operation completed: {result.get('success', False)}")
         

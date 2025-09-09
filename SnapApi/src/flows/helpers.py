@@ -449,3 +449,51 @@ def get_snap_config_from_cluster_cache(snap_cluster: str) -> Dict[str, str]:
         "cache_repo": cache_repo,
         "kube_api_address": kube_api_address
     }
+
+
+async def get_snap_config_from_cluster_cache_api(snap_cluster: str) -> Dict[str, str]:
+    """
+    Get all snap configuration values from cluster cache using the API endpoint.
+    
+    Args:
+        snap_cluster: The cluster name to load configuration for
+        
+    Returns:
+        Dictionary containing all snap configuration values:
+        - cache_registry: Registry URL
+        - cache_registry_user: Registry username
+        - cache_registry_pass: Registry password
+        - cache_repo: Repository name
+        - kube_api_address: Kubernetes API address
+        
+    Raises:
+        ValueError: If any required configuration is not found
+    """
+    from flows.config.clusterCache.get_cluster_cache import get_cluster_cache
+    
+    # Get cluster cache configuration using API
+    cluster_cache_response = await get_cluster_cache(snap_cluster)
+    
+    if not cluster_cache_response.success:
+        raise ValueError(f"Failed to get cluster cache: {cluster_cache_response.message}")
+    
+    cluster_cache_details = cluster_cache_response.cluster_cache_details
+    
+    # Extract registry, cluster, and repo names from cluster cache
+    registry_name = cluster_cache_details.registry
+    cluster_name = cluster_cache_details.cluster
+    cache_repo = cluster_cache_details.repo
+    
+    # Load registry configuration
+    registry_config = load_registry_config(registry_name)
+    
+    # Load cluster configuration
+    kube_api_address = load_cluster_config(cluster_name)
+    
+    return {
+        "cache_registry": registry_config["registry"],
+        "cache_registry_user": registry_config["username"],
+        "cache_registry_pass": registry_config["password"],
+        "cache_repo": cache_repo,
+        "kube_api_address": kube_api_address
+    }

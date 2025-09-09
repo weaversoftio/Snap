@@ -2,6 +2,6 @@
     "cluster_cache_details": {
         "cluster": "crc",
         "registry": "nexus",
-        "repo": "snap_images"
+        "repo": "cache_images"
     }
 }

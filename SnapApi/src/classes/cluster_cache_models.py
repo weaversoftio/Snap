@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 from typing import Optional
 
+class ClusterCacheDetails(BaseModel):
+    cluster: str
+    registry: str
+    repo: str
+
 class ClusterCacheRequest(BaseModel):
     cluster: str  # Points to cluster from cluster folder
     registry: str  # Points to registry from registry folder
@@ -9,16 +14,12 @@ class ClusterCacheRequest(BaseModel):
 class ClusterCacheResponse(BaseModel):
     success: bool
     message: str
+    cluster_cache_details: Optional[ClusterCacheDetails] = None
 
 class ClusterCacheListResponse(BaseModel):
     success: bool
     cluster_caches: list
     message: str
-
-class ClusterCacheDetails(BaseModel):
-    cluster: str
-    registry: str
-    repo: str
 
 class ClusterCache(BaseModel):
     cluster_cache_details: ClusterCacheDetails

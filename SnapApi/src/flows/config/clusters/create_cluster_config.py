@@ -1,5 +1,7 @@
 from pydantic import BaseModel, validator
 from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
+from classes.cluster_cache_models import ClusterCacheRequest, ClusterCache
+from flows.config.clusterCache.create_cluster_cache import create_cluster_cache
 import os
 import json
 from typing import Optional, Literal
@@ -12,6 +14,8 @@ class ClusterConfigRequest(BaseModel):
     nodes_username: str
     name: str
     auth_method: Literal["username_password", "token"] = "username_password"
+    registry: Optional[str] = None  # Registry name for cluster cache
+    repo: Optional[str] = "snap_images"  # Repository name for cluster cache
     
     @validator('kube_username')
     def validate_username_for_auth_method(cls, v, values):
@@ -62,7 +66,35 @@ async def create_cluster_config(request: ClusterConfigRequest):
     with open(path, "w") as f:
         json.dump(config.to_dict(), f, indent=4)
 
-    return ClusterConfigResponse(
-        success=True,
-        message=f"Cluster config file {request.name} created successfully"
-    )
+    # Automatically create cluster cache if registry is provided
+    if request.registry:
+        try:
+            cluster_cache_request = ClusterCacheRequest(
+                cluster=request.name,
+                registry=request.registry,
+                repo=request.repo
+            )
+            cluster_cache_result = await create_cluster_cache(cluster_cache_request)
+            
+            if cluster_cache_result.success:
+                return ClusterConfigResponse(
+                    success=True,
+                    message=f"Cluster config file {request.name} and cluster cache created successfully"
+                )
+            else:
+                # Cluster config was created but cluster cache failed
+                return ClusterConfigResponse(
+                    success=False,
+                    message=f"Cluster config file {request.name} created but cluster cache creation failed: {cluster_cache_result.message}"
+                )
+        except Exception as e:
+            # Cluster config was created but cluster cache failed
+            return ClusterConfigResponse(
+                success=False,
+                message=f"Cluster config file {request.name} created but cluster cache creation failed: {str(e)}"
+            )
+    else:
+        return ClusterConfigResponse(
+            success=True,
+            message=f"Cluster config file {request.name} created successfully (no cluster cache created - registry not specified)"
+        )

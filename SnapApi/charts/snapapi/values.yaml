@@ -130,6 +130,7 @@ affinity: {}
 # Environment variables for snap registry configuration
 env:
   snap_cluster: "crc"
+  WATCHER_CLUSTER_NAME: "crc"
 
 
 # This block is for setting up OpenShift routes for external access

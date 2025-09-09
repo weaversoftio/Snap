@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import DialogComponent from "../common/Dialog";
 import { useSnackbar } from "notistack";
 import { clusterApi } from "../../api/clusterApi";
+import { clusterCacheApi } from "../../api/clusterCacheApi";
 import { useNavigate } from "react-router-dom";
 import { Delete, SystemUpdateAlt as InstallIcon, SafetyCheck as VerifyIcon, Add as AddIcon, Cloud as CloudIcon, Storage as StorageIcon, Security as SecurityIcon, CloudUpload, Edit } from "@mui/icons-material";
 import { removeCookie } from "../../utils/cookies";
@@ -48,6 +49,16 @@ const ClusterScreen = () => {
   const [stats, setStats] = useState({ total_pods: 0, total_checkpoints: 0 });
   const [playbookConfigs, setPlaybookConfigs] = useState([])
   const [authenticationMethod, setAuthenticationMethod] = useState("username_password")
+  const [selectedRegistry, setSelectedRegistry] = useState("")
+  const [registryRepo, setRegistryRepo] = useState("snap_images")
+  const [availableRegistries, setAvailableRegistries] = useState([])
+  
+  // Cluster cache management state
+  const [clusterCacheDialogOpen, setClusterCacheDialogOpen] = useState(false)
+  const [clusterCache, setClusterCache] = useState(null)
+  const [clusterCacheLoading, setClusterCacheLoading] = useState(false)
+  const [selectedCacheRegistry, setSelectedCacheRegistry] = useState("")
+  const [cacheRepo, setCacheRepo] = useState("snap_images")
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -65,6 +76,23 @@ const ClusterScreen = () => {
 
     fetchStats();
   }, [kubeAuthenticated]);
+
+  // Fetch available registries when component mounts
+  useEffect(() => {
+    const fetchRegistries = async () => {
+      try {
+        const response = await fetch(`${window.ENV.apiUrl}/config/registry/list`);
+        const data = await response.json();
+        if (data.success) {
+          setAvailableRegistries(data.registry_configs || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch registries:", error);
+      }
+    };
+
+    fetchRegistries();
+  }, []);
 
   const handleSubmitCluster = async () => {
     // Clear previous errors
@@ -95,7 +123,9 @@ const ClusterScreen = () => {
       kube_username: authenticationMethod === "token" ? null : clusterUsername,
       kube_password: clusterPassword,
       nodes_username: nodesUsername,
-      auth_method: authenticationMethod
+      auth_method: authenticationMethod,
+      registry: selectedRegistry || null,
+      repo: registryRepo
     }
     
     try {
@@ -250,6 +280,94 @@ const ClusterScreen = () => {
     setClusterConfirmPassword("")
     setSshkey(null)
     setClusterFormErrors(null)
+    setSelectedRegistry("")
+    setRegistryRepo("snap_images")
+    setClusterEditing(false)
+  }
+
+  const handleShowClusterCacheConfig = async () => {
+    if (!selectedCluster) return;
+    
+    setClusterCacheDialogOpen(true);
+    setClusterCacheLoading(true);
+    
+    try {
+      const response = await clusterCacheApi.get(selectedCluster.name);
+      if (response.success && response.cluster_cache_details) {
+        setClusterCache(response.cluster_cache_details);
+        setSelectedCacheRegistry(response.cluster_cache_details.registry);
+        setCacheRepo(response.cluster_cache_details.repo);
+      } else {
+        setClusterCache(null);
+        setSelectedCacheRegistry("");
+        setCacheRepo("snap_images");
+      }
+    } catch (error) {
+      console.error("Failed to fetch cluster cache:", error);
+      setClusterCache(null);
+      setSelectedCacheRegistry("");
+      setCacheRepo("snap_images");
+    }
+    
+    setClusterCacheLoading(false);
+  }
+
+  const handleUpdateClusterCache = async () => {
+    if (!selectedCluster || !selectedCacheRegistry) {
+      enqueueSnackbar("Please select a registry", { variant: "error" });
+      return;
+    }
+
+    setClusterCacheLoading(true);
+    try {
+      const response = await clusterCacheApi.update({
+        cluster: selectedCluster.name,
+        registry: selectedCacheRegistry,
+        repo: cacheRepo
+      });
+
+      if (response.success) {
+        enqueueSnackbar("Cluster cache updated successfully", { variant: "success" });
+        setClusterCacheDialogOpen(false);
+        // Refresh the cache data
+        handleShowClusterCacheConfig();
+      } else {
+        enqueueSnackbar(`Failed to update cluster cache: ${response.message}`, { variant: "error" });
+      }
+    } catch (error) {
+      console.error("Failed to update cluster cache:", error);
+      enqueueSnackbar("Failed to update cluster cache", { variant: "error" });
+    }
+    setClusterCacheLoading(false);
+  }
+
+  const handleCreateClusterCache = async () => {
+    if (!selectedCluster || !selectedCacheRegistry) {
+      enqueueSnackbar("Please select a registry", { variant: "error" });
+      return;
+    }
+
+    setClusterCacheLoading(true);
+    try {
+      const response = await clusterCacheApi.create({
+        cluster: selectedCluster.name,
+        registry: selectedCacheRegistry,
+        repo: cacheRepo
+      });
+
+      if (response.success) {
+        enqueueSnackbar("Cluster cache created successfully", { variant: "success" });
+        setClusterCacheDialogOpen(false);
+        // Refresh the cache data
+        handleShowClusterCacheConfig();
+      } else {
+        enqueueSnackbar(`Failed to create cluster cache: ${response.message}`, { variant: "error" });
+      }
+    } catch (error) {
+      console.error("Failed to create cluster cache:", error);
+      enqueueSnackbar("Failed to create cluster cache", { variant: "error" });
+    }
+    setClusterCacheLoading(false);
   }
 
   const renderAuthenticationDetails = () => {
@@ -355,6 +473,33 @@ const ClusterScreen = () => {
             helperText={clusterFormErrors?.nodesUsername}
             error={!!clusterFormErrors?.nodesUsername}
           />
+          
+          {/* Registry Selection */}
+          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+            <InputLabel>Registry (Optional)</InputLabel>
+            <Select
+              value={selectedRegistry}
+              onChange={(e) => setSelectedRegistry(e.target.value)}
+              label="Registry (Optional)"
+            >
+              <MenuItem value="">None (No cluster cache will be created)</MenuItem>
+              {availableRegistries.map((registry) => (
+                <MenuItem key={registry.name} value={registry.name}>
+                  {registry.name} ({registry.registry_config_details.registry})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {selectedRegistry && (
+            <TextField
+              label="Repository Name"
+              onChange={(e) => setRegistryRepo(e.target.value)}
+              value={registryRepo}
+              helperText="Repository name for storing checkpoint images"
+            />
+          )}
+          
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleSubmitCluster}>Submit</Button>
         </Box>
       </DialogComponent>
@@ -590,6 +735,102 @@ const ClusterScreen = () => {
     )
   }
 
+  const renderClusterCacheDialog = () => {
+    return (
+      <DialogComponent
+        open={clusterCacheDialogOpen}
+        onClose={() => setClusterCacheDialogOpen(false)}
+        paperProps={{ maxWidth: 500 }}
+      >
+        <Box sx={{ p: 1 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+            Cluster Cache Configuration
+          </Typography>
+        </Box>
+        <Box gap={2} display={"flex"} flexDirection={"column"}>
+          {clusterCacheLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+                <InputLabel>Registry</InputLabel>
+                <Select
+                  value={selectedCacheRegistry}
+                  onChange={(e) => setSelectedCacheRegistry(e.target.value)}
+                  label="Registry"
+                >
+                  {availableRegistries.map((registry) => (
+                    <MenuItem key={registry.name} value={registry.name}>
+                      {registry.name} ({registry.registry_config_details.registry})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
+              <TextField
+                label="Repository Name"
+                onChange={(e) => setCacheRepo(e.target.value)}
+                value={cacheRepo}
+                helperText="Repository name for storing checkpoint images"
+              />
+              
+              {clusterCache ? (
+                <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Current Configuration:
+                  </Typography>
+                  <Typography variant="body2">
+                    Registry: {clusterCache.registry}
+                  </Typography>
+                  <Typography variant="body2">
+                    Repository: {clusterCache.repo}
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+                  <Typography variant="body2" color="warning.contrastText">
+                    No cluster cache configured for this cluster
+                  </Typography>
+                </Box>
+              )}
+              
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => setClusterCacheDialogOpen(false)}
+                  disabled={clusterCacheLoading}
+                >
+                  Cancel
+                </Button>
+                {clusterCache ? (
+                  <Button
+                    variant="contained"
+                    onClick={handleUpdateClusterCache}
+                    disabled={clusterCacheLoading || !selectedCacheRegistry}
+                    startIcon={clusterCacheLoading ? <CircularProgress size={16} /> : <StorageIcon />}
+                  >
+                    Update Cache
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    onClick={handleCreateClusterCache}
+                    disabled={clusterCacheLoading || !selectedCacheRegistry}
+                    startIcon={clusterCacheLoading ? <CircularProgress size={16} /> : <AddIcon />}
+                  >
+                    Create Cache
+                  </Button>
+                )}
+              </Box>
+            </>
+          )}
+        </Box>
+      </DialogComponent>
+    )
+  }
+
   const renderDialog = () => {
     if (!dialogType) return
 
@@ -634,6 +875,7 @@ const ClusterScreen = () => {
     <CustomerContainer title={"Cluster Management"} subtitle="Manage your clusters and their configurations">
 
       {renderDialog()}
+      {renderClusterCacheDialog()}
       {isLoading ? renderLoading() : (
         <>
           {!selectedCluster ? (
@@ -764,6 +1006,17 @@ const ClusterScreen = () => {
                           sx={{ height: 48, textTransform: 'none' }}
                         >
                           Node Config
+                        </Button>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={4}>
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          onClick={handleShowClusterCacheConfig}
+                          startIcon={<StorageIcon />}
+                          sx={{ height: 48, textTransform: 'none' }}
+                        >
+                          Cluster Cache Config
                         </Button>
                       </Grid>
                       <Grid item xs={12} sm={6} md={4}>

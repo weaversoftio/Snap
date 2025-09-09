@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from flows.config.clusterCache.delete_cluster_cache import delete_cluster_cache, DeleteClusterCacheRequest
 import os
 import json
 
@@ -32,12 +33,31 @@ async def delete_cluster_config(request: DeleteClusterConfigRequest):
             message=error_message
         )
     
-    # return a success message
-    print(f"Cluster config file {request.name} deleted successfully")    
-    return ClusterConfigResponse(
-        success=True,
-        message=f"Cluster config file {request.name} deleted successfully"
-    )
+    # Also delete the cluster cache if it exists
+    try:
+        cluster_cache_request = DeleteClusterCacheRequest(cluster=request.name)
+        cluster_cache_result = await delete_cluster_cache(cluster_cache_request)
+        
+        if cluster_cache_result.success:
+            print(f"Cluster config file {request.name} and cluster cache deleted successfully")
+            return ClusterConfigResponse(
+                success=True,
+                message=f"Cluster config file {request.name} and cluster cache deleted successfully"
+            )
+        else:
+            # Cluster config was deleted but cluster cache deletion failed (might not exist)
+            print(f"Cluster config file {request.name} deleted successfully, cluster cache deletion: {cluster_cache_result.message}")
+            return ClusterConfigResponse(
+                success=True,
+                message=f"Cluster config file {request.name} deleted successfully (cluster cache: {cluster_cache_result.message})"
+            )
+    except Exception as e:
+        # Cluster config was deleted but cluster cache deletion failed
+        print(f"Cluster config file {request.name} deleted successfully, cluster cache deletion failed: {str(e)}")
+        return ClusterConfigResponse(
+            success=True,
+            message=f"Cluster config file {request.name} deleted successfully (cluster cache deletion failed: {str(e)})"
+        )
 
     
     

@@ -5,7 +5,7 @@ from flows.helpers import (
     strip_sha_repo, pick_digest_from_image_id, extract_digest_from_pod_obj,
     parse_registry_host_from_image, normalize_registry_host, find_registry_creds,
     resolve_digest_with_skopeo, extract_digest, check_image_exists_multi_registry,
-    extract_app_name_from_pod, get_snap_config_from_cluster_cache
+    extract_app_name_from_pod, get_snap_config_from_cluster_cache_api
 )
 import subprocess
 from pydantic import BaseModel
@@ -117,7 +117,7 @@ async def receive_pod_webhook(data: PodWebhookData):
 
         # Get registry and repo from cluster cache configuration
         try:
-            snap_config = get_snap_config_from_cluster_cache(data.cluster_name)
+            snap_config = await get_snap_config_from_cluster_cache_api(data.cluster_name)
             cache_registry = snap_config["cache_registry"]
             cache_repo = snap_config["cache_repo"]
         except Exception as e:

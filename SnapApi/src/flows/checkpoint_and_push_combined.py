@@ -3,13 +3,13 @@ import json
 from fastapi import HTTPException
 from classes.apirequests import PodSpecCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
-from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache
+from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache_api
 
 
 # ----------------------------
 # Main entrypoint (DROP-IN)
 # ----------------------------
-async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointRequest, username: str, cluster: str) -> dict:
+async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointRequest, cluster: str, username: str) -> dict:
     """
     Combined function that performs both checkpoint creation and container push from pod spec.
     NOW USING CLUSTER-NATIVE UPLOAD PATH:
@@ -74,7 +74,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             raise ValueError(f"Missing required fields from pod spec: {missing}")
 
         # ----- Load configuration from cache -----
-        snap_config = get_snap_config_from_cluster_cache(cluster)
+        snap_config = await get_snap_config_from_cluster_cache_api(cluster)
         cache_registry = snap_config["cache_registry"]
         cache_registry_user = snap_config["cache_registry_user"]
         cache_registry_pass = snap_config["cache_registry_pass"]

@@ -11,13 +11,8 @@ services:
     environment:
       # SnapApi configuration
       - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,*
-      
-      # Registry configuration (adjust as needed)
-      - REGISTRY_URL=${REGISTRY_URL:-localhost:5000}
-      - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
-      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
-      - CLUSTER_NAME=${CLUSTER_NAME:-local-cluster}
-
+      # SnapWatcher operator configuration
+      - WATCHER_CLUSTER_NAME=${WATCHER_CLUSTER_NAME:-local-cluster}
       - WATCHER_MODE=${WATCHER_MODE:-compose}
       - KUBECONFIG=/app/.kube/config
     volumes:
