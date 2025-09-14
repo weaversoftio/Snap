@@ -24,9 +24,9 @@ spec:
         - containerPort: 8443
         env:
         - name: CLUSTER_NAME
-          value: {{ .Values.env.cluster_cache | quote }}
+          value: {{ .Values.env.CLUSTER_NAME | quote }}
         - name: SNAPAPI_URL
-          value: {{ .Values.env.SnapApiUrl | quote }}
+          value: {{ .Values.env.SNAPAPI_URL | quote }}
         volumeMounts:
         - name: certs
           mountPath: /certs

@@ -32,7 +32,7 @@ import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
 import ProgressTracker from './common/TaskProgressDetails';
 import { useProgress } from './common/ProgressContext';
-import { CloudUpload } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon } from '@mui/icons-material';
 
 const drawerWidth = 240;
 const selectedBackgroundColor = "rgba(36, 143, 231, 1)";
@@ -127,14 +127,10 @@ export default function AppContainer({ children }) {
   const [switchCluster, setSwitchCluster] = useState(false);
   const [clusterName, setClusterName] = useState("");
   const [clusterUrl, setClusterUrl] = useState("");
-  const [clusterUsername, setClusterUsername] = useState("");
-  const [clusterPassword, setClusterPassword] = useState("");
-  const [clusterConfirmPassword, setClusterConfirmPassword] = useState("");
+  const [clusterToken, setClusterToken] = useState("");
   const [clusterAction, setClusterAction] = useState("");
-  const [nodesUsername, setNodesUsername] = useState("");
   const [sshKey, setSshkey] = useState(null);
-  const [clusterFormErrors, setClusterFormErrors] = useState({});
-  const [authenticationMethod, setAuthenticationMethod] = useState("username_password");
+  const [clusterFormErrors, setClusterFormErrors] = useState({});;
   const [selectedRegistry, setSelectedRegistry] = useState("");
   const [registryRepo, setRegistryRepo] = useState("snap_images");
   const [availableRegistries, setAvailableRegistries] = useState([]);
@@ -224,15 +220,7 @@ export default function AppContainer({ children }) {
     const errors = {}
     if (!clusterName.trim()) errors.name = "Cluster name is required"
     if (!clusterUrl.trim()) errors.url = "Cluster API URL is required"
-    if (!nodesUsername.trim()) errors.nodesUsername = "Nodes username is required"
-    if (!clusterPassword.trim()) {
-      errors.password = authenticationMethod === "token" ? "Token is required" : "Password is required"
-    }
-    
-    if (authenticationMethod === "username_password") {
-      if (!clusterUsername.trim()) errors.username = "Username is required"
-      if (clusterPassword !== clusterConfirmPassword) errors.confirmPassword = "Passwords do not match"
-    }
+    if (!clusterToken.trim()) errors.token = "Token is required"
     
     if (Object.keys(errors).length > 0) {
       setClusterFormErrors(errors)
@@ -245,10 +233,7 @@ export default function AppContainer({ children }) {
     await clusterApi.create({
       name: clusterName,
       kube_api_url: clusterUrl,
-      kube_username: authenticationMethod === "token" ? null : clusterUsername,
-      kube_password: clusterPassword,
-      nodes_username: nodesUsername,
-      auth_method: authenticationMethod,
+      token: clusterToken,
       registry: selectedRegistry || null,
       repo: registryRepo
     })
@@ -268,10 +253,7 @@ export default function AppContainer({ children }) {
     setClusterOpen(false)
     setClusterName("")
     setClusterUrl("")
-    setClusterUsername("")
-    setClusterPassword("")
-    setClusterConfirmPassword("")
-    setNodesUsername("")
+    setClusterToken("")
     setSshkey(null)
     setSelectedRegistry("")
     setRegistryRepo("snap_images")
@@ -296,44 +278,15 @@ export default function AppContainer({ children }) {
 
 
   const renderAuthenticationDetails = () => {
-    if (authenticationMethod === "token") {
-      return (
-        <TextField
-          label="Token"
-          type="password"
-          onChange={(e) => setClusterPassword(e.target.value)}
-          value={clusterPassword}
-          helperText={clusterFormErrors?.password}
-          error={!!clusterFormErrors?.password}
-        />
-      )
-    }
     return (
-      <>
-        <TextField
-          label="Cluster Username"
-          onChange={(e) => setClusterUsername(e.target.value)}
-          value={clusterUsername}
-          helperText={clusterFormErrors?.username}
-          error={!!clusterFormErrors?.username}
-        />
-        <TextField
-          label="Password"
-          type={"password"}
-          onChange={(e) => setClusterPassword(e.target.value)}
-          value={clusterPassword}
-          helperText={clusterFormErrors?.password}
-          error={!!clusterFormErrors?.password}
-        />
-        <TextField
-          label="Confirm Password"
-          type={"password"}
-          onChange={(e) => setClusterConfirmPassword(e.target.value)}
-          value={clusterConfirmPassword}
-          error={!!clusterFormErrors?.confirmPassword}
-          helperText={clusterFormErrors?.confirmPassword}
-        />
-      </>
+      <TextField
+        label="Token"
+        type="password"
+        onChange={(e) => setClusterToken(e.target.value)}
+        value={clusterToken}
+        helperText={clusterFormErrors?.token}
+        error={!!clusterFormErrors?.token}
+      />
     )
   }
 
@@ -361,17 +314,6 @@ export default function AppContainer({ children }) {
             error={!!clusterFormErrors?.url}
           />
 
-          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
-            <InputLabel>Authentication Method</InputLabel>
-            <Select
-              value={authenticationMethod}
-              onChange={(e) => setAuthenticationMethod(e.target.value)}
-              label="Authentication Method"
-            >
-              <MenuItem value={"username_password"} key={"username_password"}>{"Username + Password (default)"}</MenuItem>
-              <MenuItem value={"token"} key={"token"}>{"Token"}</MenuItem>
-            </Select>
-          </FormControl>
           {renderAuthenticationDetails()}
           <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
             Upload SSH Key
@@ -383,13 +325,6 @@ export default function AppContainer({ children }) {
             />
           </Button>
           {sshKey && <Typography variant="body2">{sshKey.name}</Typography>}
-          <TextField
-            label="Nodes Username"
-            onChange={(e) => setNodesUsername(e.target.value)}
-            value={nodesUsername}
-            helperText={clusterFormErrors?.nodesUsername}
-            error={!!clusterFormErrors?.nodesUsername}
-          />
           
           {/* Registry Selection */}
           <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
@@ -435,6 +370,7 @@ export default function AppContainer({ children }) {
       { text: "Registry", path: "/registry", Icon: StorageIcon },
       { text: "Secrets", path: "/secrets", Icon: SecurityIcon },
       { text: "Users", path: "/users", Icon: UsersIcon },
+      { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
     ]
 
     const showNavigation = kubeAuthenticated && selectedCluster

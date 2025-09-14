@@ -57,17 +57,11 @@ def auto_create_local_cluster():
         # Get Kubernetes API URL
         api_url = get_kubernetes_api_url()
         
-        # Get nodes username from environment variable or use default
-        nodes_username = os.getenv("SNAP_NODES_USERNAME", "root")
-        
         # Always create/update the local cluster configuration with fresh token
         cluster_config_dict = {
             "cluster_config_details": {
                 "kube_api_url": api_url,
-                "kube_username": None,
-                "kube_password": token,
-                "nodes_username": nodes_username,
-                "auth_method": "token"
+                "token": token
             },
             "name": "local"
         }
@@ -91,6 +85,7 @@ def snap_init():
         os.makedirs("config/clusters", exist_ok=True)
         os.makedirs("config/registry", exist_ok=True)
         os.makedirs("config/clusterCache", exist_ok=True)
+        os.makedirs("config/watcher", exist_ok=True)
         os.makedirs("config/security/users", exist_ok=True)
         os.makedirs("config/security/secrets", exist_ok=True)
         

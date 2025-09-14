@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 import shutil
 from classes.apirequests import PodCheckpointRequest, CheckpointctlRequest, PodCheckpointAndPushRequest, PodSpecCheckpointRequest
 from flows.checkpoint_container_kubelet import checkpoint_container_kubelet
-from flows.checkpoint_and_push_combined import checkpoint_and_push_combined_from_pod_spec
+from flows.checkpoint_and_push import checkpoint_and_push_from_pod_spec
 from flows.proccess_utils import run
 from flows.upload_checkpoint import upload_checkpoint
 from flows.analytics.checkpoint_insights import CheckpointInsightsUseCase, CheckpointInsightsRequest
@@ -70,7 +70,7 @@ async def create_checkpoint_and_push_from_pod_spec(
     Extracts all required information from the pod specification and environment variables.
     Uses environment variables for registry configuration and cluster information.
     """
-    return await checkpoint_and_push_combined_from_pod_spec(request, username)
+    return await checkpoint_and_push_from_pod_spec(request, username)
 
 
 

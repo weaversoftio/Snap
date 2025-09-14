@@ -1,4 +1,4 @@
-import { Box, Typography, Button, Select, MenuItem, FormControl, TextField, Stack, Grid2 as Grid, Card, CardContent, CircularProgress, Paper, Divider, Chip, IconButton, Tooltip, FormControlLabel, InputLabel } from "@mui/material"
+import { Box, Typography, Button, Select, MenuItem, FormControl, TextField, Stack, Grid2 as Grid, Card, CardContent, CircularProgress, Paper, Divider, Chip, IconButton, Tooltip, FormControlLabel, InputLabel, Tabs, Tab } from "@mui/material"
 import { useDispatch, useSelector } from "react-redux";
 import { Loading } from "../common/loading";
 import { clusterActions } from "../../features/cluster/clusterSlice";
@@ -39,16 +39,12 @@ const ClusterScreen = () => {
   const [dialogData, setDialogData] = useState(null)
   const [clusterName, setClusterName] = useState("");
   const [clusterUrl, setClusterUrl] = useState("");
-  const [clusterUsername, setClusterUsername] = useState("");
-  const [clusterPassword, setClusterPassword] = useState("");
-  const [clusterConfirmPassword, setClusterConfirmPassword] = useState("");
-  const [nodesUsername, setNodesUsername] = useState("");
+  const [clusterToken, setClusterToken] = useState("");
   const [sshKey, setSshkey] = useState(null);
   const [clusterFormErrors, setClusterFormErrors] = useState({});
   const [statLoading, setStatLoading] = useState(false)
   const [stats, setStats] = useState({ total_pods: 0, total_checkpoints: 0 });
   const [playbookConfigs, setPlaybookConfigs] = useState([])
-  const [authenticationMethod, setAuthenticationMethod] = useState("username_password")
   const [selectedRegistry, setSelectedRegistry] = useState("")
   const [registryRepo, setRegistryRepo] = useState("snap_images")
   const [availableRegistries, setAvailableRegistries] = useState([])
@@ -102,15 +98,7 @@ const ClusterScreen = () => {
     const errors = {}
     if (!clusterName.trim()) errors.name = "Cluster name is required"
     if (!clusterUrl.trim()) errors.url = "Cluster API URL is required"
-    if (!nodesUsername.trim()) errors.nodesUsername = "Nodes username is required"
-    if (!clusterPassword.trim()) {
-      errors.password = authenticationMethod === "token" ? "Token is required" : "Password is required"
-    }
-    
-    if (authenticationMethod === "username_password") {
-      if (!clusterUsername.trim()) errors.username = "Username is required"
-      if (clusterPassword !== clusterConfirmPassword) errors.confirmPassword = "Passwords do not match"
-    }
+    if (!clusterToken.trim()) errors.token = "Token is required"
     
     if (Object.keys(errors).length > 0) {
       setClusterFormErrors(errors)
@@ -120,10 +108,7 @@ const ClusterScreen = () => {
     const clusterData = {
       name: clusterName,
       kube_api_url: clusterUrl,
-      kube_username: authenticationMethod === "token" ? null : clusterUsername,
-      kube_password: clusterPassword,
-      nodes_username: nodesUsername,
-      auth_method: authenticationMethod,
+      token: clusterToken,
       registry: selectedRegistry || null,
       repo: registryRepo
     }
@@ -153,14 +138,11 @@ const ClusterScreen = () => {
 
   const handleShowClusterConfig = () => {
     const { name, cluster_config_details } = selectedCluster || {}
-    const { kube_api_url, kube_username, nodes_username, auth_method } = cluster_config_details || {}
+    const { kube_api_url, token } = cluster_config_details || {}
     setClusterEditing(true)
     setClusterName(name)
     setClusterUrl(kube_api_url)
-    // Use auth_method if available, otherwise determine from username presence for backward compatibility
-    setAuthenticationMethod(auth_method || (kube_username ? "username_password" : "token"))
-    setClusterUsername(kube_username || "")
-    setNodesUsername(nodes_username || "")
+    setClusterToken(token || "")
     setDialogType("clusterForm")
   }
 
@@ -275,9 +257,7 @@ const ClusterScreen = () => {
     setDialogType("")
     setClusterName("")
     setClusterUrl("")
-    setClusterUsername("")
-    setClusterPassword("")
-    setClusterConfirmPassword("")
+    setClusterToken("")
     setSshkey(null)
     setClusterFormErrors(null)
     setSelectedRegistry("")
@@ -371,44 +351,15 @@ const ClusterScreen = () => {
   }
 
   const renderAuthenticationDetails = () => {
-    if (authenticationMethod === "token") {
-      return (
-        <TextField
-          label="Token"
-          type="password"
-          onChange={(e) => setClusterPassword(e.target.value)}
-          value={clusterPassword}
-          helperText={clusterFormErrors?.password}
-          error={!!clusterFormErrors?.password}
-        />
-      )
-    }
     return (
-      <>
-        <TextField
-          label="Cluster Username"
-          onChange={(e) => setClusterUsername(e.target.value)}
-          value={clusterUsername}
-          helperText={clusterFormErrors?.username}
-          error={!!clusterFormErrors?.username}
-        />
-        <TextField
-          label="Password"
-          type={"password"}
-          onChange={(e) => setClusterPassword(e.target.value)}
-          value={clusterPassword}
-          helperText={clusterFormErrors?.password}
-          error={!!clusterFormErrors?.password}
-        />
-        <TextField
-          label="Confirm Password"
-          type={"password"}
-          onChange={(e) => setClusterConfirmPassword(e.target.value)}
-          value={clusterConfirmPassword}
-          error={!!clusterFormErrors?.confirmPassword}
-          helperText={clusterFormErrors?.confirmPassword}
-        />
-      </>
+      <TextField
+        label="Token"
+        type="password"
+        onChange={(e) => setClusterToken(e.target.value)}
+        value={clusterToken}
+        helperText={clusterFormErrors?.token}
+        error={!!clusterFormErrors?.token}
+      />
     )
   }
 
@@ -444,17 +395,6 @@ const ClusterScreen = () => {
             error={!!clusterFormErrors?.url}
           />
 
-          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
-            <InputLabel>Authentication Method</InputLabel>
-            <Select
-              value={authenticationMethod}
-              onChange={(e) => setAuthenticationMethod(e.target.value)}
-              label="Authentication Method"
-            >
-              <MenuItem value={"username_password"} key={"username_password"}>{"Username + Password (default)"}</MenuItem>
-              <MenuItem value={"token"} key={"token"}>{"Token"}</MenuItem>
-            </Select>
-          </FormControl>
           {renderAuthenticationDetails()}
           <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
             Upload SSH Key
@@ -466,13 +406,6 @@ const ClusterScreen = () => {
             />
           </Button>
           {sshKey && <Typography variant="body2">{sshKey.name}</Typography>}
-          <TextField
-            label="Nodes Username"
-            onChange={(e) => setNodesUsername(e.target.value)}
-            value={nodesUsername}
-            helperText={clusterFormErrors?.nodesUsername}
-            error={!!clusterFormErrors?.nodesUsername}
-          />
           
           {/* Registry Selection */}
           <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
@@ -906,9 +839,11 @@ const ClusterScreen = () => {
               </Button>
             </Box>
           ) : (
-            <Stack spacing={4}>
-              {/* Cluster Status Section */}
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+            <Box>
+              {/* Cluster Content */}
+                <Stack spacing={4}>
+                  {/* Cluster Status Section */}
+                  <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
@@ -1070,7 +1005,8 @@ const ClusterScreen = () => {
                   </Button>
                 </Box>
               </Paper>
-            </Stack>
+                </Stack>
+            </Box>
           )}
         </>
       )}

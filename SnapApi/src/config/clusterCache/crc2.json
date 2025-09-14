@@ -1,0 +1,7 @@
+{
+    "cluster_cache_details": {
+        "cluster": "crc2",
+        "registry": "nexus",
+        "repo": "snap_images"
+    }
+}

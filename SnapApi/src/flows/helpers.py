@@ -424,9 +424,7 @@ def get_snap_config_from_cluster_cache(cluster_cache: str) -> Dict[str, str]:
         - cache_registry_pass: Registry password
         - cache_repo: Repository name
         - kube_api_address: Kubernetes API address
-        - kube_username: Kubernetes username
-        - kube_password: Kubernetes password
-        - auth_method: Authentication method
+        - token: Kubernetes authentication token
         
     Raises:
         ValueError: If any required configuration is not found
@@ -459,9 +457,7 @@ def get_snap_config_from_cluster_cache(cluster_cache: str) -> Dict[str, str]:
         "cache_registry_pass": registry_config["password"],
         "cache_repo": cache_repo,
         "kube_api_address": kube_api_address,
-        "kube_username": cluster_auth.get("kube_username", ""),
-        "kube_password": cluster_auth.get("kube_password", ""),
-        "auth_method": cluster_auth.get("auth_method", "username_password")
+        "token": cluster_auth.get("token", "")
     }
 
 
@@ -479,9 +475,7 @@ async def get_snap_config_from_cluster_cache_api(cluster_cache: str) -> Dict[str
         - cache_registry_pass: Registry password
         - cache_repo: Repository name
         - kube_api_address: Kubernetes API address
-        - kube_username: Kubernetes username
-        - kube_password: Kubernetes password
-        - auth_method: Authentication method
+        - token: Kubernetes authentication token
         
     Raises:
         ValueError: If any required configuration is not found
@@ -523,7 +517,5 @@ async def get_snap_config_from_cluster_cache_api(cluster_cache: str) -> Dict[str
         "cache_registry_pass": registry_config["password"],
         "cache_repo": cache_repo,
         "kube_api_address": kube_api_address,
-        "kube_username": cluster_auth.get("kube_username", ""),
-        "kube_password": cluster_auth.get("kube_password", ""),
-        "auth_method": cluster_auth.get("auth_method", "username_password")
+        "token": cluster_auth.get("token", "")
     }

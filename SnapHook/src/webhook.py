@@ -22,6 +22,16 @@ async def mutate_pods(request: Request):
     cluster_name = os.getenv("CLUSTER_NAME", "Unknown").lower()
     snapapi_url = os.getenv("SNAPAPI_URL", "Unknown")
     
+    # Debug logging
+    print(f"SnapHook: Cluster name: {cluster_name}")
+    print(f"SnapHook: SnapApi URL: {snapapi_url}")
+    
+    # Validate URL has protocol
+    if not snapapi_url.startswith(('http://', 'https://')):
+        print(f"SnapHook: URL missing protocol, adding http://")
+        snapapi_url = f"http://{snapapi_url}"
+        print(f"SnapHook: Fixed URL: {snapapi_url}")
+    
     patches = []
     should_patch_image = False
     generated_image_tag = None
@@ -32,6 +42,9 @@ async def mutate_pods(request: Request):
             "cluster_name": cluster_name,
             "pod_data": pod
         }
+        
+        print(f"SnapHook: Sending request to: {snapapi_url}/pod/webhook")
+        print(f"SnapHook: Request data: {webhook_data}")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -55,9 +68,11 @@ async def mutate_pods(request: Request):
                 
         else:
             logger.error(f"Failed to send pod data to SnapApi. Status: {response.status_code}")
+            print(f"SnapHook: Response content: {response.text}")
             
     except Exception as e:
         logger.error(f"Error sending pod data to SnapApi: {str(e)}")
+        print(f"SnapHook: Exception details: {str(e)}")
         # Continue with webhook processing even if API call fails
 
     # Only patch container images if the generated image exists in the registry

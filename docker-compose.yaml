@@ -1,0 +1,51 @@
+services:
+  snapapi:
+    stop_grace_period: 2s
+    build: 
+      context: ./SnapApi
+      dockerfile: Dockerfile
+    image: docker.io/frenzy669/grus-api:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./grus-api:/app
+    networks:
+      - app-network
+    privileged: true
+    group_add:
+      - "0"  # root group
+      - "998"  # crio group
+      - "999"  # podman group
+    security_opt:
+      - label=disable
+    env_file:
+      - .env
+    environment:
+      - GRUS_API_URL=${GRUS_API_URL}
+      - CONTAINER_RUNTIME=${CONTAINER_RUNTIME}
+      - CHECKPOINT_PATH=${CHECKPOINT_PATH}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GRUS_ORIGINS=${GRUS_ORIGINS}
+    user: root
+    cap_add:
+      - SYS_ADMIN
+  snapui:
+    stop_grace_period: 1s
+    build: 
+      context: ./SnapApi
+      dockerfile: Dockerfile
+    image: docker.io/frenzy669/grus-admin:latest
+    env_file:
+      - .env
+    environment:
+      - API_URL=${API_URL}
+      - WS_URL=${WS_URL}
+    depends_on:
+      - api
+    ports:
+      - "8088:80" # TODO: change to 8080    
+    networks:
+      - app-network
+networks:
+  app-network:
+    driver: bridge

@@ -205,10 +205,7 @@ Now we should checkpoint
    pip install -r requirements.txt
    ```
 
-2. **Run locally** (requires kubeconfig):
-   ```bash
-   kopf run --standalone --all-namespaces operator.py
-   ```
+
 
 ### Building Container Image
 

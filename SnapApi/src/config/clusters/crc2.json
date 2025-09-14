@@ -1,0 +1,7 @@
+{
+    "cluster_config_details": {
+        "kube_api_url": "https://api.crc.testing:6443",
+        "token": "sha256~_bcyaHPGe5kIDcpT0MoblvveKEDRjbMuUYqUUNb-Hr4"
+    },
+    "name": "crc2"
+}

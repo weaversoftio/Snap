@@ -6,15 +6,25 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: snapapi
+    stop_grace_period: 2s
+    privileged: true
+    cap_add:
+    - SYS_ADMIN
+    group_add:
+      - "0"  # root group
+      - "998"  # crio group
+      - "999"  # podman group
+    security_opt:
+      - label=disable
     ports:
       - "8000:8000"
     environment:
       # SnapApi configuration
-      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,*
+      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,http://192.168.33.209:3000,*
+      - SNAP_API_URL=http://192.168.130.1:8000
       # SnapWatcher operator configuration
-      - WATCHER_CLUSTER_NAME=${WATCHER_CLUSTER_NAME:-local-cluster}
-      - WATCHER_MODE=${WATCHER_MODE:-compose}
-      - KUBECONFIG=/app/.kube/config
+      - WATCHER_CLUSTER_NAME=crc
+      - WATCHER_MODE=compose
     volumes:
       # Mount src folder for development
       - ./src:/app:Z 

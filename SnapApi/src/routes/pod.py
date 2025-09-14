@@ -68,14 +68,14 @@ async def receive_pod_webhook(data: PodWebhookData):
             if generate_name:
                 # Remove trailing dash from generateName
                 pod_name = generate_name.rstrip("-")
-                print(f"DEBUG - Using generateName: '{generate_name}' -> pod_name: '{pod_name}'")
+                print(f"SnapHook_Request: DEBUG - Using generateName: '{generate_name}' -> pod_name: '{pod_name}'")
         
-        print(f"DEBUG - Webhook received pod_name: '{pod_name}', namespace: '{namespace}'")
-        print(f"DEBUG - Webhook received labels: {labels}")
+        print(f"SnapHook_Request: DEBUG - Webhook received pod_name: '{pod_name}', namespace: '{namespace}'")
+        print(f"SnapHook_Request: DEBUG - Webhook received labels: {labels}")
         
         # Extract app name using helper function
         app = extract_app_name_from_pod(pod_name, labels)
-        print(f"DEBUG - Extracted app name: '{app}'")
+        print(f"SnapHook_Request: DEBUG - Extracted app name: '{app}'")
         
         # Use "unknown" as fallback for webhook (instead of "unknown-app")
         if app == "unknown-app":
@@ -112,7 +112,7 @@ async def receive_pod_webhook(data: PodWebhookData):
                         else:
                             repo = repo.split(":")[0].split("@")[0]  # Remove tag/digest
             except Exception as e:
-                logger.warning(f"Failed to parse repo from image_ref {image_ref}: {e}")
+                print(f"SnapHook_Request: Failed to parse repo from image_ref {image_ref}: {e}")
                 repo = ""  # fallback to default
 
         # Get registry and repo from cluster cache configuration
@@ -121,12 +121,12 @@ async def receive_pod_webhook(data: PodWebhookData):
             cache_registry = snap_config["cache_registry"]
             cache_repo = snap_config["cache_repo"]
         except Exception as e:
-            logger.warning(f"Failed to load cluster cache config for {data.cluster_name}: {e}")
+            print(f"SnapHook_Request: Failed to load cluster cache config for {data.cluster_name}: {e}")
             # Fallback to environment variables
             cache_registry = os.getenv("snap_registry", "docker.io")
             cache_repo = os.getenv("snap_repo", "snap")
         
-        print(f"Registry config: {cache_registry}/{cache_repo}")
+        print(f"SnapHook_Request: Registry config: {cache_registry}/{cache_repo}")
 
         # Generate the complete image tag using cluster cache configuration
         generated_image_tag = None
@@ -141,10 +141,10 @@ async def receive_pod_webhook(data: PodWebhookData):
                 PodTemplateHash=pod_template_hash
             )
         except Exception as tag_error:
-            logger.warning(f"Failed to generate image tag: {tag_error}")
+            print(f"SnapHook_Request: Failed to generate image tag: {tag_error}")
             generated_image_tag = "generation-failed"
 
-        print(f"Pod webhook: {data.cluster_name}/{namespace}/{app} | digest:{orig_image_short_digest} | tag:{generated_image_tag}")
+        print(f"SnapHook_Request: Pod webhook: {data.cluster_name}/{namespace}/{app} | digest:{orig_image_short_digest} | tag:{generated_image_tag}")
 
         # Check if the generated image exists in the registry using cluster cache configuration
         image_exists = await check_image_exists_multi_registry(
@@ -164,5 +164,5 @@ async def receive_pod_webhook(data: PodWebhookData):
             }
 
     except Exception as e:
-        logger.error(f"Error processing pod webhook: {str(e)}")
+        print(f"SnapHook_Request: Error processing pod webhook: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing webhook: {str(e)}")

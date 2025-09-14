@@ -3,13 +3,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
-import threading
 import kopf
 import flows.snap_init
 flows.snap_init.snap_init()
 
 # Import operator functionality - this registers the kopf event handlers with the framework
-import flows.operator_watcher  # noqa: F401
+import classes.operator_watcher  # noqa: F401
+
+# Load watcher configurations on startup
+from routes.operator import load_watcher_configs_on_startup
+load_watcher_configs_on_startup()
 
 # Import routers
 from routes.registry import router as registry_router
@@ -23,6 +26,7 @@ from routes.cluster_cache import router as cluster_cache_router
 from routes.download import router as cluster_download
 from routes.websocket import router as websocket_router
 from routes.imagetag import router as imagetag_router
+from routes.operator import router as operator_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -66,25 +70,6 @@ app.include_router(config_router, prefix="/config", tags=["config"])
 app.include_router(cluster_download, prefix="/download", tags=["download"])
 app.include_router(websocket_router, prefix="/ws", tags=["websocket"])
 app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])
+app.include_router(operator_router, prefix="/operator", tags=["operator"])
 
-# Start the integrated SnapWatcher operator
-@app.on_event("startup")
-async def startup_event():
-    """Start the integrated SnapWatcher operator in a background thread"""
-    watcher_mode = os.getenv("WATCHER_MODE", "off").lower()
-    
-    if watcher_mode == "off":
-        logger.info("SnapWatcher: WatcherMode is 'off' - operator will not start")
-        logger.info("SnapApi started successfully (operator disabled)")
-        return
-    
-    def run_operator():
-        logger.info("Starting integrated SnapWatcher operator...")
-        kopf.run(
-            clusterwide=True
-        )
-    
-    # Start operator in a daemon thread
-    operator_thread = threading.Thread(target=run_operator, daemon=True)
-    operator_thread.start()
-    logger.info("SnapApi with integrated SnapWatcher operator started successfully")
+# SnapWatcher operator will be started via API request

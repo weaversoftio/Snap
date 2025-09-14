@@ -33,19 +33,10 @@ async def list_cluster_config():
                         data = json.load(f)
                         cluster_details_data = data["cluster_config_details"]
                         
-                        # Handle backward compatibility - if auth_method is not present, determine it based on username
-                        auth_method = cluster_details_data.get("auth_method")
-                        if auth_method is None:
-                            # Backward compatibility: determine auth method based on username presence
-                            auth_method = "token" if not cluster_details_data.get("kube_username") else "username_password"
-                        
                         # Create ClusterConfigDetails using model_construct to bypass all validation
                         cluster_details = ClusterConfigDetails.model_construct(
                             kube_api_url=cluster_details_data["kube_api_url"],
-                            kube_username=cluster_details_data.get("kube_username"),
-                            kube_password=cluster_details_data["kube_password"],
-                            nodes_username=cluster_details_data["nodes_username"],
-                            auth_method=auth_method
+                            token=cluster_details_data.get("token", cluster_details_data.get("kube_password", ""))
                         )
                         
                         # Create ClusterConfig with the details

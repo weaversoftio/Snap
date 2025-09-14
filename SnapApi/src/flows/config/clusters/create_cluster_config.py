@@ -4,35 +4,20 @@ from classes.cluster_cache_models import ClusterCacheRequest, ClusterCache
 from flows.config.clusterCache.create_cluster_cache import create_cluster_cache
 import os
 import json
-from typing import Optional, Literal
+from typing import Optional
 import re
 
 class ClusterConfigRequest(BaseModel):
     kube_api_url: str
-    kube_username: Optional[str] = None
-    kube_password: str
-    nodes_username: str
+    token: str
     name: str
-    auth_method: Literal["username_password", "token"] = "username_password"
     registry: Optional[str] = None  # Registry name for cluster cache
     repo: Optional[str] = "snap_images"  # Repository name for cluster cache
     
-    @validator('kube_username')
-    def validate_username_for_auth_method(cls, v, values):
-        auth_method = values.get('auth_method', 'username_password')
-        if auth_method == 'username_password' and not v:
-            raise ValueError('Username is required for username_password authentication')
-        elif auth_method == 'token' and v:
-            # Clear username for token auth
-            return None
-        return v
-    
-    @validator('kube_password')
-    def validate_password_or_token(cls, v, values):
+    @validator('token')
+    def validate_token(cls, v):
         if not v or not v.strip():
-            auth_method = values.get('auth_method', 'username_password')
-            field_name = 'Token' if auth_method == 'token' else 'Password'
-            raise ValueError(f'{field_name} is required')
+            raise ValueError('Token is required')
         return v
 
 class ClusterConfigResponse(BaseModel):
@@ -54,10 +39,7 @@ async def create_cluster_config(request: ClusterConfigRequest):
     config = ClusterConfig(    
         cluster_config_details=ClusterConfigDetails(
             kube_api_url=request.kube_api_url,
-            kube_username=request.kube_username,
-            kube_password=request.kube_password,
-            nodes_username=request.nodes_username,
-            auth_method=request.auth_method
+            token=request.token
         ),
         name=request.name
     )

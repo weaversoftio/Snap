@@ -9,7 +9,7 @@ from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extra
 # ----------------------------
 # Main entrypoint (DROP-IN)
 # ----------------------------
-async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointRequest, cluster: str, username: str) -> dict:
+async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, cluster: str, username: str) -> dict:
     """
     Combined function that performs both checkpoint creation and container push from pod spec.
     NOW USING CLUSTER-NATIVE UPLOAD PATH:
@@ -34,7 +34,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             if generate_name:
                 # Remove trailing dash from generateName
                 pod_name = generate_name.rstrip("-")
-                print(f"DEBUG - Checkpoint using generateName: '{generate_name}' -> pod_name: '{pod_name}'")
+                print(f"SnapAPI: DEBUG - Checkpoint using generateName: '{generate_name}' -> pod_name: '{pod_name}'")
         
         # Extract app name using helper function
         app = extract_app_name_from_pod(pod_name, labels)
@@ -80,9 +80,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         cache_registry_pass = snap_config["cache_registry_pass"]
         cache_repo = snap_config["cache_repo"]
         kube_api_address = snap_config["kube_api_address"]
-        kube_username = snap_config["kube_username"]
-        kube_password = snap_config["kube_password"]
-        auth_method = snap_config["auth_method"]
+        token = snap_config["token"]
 
          
         SNAP_API_URL = os.getenv("SNAP_API_URL", "Unknown")
@@ -103,28 +101,11 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         kube_api_checkpoint_url = (
             f"{kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}"
         )
-        print(kube_api_checkpoint_url)
+        print(f"SnapAPI: {kube_api_checkpoint_url}")
         
-        # Get proper Bearer token for authentication
-        if auth_method == "token":
-            # Use provided token directly
-            token = kube_password
-        else:
-            # For username/password auth, we need to get a Bearer token
-            # First try to login and get token using oc
-            try:
-                # Login using kubeadmin credentials and get token
-                login_cmd = ["oc", "login", kube_api_address, "-u", kube_username, "-p", kube_password, "--insecure-skip-tls-verify=true"]
-                await run(login_cmd)
-                
-                # Get the token
-                token_cmd = ["oc", "whoami", "--show-token"]
-                token_output = await run(token_cmd)
-                token = token_output.stdout.strip()
-            except Exception as e:
-                print(f"Failed to get token via oc login: {e}")
-                # Fallback to using password as token (may work in some cases)
-                token = kube_password
+        # Use provided token directly
+        print("SnapAPI: Using provided token for authentication")
+        print(f"SnapAPI: Token: {token[:20]}...")
         
         # Build curl command with Bearer token
         checkpoint_cmd = [
@@ -133,16 +114,16 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             kube_api_checkpoint_url
         ]
 
-        print(f"Creating checkpoint: {pod_name}/{container_name}")
-        print(f"Checkpoint API URL: {kube_api_checkpoint_url}")
+        print(f"SnapAPI: Creating checkpoint: {pod_name}/{container_name}")
+        print(f"SnapAPI: Checkpoint API URL: {kube_api_checkpoint_url}")
         
         output = await run(checkpoint_cmd)
         stdout = (output.stdout or "").strip()
         stderr = (output.stderr or "").strip()
         
-        print(f"Checkpoint API response: {stdout[:200]}...")
+        print(f"SnapAPI: Checkpoint API response: {stdout[:200]}...")
         if stderr:
-            print(f"Checkpoint API stderr: {stderr[:200]}...")
+            print(f"SnapAPI: Checkpoint API stderr: {stderr[:200]}...")
 
         # Parse kubelet response
         try:
@@ -157,7 +138,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
         checkpoint_file_path = items[0]
         checkpoint_filename = os.path.basename(checkpoint_file_path)
         
-        print(f"Checkpoint created at: {checkpoint_file_path}")
+        print(f"SnapAPI: Checkpoint created at: {checkpoint_file_path}")
 
 
 
@@ -177,22 +158,22 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
             "-F", f"file=@{checkpoint_file_path}"
         ]
         try:
-            print(f"Uploading checkpoint from node: {checkpoint_file_path}")
-            print(f"Curl Command: {debug_command}")
-            print(f"Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
+            print(f"SnapAPI: Uploading checkpoint from node: {checkpoint_file_path}")
+            print(f"SnapAPI: Curl Command: {debug_command}")
+            print(f"SnapAPI: Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
             
             # Call debug command
-            print(f"Executing debug command: {debug_command}")
+            print(f"SnapAPI: Executing debug command: {debug_command}")
             debug_output = await run(debug_command)
             
             if debug_output.stdout:
-                print(f"Upload result: {debug_output.stdout[:200]}...")
+                print(f"SnapAPI: Upload result: {debug_output.stdout[:200]}...")
             if debug_output.stderr:
-                print(f"Upload stderr: {debug_output.stderr[:200]}...")
+                print(f"SnapAPI: Upload stderr: {debug_output.stderr[:200]}...")
             
             if debug_output.returncode != 0:
                 error_msg = f"Upload failed: {debug_output.stderr[:100]}..."
-                print(error_msg)
+                print(f"SnapAPI: {error_msg}")
                 return {
                     "success": False,
                     "message": error_msg,
@@ -201,7 +182,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
                 }
         except Exception as e:
             error_msg = f"Upload error: {str(e)}"
-            print(error_msg)
+            print(f"SnapAPI: {error_msg}")
             return {
                 "success": False,
                 "message": error_msg,
@@ -250,7 +231,7 @@ async def checkpoint_and_push_combined_from_pod_spec(request: PodSpecCheckpointR
                 processed_filename = f"{processed_filename}.tar"
             
             checkpoint_file_in_pod = f"./checkpoints/{pod_name}/{processed_filename}"
-            print(f"Looking for checkpoint file at: {checkpoint_file_in_pod}")
+            print(f"SnapAPI: Looking for checkpoint file at: {checkpoint_file_in_pod}")
             
             await run(["buildah", "add", newcontainer, checkpoint_file_in_pod, "/"])
             await run([

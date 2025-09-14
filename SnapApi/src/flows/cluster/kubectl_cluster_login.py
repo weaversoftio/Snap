@@ -27,36 +27,20 @@ async def kubectl_cluster_login(cluster_config_name: str, username: str):
         
         # Run oc login with the given credentials
         kube_api_url = cluster_config.cluster_config_details.kube_api_url
-        kube_username = cluster_config.cluster_config_details.kube_username
-        kube_password = cluster_config.cluster_config_details.kube_password
-        auth_method = getattr(cluster_config.cluster_config_details, 'auth_method', 'username_password')
+        token = cluster_config.cluster_config_details.token
         
         message=f"Logging in to the kubernetes cluster"
         await send_progress(username, {"progress": 16, "task_name": "Cluster Login", "message": message})
-        print(f"Logging in to the kubernetes cluster with the given credentials: {kube_api_url}, {kube_username}, {kube_password}")
-        print(f"Authentication method: {auth_method}")
+        print(f"Logging in to the kubernetes cluster with token authentication: {kube_api_url}")
+        print("Using token-based authentication")
         
-        # Determine authentication method - check auth_method field first, then fallback to username presence
-        use_token_auth = (auth_method == "token") or (not kube_username)
-        
-        if use_token_auth:
-            # Use token-based login
-            print("Using token-based authentication")
-            await run([
-                "oc", "login", 
-                "--token", kube_password,
-                "--server", kube_api_url,
-                "--insecure-skip-tls-verify=true"
-            ])
-        else:
-            # Use username/password-based login
-            print("Using username/password authentication")
-            await run([
-                "oc", "login", kube_api_url,
-                "--username", kube_username,
-                "--password", kube_password,
-                "--insecure-skip-tls-verify=true"
-            ])
+        # Use token-based login
+        await run([
+            "oc", "login", 
+            "--token", token,
+            "--server", kube_api_url,
+            "--insecure-skip-tls-verify=true"
+        ])
         await send_progress(username, {"progress": 32, "task_name": "Cluster Login", "message": "Successfully logged in to the kubernetes cluster"})
         print("Logged in to the kubernetes cluster")
 
