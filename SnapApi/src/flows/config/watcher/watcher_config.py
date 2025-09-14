@@ -16,7 +16,8 @@ class WatcherConfig:
     
     def __init__(self, name: str, cluster_name: str, cluster_config: Dict[str, Any], 
                  scope: str = "cluster", trigger: str = "startupProbe", 
-                 namespace: Optional[str] = None, status: str = "stopped"):
+                 namespace: Optional[str] = None, status: str = "stopped", 
+                 auto_delete_pod: bool = True):
         self.name = name
         self.cluster_name = cluster_name
         self.cluster_config = cluster_config
@@ -24,6 +25,7 @@ class WatcherConfig:
         self.trigger = trigger
         self.namespace = namespace
         self.status = status
+        self.auto_delete_pod = auto_delete_pod
         self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
     
@@ -37,6 +39,7 @@ class WatcherConfig:
             "trigger": self.trigger,
             "namespace": self.namespace,
             "status": self.status,
+            "auto_delete_pod": self.auto_delete_pod,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -51,7 +54,8 @@ class WatcherConfig:
             scope=data.get("scope", "cluster"),
             trigger=data.get("trigger", "startupProbe"),
             namespace=data.get("namespace"),
-            status=data.get("status", "stopped")
+            status=data.get("status", "stopped"),
+            auto_delete_pod=data.get("auto_delete_pod", True)
         )
         config.created_at = data.get("created_at", datetime.now().isoformat())
         config.updated_at = data.get("updated_at", datetime.now().isoformat())

@@ -1,51 +1,77 @@
 services:
   snapapi:
-    stop_grace_period: 2s
-    build: 
-      context: ./SnapApi
+    build:
+      context: .
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/grus-api:latest
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./grus-api:/app
-    networks:
-      - app-network
+    container_name: snapapi
+    stop_grace_period: 2s
     privileged: true
+    cap_add:
+    - SYS_ADMIN
     group_add:
       - "0"  # root group
       - "998"  # crio group
       - "999"  # podman group
     security_opt:
       - label=disable
-    env_file:
-      - .env
-    environment:
-      - GRUS_API_URL=${GRUS_API_URL}
-      - CONTAINER_RUNTIME=${CONTAINER_RUNTIME}
-      - CHECKPOINT_PATH=${CHECKPOINT_PATH}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GRUS_ORIGINS=${GRUS_ORIGINS}
-    user: root
-    cap_add:
-      - SYS_ADMIN
-  snapui:
-    stop_grace_period: 1s
-    build: 
-      context: ./SnapApi
-      dockerfile: Dockerfile
-    image: docker.io/frenzy669/grus-admin:latest
-    env_file:
-      - .env
-    environment:
-      - API_URL=${API_URL}
-      - WS_URL=${WS_URL}
-    depends_on:
-      - api
     ports:
-      - "8088:80" # TODO: change to 8080    
+      - "8000:8000"
+    environment:
+      # SnapApi configuration
+      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,http://192.168.33.209:3000,*
+      - SNAP_API_URL=http://192.168.130.1:8000
+      # SnapWatcher operator configuration
+      - WATCHER_CLUSTER_NAME=crc
+      - WATCHER_MODE=compose
+    volumes:
+      # Mount src folder for development
+      - ./src:/app:Z 
+      # Mount checkpoint storage
+      - snapapi-checkpoints:/app/checkpoints
     networks:
-      - app-network
+      - snap-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  snapui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: snapui
+    ports:
+      - "0.0.0.0:3000:8080"
+    environment:
+      # API configuration
+      - API_URL=${API_URL:-http://localhost:8000}
+      - WS_URL=${WS_URL:-ws://localhost:8000}
+      
+      # React app configuration
+      - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}
+      - REACT_APP_PASSWORD=${REACT_APP_PASSWORD:-admin}
+    volumes:
+      # Mount src folder for development (optional)
+      - ./src:/app:Z
+    networks:
+      - snap-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+
+volumes:
+  snapapi-checkpoints:
+    driver: local
+  snapui-build:
+    driver: local
+
 networks:
-  app-network:
+  snap-network:
     driver: bridge

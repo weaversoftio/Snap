@@ -19,7 +19,7 @@ class SnapWatcherOperator:
     Uses cluster configuration for Kubernetes client setup.
     """
     
-    def __init__(self, cluster_name: str, cluster_config: ClusterConfig, scope: str = "cluster", namespace: Optional[str] = None):
+    def __init__(self, cluster_name: str, cluster_config: ClusterConfig, scope: str = "cluster", namespace: Optional[str] = None, auto_delete_pod: bool = True):
         """
         Initialize the SnapWatcherOperator with cluster configuration.
         
@@ -28,12 +28,14 @@ class SnapWatcherOperator:
             cluster_config: Cluster configuration containing API URL and token
             scope: Scope of watching - "cluster" or "namespace"
             namespace: Specific namespace to watch (required if scope is "namespace")
+            auto_delete_pod: Whether to automatically delete pods after successful checkpoint
         """
         # Using print instead of logger
         self.cluster_name = cluster_name
         self.cluster_config = cluster_config
         self.scope = scope
         self.namespace = namespace
+        self.auto_delete_pod = auto_delete_pod
         self.kube_client = None
         
         # Validate namespace scope
@@ -49,6 +51,9 @@ class SnapWatcherOperator:
             kube_config = client.Configuration()
             kube_config.host = self.cluster_config.cluster_config_details.kube_api_url
             kube_config.api_key = {'authorization': f'Bearer {self.cluster_config.cluster_config_details.token}'}
+            
+            # Disable SSL verification for self-signed certificates
+            kube_config.verify_ssl = False
             
             # Create API client with the configuration
             self.kube_client = client.ApiClient(kube_config)
@@ -71,6 +76,42 @@ class SnapWatcherOperator:
     def is_ready(self) -> bool:
         """Check if the operator is ready to handle events."""
         return self.kube_client is not None
+    
+    def delete_pod(self, pod_name: str, namespace: str) -> bool:
+        """
+        Delete a pod using the Kubernetes client.
+        
+        Args:
+            pod_name: Name of the pod to delete
+            namespace: Namespace of the pod
+            
+        Returns:
+            bool: True if deletion was successful, False otherwise
+        """
+        try:
+            if not self.is_ready():
+                print(f"SnapWatcher: Kubernetes client not ready, cannot delete pod {pod_name}")
+                return False
+            
+            # Create CoreV1Api instance for pod operations
+            v1 = client.CoreV1Api(self.kube_client)
+            
+            # Delete the pod
+            v1.delete_namespaced_pod(
+                name=pod_name,
+                namespace=namespace,
+                body=client.V1DeleteOptions()
+            )
+            
+            print(f"SnapWatcher: Successfully initiated deletion of pod {pod_name} in namespace {namespace}")
+            return True
+            
+        except client.exceptions.ApiException as e:
+            print(f"SnapWatcher: Failed to delete pod {pod_name}: {e}")
+            return False
+        except Exception as e:
+            print(f"SnapWatcher: Unexpected error deleting pod {pod_name}: {e}")
+            return False
     
     def configure_kopf_namespace(self):
         """Configure kopf to watch specific namespace if scope is namespace."""
@@ -162,6 +203,17 @@ class SnapWatcherOperator:
             if result.get("success"):
                 print(f"SnapWatcher: Checkpoint and push completed successfully for pod {pod}")
                 print(f"SnapWatcher: Image tag: {result.get('image_tag', 'N/A')}")
+                
+                # Automatically delete the pod after successful checkpoint if enabled
+                if self.auto_delete_pod:
+                    print(f"SnapWatcher: Auto-deleting pod {pod} after successful checkpoint")
+                    delete_success = self.delete_pod(pod, ns)
+                    if delete_success:
+                        print(f"SnapWatcher: Pod {pod} deletion initiated successfully")
+                    else:
+                        print(f"SnapWatcher: Failed to delete pod {pod}")
+                else:
+                    print(f"SnapWatcher: Auto-deletion disabled, keeping pod {pod}")
             else:
                 print(f"SnapWatcher: Checkpoint operation failed: {result.get('message', 'Unknown error')}")
                 

@@ -31,6 +31,7 @@ class OperatorStartRequest(BaseModel):
     cluster_config: ClusterConfig
     scope: str = "cluster"
     namespace: Optional[str] = None
+    auto_delete_pod: bool = True
 
 
 class OperatorStatusResponse(BaseModel):
@@ -48,6 +49,7 @@ class SnapWatcherCreateRequest(BaseModel):
     scope: str = "cluster"
     trigger: str = "startupProbe"
     namespace: Optional[str] = None
+    auto_delete_pod: bool = True
 
 
 class SnapWatcherUpdateRequest(BaseModel):
@@ -55,6 +57,7 @@ class SnapWatcherUpdateRequest(BaseModel):
     scope: Optional[str] = None
     trigger: Optional[str] = None
     namespace: Optional[str] = None
+    auto_delete_pod: Optional[bool] = None
 
 
 class SnapWatcherResponse(BaseModel):
@@ -65,6 +68,7 @@ class SnapWatcherResponse(BaseModel):
     trigger: str
     namespace: Optional[str] = None
     status: str
+    auto_delete_pod: bool
     created_at: str
     updated_at: str
 
@@ -120,7 +124,8 @@ async def start_operator(request: OperatorStartRequest, background_tasks: Backgr
             cluster_name=request.cluster_name,
             cluster_config=request.cluster_config,
             scope=request.scope,
-            namespace=request.namespace
+            namespace=request.namespace,
+            auto_delete_pod=request.auto_delete_pod
         )
         
         # Set the global operator instance for kopf event handlers
@@ -248,7 +253,8 @@ async def create_snapwatcher(request: SnapWatcherCreateRequest):
             scope=request.scope,
             trigger=request.trigger,
             namespace=request.namespace,
-            status="stopped"
+            status="stopped",
+            auto_delete_pod=request.auto_delete_pod
         )
         
         # Save configuration
@@ -270,7 +276,8 @@ async def create_snapwatcher(request: SnapWatcherCreateRequest):
                 cluster_name=request.cluster_name,
                 cluster_config=request.cluster_config,
                 scope=request.scope,
-                namespace=request.namespace
+                namespace=request.namespace,
+                auto_delete_pod=request.auto_delete_pod
             )
             
             # Start the operator
