@@ -17,6 +17,7 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import WarningIcon from '@mui/icons-material/Warning';
 import { YamlEditor } from "../common/YamlViewer";
 import Editor from "@monaco-editor/react";
+import ClusterStatus from "./ClusterStatus";
 
 const ClusterScreen = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -949,6 +950,14 @@ const ClusterScreen = () => {
                     </Button>
                   </Grid>
                 </Grid>
+              </Paper>
+
+              {/* Cluster Status */}
+              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 3 }}>
+                  Cluster Status
+                </Typography>
+                <ClusterStatus />
               </Paper>
 
               {/* Danger Zone */}

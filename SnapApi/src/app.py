@@ -27,6 +27,7 @@ from routes.download import router as cluster_download
 from routes.websocket import router as websocket_router
 from routes.imagetag import router as imagetag_router
 from routes.operator import router as operator_router
+from routes.cluster_status import router as cluster_status_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -62,6 +63,7 @@ logging.getLogger("uvicorn").setLevel(logging.ERROR)
 app.include_router(registry_router, prefix="/registry", tags=["registry"])
 app.include_router(cluster_router, prefix="/cluster", tags=["cluster"])
 app.include_router(cluster_cache_router, prefix="/config/clusterCache", tags=["clusterCache"])
+app.include_router(cluster_status_router, prefix="/cluster/status", tags=["clusterStatus"])
 app.include_router(checkpoint_router, prefix="/checkpoint", tags=["checkpoint"])
 app.include_router(pod_router, prefix="/pod", tags=["pod"])
 app.include_router(automation_router, prefix="/automation", tags=["automation"])

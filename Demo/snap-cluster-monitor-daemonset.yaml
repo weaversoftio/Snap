@@ -1,0 +1,281 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: snap-cluster-monitor
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: snap-cluster-monitor
+  template:
+    metadata:
+      labels:
+        app: snap-cluster-monitor
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: cluster-monitor
+        image: quay.io/centos/centos:stream9
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            # Install required packages
+            dnf update -y && dnf install -y curl jq
+            
+            # Install criu dependencies
+            dnf install -y protobuf-c libnl3 libnet libselinux
+            
+            # Function to check crio version
+            check_crio() {
+              # Check common crio locations
+              local crio_bin=""
+              
+              for path in "/host/usr/bin/crio" "/host/bin/crio" "/usr/bin/crio" "/usr/local/bin/crio" "/bin/crio"; do
+                if [ -x "$path" ]; then
+                  crio_bin="$path"
+                  break
+                fi
+              done
+              
+              if [ -n "$crio_bin" ]; then
+                local version=$("$crio_bin" -v 2>/dev/null | grep -o "crio version [0-9.]*" || echo "")
+                if [[ "$version" == *"crio version 1.31.2"* ]]; then
+                  echo "crio:pass"
+                else
+                  echo "crio:fail:$version"
+                fi
+              else
+                echo "crio:fail:not_installed"
+              fi
+            }
+            
+            # Function to check criu version
+            check_criu() {
+              # Check common criu locations
+              local criu_bin=""
+              
+              for path in "/host/usr/sbin/criu" "/host/usr/bin/criu" "/host/bin/criu" "/usr/sbin/criu" "/usr/bin/criu" "/usr/local/bin/criu" "/bin/criu"; do
+                if [ -x "$path" ]; then
+                  criu_bin="$path"
+                  break
+                fi
+              done
+              
+              if [ -n "$criu_bin" ]; then
+                # Try to execute the binary directly to get version
+                local version=$("$criu_bin" -V 2>/dev/null | grep -o "Version: [0-9.]*" || echo "")
+                
+                if [ -z "$version" ]; then
+                  echo "criu:fail:cannot_execute"
+                  return
+                fi
+                
+                # Check if version matches expected
+                if [[ "$version" == *"Version: 3.19"* ]]; then
+                  echo "criu:pass"
+                else
+                  echo "criu:fail:$version"
+                fi
+              else
+                echo "criu:fail:not_installed"
+              fi
+            }
+            
+            # Function to check criu config
+            check_criu_config() {
+              # Check host-mounted config first
+              if [ -f "/host/etc/criu/default.conf" ]; then
+                if grep -q "tcp-close" /host/etc/criu/default.conf; then
+                  echo "criu_config:pass"
+                else
+                  echo "criu_config:fail:missing_tcp_close"
+                fi
+              elif [ -f "/etc/criu/default.conf" ]; then
+                if grep -q "tcp-close" /etc/criu/default.conf; then
+                  echo "criu_config:pass"
+                else
+                  echo "criu_config:fail:missing_tcp_close"
+                fi
+              else
+                echo "criu_config:fail:config_not_found"
+              fi
+            }
+            
+            # Function to get node name
+            get_node_name() {
+              cat /etc/hostname 2>/dev/null || hostname
+            }
+            
+            # Function to post results to SnapApi
+            post_results() {
+              local node_name=$(get_node_name)
+              local cluster_name="crc2"  # Set cluster name here
+              local crio_result=$(check_crio)
+              local criu_result=$(check_criu)
+              local criu_config_result=$(check_criu_config)
+              
+              local payload=$(cat <<EOF
+            {
+              "cluster_name": "$cluster_name",
+              "node_name": "$node_name",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "checks": {
+                "crio": "$crio_result",
+                "criu": "$criu_result",
+                "criu_config": "$criu_config_result"
+              }
+            }
+            EOF
+            )
+              
+              # Try to post to SnapApi (adjust URL as needed)
+              curl -s -X POST \
+                -H "Content-Type: application/json" \
+                -d "$payload" \
+                "http://192.168.33.209:8000/cluster/status/report" \
+                || echo "Failed to post results"
+            }
+            
+            # Debug function to find tools
+            debug_find_tools() {
+              echo "=========================================="
+              echo "CLUSTER STATUS DEBUG REPORT"
+              echo "=========================================="
+              
+              # CRIO Check
+              echo "CRIO STATUS:"
+              local crio_bin=""
+              for path in "/host/usr/bin/crio" "/host/bin/crio" "/usr/bin/crio" "/usr/local/bin/crio" "/bin/crio"; do
+                if [ -x "$path" ]; then
+                  crio_bin="$path"
+                  break
+                fi
+              done
+              
+              if [ -n "$crio_bin" ]; then
+                echo "  Found: $crio_bin"
+                local crio_version=$("$crio_bin" -v 2>/dev/null | grep -o "crio version [0-9.]*" || echo "unknown")
+                echo "  Version: $crio_version"
+                if [[ "$crio_version" == *"crio version 1.31.2"* ]]; then
+                  echo "  Status: PASS (Expected version)"
+                else
+                  echo "  Status: FAIL (Unexpected version)"
+                fi
+              else
+                echo "  Status: FAIL (Not found)"
+              fi
+              
+              echo ""
+              
+              # CRIU Check
+              echo "CRIU STATUS:"
+              local criu_bin=""
+              for path in "/host/usr/sbin/criu" "/host/usr/bin/criu" "/host/bin/criu" "/usr/sbin/criu" "/usr/bin/criu" "/usr/local/bin/criu" "/bin/criu"; do
+                if [ -x "$path" ]; then
+                  criu_bin="$path"
+                  break
+                fi
+              done
+              
+              if [ -n "$criu_bin" ]; then
+                echo "  Found: $criu_bin"
+                
+                # Try to get version by direct execution
+                echo "  Attempting to get version..."
+                local criu_version=$("$criu_bin" -V 2>&1 | grep -o "Version: [0-9.]*" || echo "")
+                local criu_error=$("$criu_bin" -V 2>&1 | grep -v "Version:" || echo "")
+                
+                if [ -n "$criu_version" ]; then
+                  echo "  Version: $criu_version"
+                  if [[ "$criu_version" == *"Version: 3.19"* ]]; then
+                    echo "  Status: PASS (Expected version)"
+                  else
+                    echo "  Status: FAIL (Unexpected version)"
+                  fi
+                else
+                  echo "  Version: Cannot execute binary"
+                  echo "  Error details: $criu_error"
+                  echo "  Status: FAIL (Cannot verify version)"
+                fi
+              else
+                echo "  Status: FAIL (Not found)"
+              fi
+              
+              echo ""
+              
+              # CRIU Config Check
+              echo "CRIU CONFIG STATUS:"
+              if [ -f "/host/etc/criu/default.conf" ]; then
+                echo "  Config file found: /host/etc/criu/default.conf"
+                echo "  Config content:"
+                cat /host/etc/criu/default.conf | sed 's/^/    /'
+                
+                if grep -q "tcp-close" /host/etc/criu/default.conf; then
+                  echo "  Status: PASS (tcp-close configured)"
+                else
+                  echo "  Status: FAIL (tcp-close not found)"
+                fi
+              else
+                echo "  Config file not found: /host/etc/criu/default.conf"
+                echo "  Searching for criu config files:"
+                find /host/etc -name "*criu*" 2>/dev/null | sed 's/^/    /' || echo "    No criu files found"
+                echo "  Status: FAIL (Config not found)"
+              fi
+              
+              echo ""
+              echo "=========================================="
+              echo "END DEBUG REPORT"
+              echo "=========================================="
+            }
+            
+            # Main monitoring loop
+            while true; do
+              echo "$(date): Running cluster status checks..."
+              debug_find_tools
+              post_results
+              sleep 60  # Check every 5 minutes
+            done
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-etc
+          mountPath: /host/etc
+          readOnly: true
+        - name: host-bin
+          mountPath: /host/bin
+          readOnly: true
+        - name: host-usr-bin
+          mountPath: /host/usr/bin
+          readOnly: true
+        - name: host-usr-sbin
+          mountPath: /host/usr/sbin
+          readOnly: true
+        - name: host-lib64
+          mountPath: /host/lib64
+          readOnly: true
+        - name: host-lib
+          mountPath: /host/lib
+          readOnly: true
+      volumes:
+      - name: host-etc
+        hostPath:
+          path: /etc
+      - name: host-bin
+        hostPath:
+          path: /bin
+      - name: host-usr-bin
+        hostPath:
+          path: /usr/bin
+      - name: host-usr-sbin
+        hostPath:
+          path: /usr/sbin
+      - name: host-lib64
+        hostPath:
+          path: /lib64
+      - name: host-lib
+        hostPath:
+          path: /lib
+      tolerations:
+      - operator: Exists
