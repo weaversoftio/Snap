@@ -24,8 +24,6 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
     try:
         pod_name = request.pod_name
         namespace = request.namespace
-        pod_name = request.pod_name
-        namespace = request.namespace
         node_name = request.node_name
         container_name = request.container_name
         kube_api_address = request.kube_api_address
@@ -45,12 +43,10 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         
         print(f"Token: {token[:20]}...")  # Only show first 20 chars for security
 
-        # Handle different API address formats
+        # Handle different API address formats - match checkpoint_and_push.py logic
         if kube_api_address.startswith('kubernetes.default.svc'):
-            # Internal cluster access - ensure proper protocol and port
-            kube_api_address = f"https://kubernetes.default.svc:443"
-        elif not kube_api_address.startswith('http'):
-            # External access - ensure https protocol
+            kube_api_address = "https://kubernetes.default.svc:443"
+        elif not kube_api_address.startswith("http"):
             kube_api_address = f"https://{kube_api_address}"
 
         # Construct the checkpoint endpoint
@@ -59,58 +55,60 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         )
         print(f"Kube API URL: {kube_api_checkpoint_url}")
 
+        # Build curl command with Bearer token - match checkpoint_and_push.py
         checkpoint_cmd = [
             "curl", "-k", "-X", "POST",
             "--header", f"Authorization: Bearer {token}",
             kube_api_checkpoint_url
         ]
-        print(f"Checkpoint command: {checkpoint_cmd}")
-        await send_progress(username, {"progress": 30, "task_name": "Create Checkpoint", "message": f"Running command: \n{checkpoint_cmd}"})
+
+        await send_progress(username, {"progress": 30, "task_name": "Create Checkpoint", "message": f"Creating checkpoint for {pod_name}/{container_name}"})
+        
+        print(f"SnapAPI: Creating checkpoint: {pod_name}/{container_name}")
+        print(f"SnapAPI: Checkpoint API URL: {kube_api_checkpoint_url}")
+        
         output = await run(checkpoint_cmd)
-        stdout = output.stdout.strip()
-        stderr = output.stderr.strip()
+        stdout = (output.stdout or "").strip()
+        stderr = (output.stderr or "").strip()
+        
+        print(f"SnapAPI: Checkpoint API response: {stdout[:200]}...")
+        if stderr:
+            print(f"SnapAPI: Checkpoint API stderr: {stderr[:200]}...")
 
-        # Log outputs
-        print(f"STDOUT: {stdout}")
-        print(f"STDERR: {stderr}")
-
-        await send_progress(username, {
-            "type": "progress",
-            "name": "Checkpoint Output",
-            "message": f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-        })
-
-        # Try to parse JSON
+        # Parse kubelet response - match checkpoint_and_push.py logic
         try:
             checkpoint_data = json.loads(stdout)
-            # handle normally if JSON
         except json.JSONDecodeError:
-            # handle as plain error message
-            error_message = f"Checkpoint failed:\n{stdout}"
+            error_msg = f"Checkpoint API did not return JSON.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
             await send_progress(username, {
-                "type": "progress",
-                "name": "Create Checkpoint",
-                "message": error_message
+                "progress": "failed", 
+                "task_name": "Create Checkpoint", 
+                "message": f"Checkpoint creation failed: Invalid JSON response"
             })
-            return PodCheckpointResponse(success=False, message=error_message)
+            return PodCheckpointResponse(success=False, message=error_msg)
 
+        items = checkpoint_data.get("items") or []
+        if not items:
+            error_msg = f"No checkpoint file path found in API response.\n{stdout}"
+            await send_progress(username, {
+                "progress": "failed", 
+                "task_name": "Create Checkpoint", 
+                "message": f"Checkpoint creation failed: No checkpoint file path in response"
+            })
+            return PodCheckpointResponse(success=False, message=error_msg)
 
-
-        # Parse the JSON response to get the checkpoint file path
-
-        try:
-            checkpoint_data = json.loads(output.stdout)
-            if checkpoint_data.get("items") and len(checkpoint_data["items"]) > 0:
-                checkpoint_file_path = checkpoint_data["items"][0]
-            else:
-                await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: No checkpoint file path found in response"})
-                raise RuntimeError("No checkpoint file path found in response")
-        except json.JSONDecodeError:
-            await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: Failed to parse checkpoint response as JSON"})
-            raise RuntimeError("Failed to parse checkpoint response as JSON")
-        
-        # Upload the checkpoint file from the node
+        checkpoint_file_path = items[0]
         checkpoint_filename = os.path.basename(checkpoint_file_path)
+        
+        await send_progress(username, {
+            "progress": 40, 
+            "task_name": "Create Checkpoint", 
+            "message": f"Checkpoint created successfully at {checkpoint_file_path}"
+        })
+        
+        print(f"SnapAPI: Checkpoint created at: {checkpoint_file_path}")
+        
+        # Upload the checkpoint file from the node - match checkpoint_and_push.py logic
         debug_command = [
             "oc", "debug", f"node/{node_name}", "--",
             "chroot", "/host", "curl", "-X", "POST",
@@ -120,23 +118,38 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
             "-F", f"file=@{checkpoint_file_path}"
         ]
         try:
-            await send_progress(username, {"progress": 45, "task_name": "Create Checkpoint", "message": f"Running command: \n{debug_command}"})
-            print(f"Executing debug command: {debug_command}")
+            await send_progress(username, {"progress": 50, "task_name": "Create Checkpoint", "message": f"Uploading checkpoint file from node"})
+            
+            print(f"SnapAPI: Uploading checkpoint from node: {checkpoint_file_path}")
+            print(f"SnapAPI: Curl Command: {debug_command}")
+            print(f"SnapAPI: Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
+            
+            # Call debug command
+            print(f"SnapAPI: Executing debug command: {debug_command}")
             debug_output = await run(debug_command)
-            print(f"Debug command stdout: {debug_output.stdout}")
-            print(f"Debug command stderr: {debug_output.stderr}")
-            await send_progress(username, {"progress": 60, "task_name": "Create Checkpoint", "message": f"Debug command stdout: {debug_output.stdout}"})
-            await send_progress(username, {"progress": 75, "task_name": "Create Checkpoint", "message": f"Debug command stderr: {debug_output.stderr}"})
+            
+            if debug_output.stdout:
+                print(f"SnapAPI: Upload result: {debug_output.stdout[:200]}...")
+            if debug_output.stderr:
+                print(f"SnapAPI: Upload stderr: {debug_output.stderr[:200]}...")
             
             if debug_output.returncode != 0:
-                error_msg = f"Upload failed with return code {debug_output.returncode}. stderr: {debug_output.stderr}"
-                print(error_msg)
-                await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: {error_msg}"})
+                error_msg = f"Upload failed: {debug_output.stderr[:100]}..."
+                await send_progress(username, {
+                    "progress": "failed", 
+                    "task_name": "Create Checkpoint", 
+                    "message": f"Upload failed: {debug_output.stderr[:100]}..."
+                })
+                print(f"SnapAPI: {error_msg}")
                 return PodCheckpointResponse(success=False, message=error_msg)
         except Exception as e:
-            error_msg = f"Failed to upload checkpoint file: {str(e)}"
-            print(error_msg)
-            await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: {error_msg}"})
+            error_msg = f"Upload error: {str(e)}"
+            await send_progress(username, {
+                "progress": "failed", 
+                "task_name": "Create Checkpoint", 
+                "message": f"Upload error: {str(e)}"
+            })
+            print(f"SnapAPI: {error_msg}")
             return PodCheckpointResponse(success=False, message=error_msg)
 
         await send_progress(username, {"progress": 100, "task_name": "Create Checkpoint", "message": f"All containers checkpointed successfully for pod: {pod_name}"})
@@ -148,7 +161,11 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
             container_ids=container_name  # Include container_ids in response
         )
 
-    except RuntimeError as e:
-        print(e)
-        await send_progress(username, {"progress": "failed", "task_name": "Create Checkpoint", "message": f"Error: {str(e)}"})
-        return PodCheckpointResponse(success=False, message=str(e))
+    except Exception as e:
+        err = f"Checkpoint operation failed: {e}"
+        await send_progress(username, {
+            "progress": "failed", 
+            "task_name": "Create Checkpoint", 
+            "message": f"Operation failed: {str(e)}"
+        })
+        return PodCheckpointResponse(success=False, message=err)

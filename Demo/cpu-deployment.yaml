@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-stress-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "cpu-stress-test"
+  template:
+    metadata:
+      labels:
+        app: "cpu-stress-test"
+        snap.weaversoft.io/snap: "true"
+    spec:
+      containers:
+      - name: cpu-stress
+        image: busybox:stable
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Starting CPU stress test..."
+            
+            # Run CPU stress for 10 seconds with monitoring
+            echo "Running CPU stress for 10 seconds..."
+            timeout 10s sh -c 'for i in $(seq 1 4); do while true; do :; done & done; wait' &
+            STRESS_PID=$!
+            
+            # Monitor CPU every second
+            for i in $(seq 1 10); do
+              LOAD=$(cat /proc/loadavg | cut -d' ' -f1)
+              echo "Second $i: Load $LOAD"
+              sleep 1
+            done
+            
+            # Kill any remaining stress processes
+            kill $STRESS_PID 2>/dev/null || true
+            pkill -f "while true" 2>/dev/null || true
+            sleep 2
+            
+            echo "CPU stress completed, monitoring CPU return to normal..."
+            
+            # Monitor CPU returning to minimal for 10 seconds
+            for i in $(seq 1 10); do
+              LOAD=$(cat /proc/loadavg | cut -d' ' -f1)
+              echo "Second $i after stress: Load $LOAD - CPU is not stressed anymore"
+              sleep 1
+            done
+            
+            echo "CPU usage is minimal, creating completion file..."
+            touch /tmp/stress-complete
+            
+            # Keep container running
+            while true; do 
+              sleep 60
+              echo "Container stable at $(date)"
+            done
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - test -f /tmp/stress-complete
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          timeoutSeconds: 1
+          failureThreshold: 60
+          successThreshold: 1
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - test -f /tmp/stress-complete
+          initialDelaySeconds: 1
+          periodSeconds: 5
+          timeoutSeconds: 1
+          failureThreshold: 3
+          successThreshold: 1
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - test -f /tmp/stress-complete
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+          successThreshold: 1
+        imagePullSecrets:
+        - name: nexus-registry-secret

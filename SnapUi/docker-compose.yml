@@ -10,8 +10,8 @@ services:
       - "0.0.0.0:3000:8080"
     environment:
       # API configuration
-      - API_URL=${API_URL:-http://localhost:8000}
-      - WS_URL=${WS_URL:-ws://localhost:8000}
+      - API_URL=${API_URL:-http://192.168.33.209:8000}
+      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
       
       # React app configuration
       - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}

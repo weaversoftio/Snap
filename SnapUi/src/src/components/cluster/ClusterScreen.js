@@ -45,8 +45,6 @@ const ClusterScreen = () => {
   const [statLoading, setStatLoading] = useState(false)
   const [stats, setStats] = useState({ total_pods: 0, total_checkpoints: 0 });
   const [playbookConfigs, setPlaybookConfigs] = useState([])
-  const [selectedRegistry, setSelectedRegistry] = useState("")
-  const [registryRepo, setRegistryRepo] = useState("snap_images")
   const [availableRegistries, setAvailableRegistries] = useState([])
   
   // Cluster cache management state
@@ -108,9 +106,7 @@ const ClusterScreen = () => {
     const clusterData = {
       name: clusterName,
       kube_api_url: clusterUrl,
-      token: clusterToken,
-      registry: selectedRegistry || null,
-      repo: registryRepo
+      token: clusterToken
     }
     
     try {
@@ -260,8 +256,6 @@ const ClusterScreen = () => {
     setClusterToken("")
     setSshkey(null)
     setClusterFormErrors(null)
-    setSelectedRegistry("")
-    setRegistryRepo("snap_images")
     setClusterEditing(false)
   }
 
@@ -406,32 +400,6 @@ const ClusterScreen = () => {
             />
           </Button>
           {sshKey && <Typography variant="body2">{sshKey.name}</Typography>}
-          
-          {/* Registry Selection */}
-          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
-            <InputLabel>Registry (Optional)</InputLabel>
-            <Select
-              value={selectedRegistry}
-              onChange={(e) => setSelectedRegistry(e.target.value)}
-              label="Registry (Optional)"
-            >
-              <MenuItem value="">None (No cluster cache will be created)</MenuItem>
-              {availableRegistries.map((registry) => (
-                <MenuItem key={registry.name} value={registry.name}>
-                  {registry.name} ({registry.registry_config_details.registry})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          {selectedRegistry && (
-            <TextField
-              label="Repository Name"
-              onChange={(e) => setRegistryRepo(e.target.value)}
-              value={registryRepo}
-              helperText="Repository name for storing checkpoint images"
-            />
-          )}
           
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleSubmitCluster}>Submit</Button>
         </Box>

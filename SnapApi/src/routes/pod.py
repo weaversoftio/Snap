@@ -7,6 +7,7 @@ from flows.helpers import (
     resolve_digest_with_skopeo, extract_digest, check_image_exists_multi_registry,
     extract_app_name_from_pod, get_snap_config_from_cluster_cache_api
 )
+from routes.websocket import broadcast_progress
 import subprocess
 from pydantic import BaseModel
 from typing import Any, Dict, Optional, List
@@ -54,6 +55,12 @@ async def MigratePod(request: PodMigrationRequest):
 @router.post("/webhook")
 async def receive_pod_webhook(data: PodWebhookData):
     try:
+        await broadcast_progress({
+            "progress": 10, 
+            "task_name": "SnapHook Webhook", 
+            "message": f"Processing webhook request for cluster {data.cluster_name}"
+        })
+        
         pod = data.pod_data or {}
         meta = pod.get("metadata", {}) or {}
         spec = pod.get("spec", {}) or {}
@@ -80,8 +87,14 @@ async def receive_pod_webhook(data: PodWebhookData):
         # Use "unknown" as fallback for webhook (instead of "unknown-app")
         if app == "unknown-app":
             app = "unknown"
-        
+
         pod_template_hash = labels.get("pod-template-hash", "unknown")
+
+        await broadcast_progress({
+            "progress": 30, 
+            "task_name": "SnapHook Webhook", 
+            "message": f"Processing pod {pod_name} in namespace {namespace}"
+        })
 
         # Resolve digest (without 'sha256:' repo), or 'unknown'
         orig_image_short_digest = await extract_digest(pod)
@@ -117,6 +130,12 @@ async def receive_pod_webhook(data: PodWebhookData):
 
         # Get registry and repo from cluster cache configuration
         try:
+            await broadcast_progress({
+                "progress": 50, 
+                "task_name": "SnapHook Webhook", 
+                "message": f"Loading cluster configuration for {data.cluster_name}"
+            })
+            
             snap_config = await get_snap_config_from_cluster_cache_api(data.cluster_name)
             cache_registry = snap_config["cache_registry"]
             cache_repo = snap_config["cache_repo"]
@@ -131,6 +150,12 @@ async def receive_pod_webhook(data: PodWebhookData):
         # Generate the complete image tag using cluster cache configuration
         generated_image_tag = None
         try:
+            await broadcast_progress({
+                "progress": 70, 
+                "task_name": "SnapHook Webhook", 
+                "message": f"Generating image tag for {app}"
+            })
+            
             generated_image_tag = generate_image_tag(
                 registry=cache_registry,
                 repo=cache_repo,
@@ -147,6 +172,12 @@ async def receive_pod_webhook(data: PodWebhookData):
         print(f"SnapHook_Request: Pod webhook: {data.cluster_name}/{namespace}/{app} | digest:{orig_image_short_digest} | tag:{generated_image_tag}")
 
         # Check if the generated image exists in the registry using cluster cache configuration
+        await broadcast_progress({
+            "progress": 90, 
+            "task_name": "SnapHook Webhook", 
+            "message": f"Checking if image exists in registry"
+        })
+        
         image_exists = await check_image_exists_multi_registry(
             cache_registry, cache_repo, data.cluster_name, namespace, app, 
             orig_image_short_digest, pod_template_hash
@@ -154,15 +185,30 @@ async def receive_pod_webhook(data: PodWebhookData):
 
         # Return response based on image existence
         if image_exists:
+            await broadcast_progress({
+                "progress": 100, 
+                "task_name": "SnapHook Webhook", 
+                "message": f"Image exists in registry: {generated_image_tag}"
+            })
             return {
                 "exist": "True",
                 "generated_image_tag": generated_image_tag
             }
         else:
+            await broadcast_progress({
+                "progress": 100, 
+                "task_name": "SnapHook Webhook", 
+                "message": f"Image not found in registry for {app}"
+            })
             return {
                 "exist": "False"
             }
 
     except Exception as e:
+        await broadcast_progress({
+            "progress": "failed", 
+            "task_name": "SnapHook Webhook", 
+            "message": f"Webhook processing failed: {str(e)}"
+        })
         print(f"SnapHook_Request: Error processing pod webhook: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing webhook: {str(e)}")

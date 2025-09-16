@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tcp-demo-2
+  labels:
+    app: tcp-demo-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tcp-demo-2
+  template:
+    metadata:
+      labels:
+        app: tcp-demo-2
+        snap.weaversoft.io/snap: "true"
+    spec:
+      imagePullSecrets:
+        - name: nexus-registry-secret
+      containers:
+      - name: tcp-server
+        image: python:3.11-slim
+        command: ["python", "-u", "-c"]
+        args:
+          - |
+            import socket, sys
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", 9000))
+            s.listen(5)
+            print("Listening on port 9000", flush=True)
+            while True:
+                conn, addr = s.accept()
+                print("Connection from", addr, flush=True)
+                while True:
+                    data = conn.recv(1024)
+                    if not data:
+                        break
+                    conn.sendall(b"ECHO: " + data)
+                conn.close()
+        ports:
+        - containerPort: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tcp-longdemo
+  labels:
+    app: tcp-longdemo
+spec:
+  selector:
+    app: tcp-longdemo
+  ports:
+    - name: tcp-echo
+      port: 9000
+      targetPort: 9000

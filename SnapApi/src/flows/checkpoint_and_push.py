@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from classes.apirequests import PodSpecCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
 from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache_api
+from routes.websocket import broadcast_progress
 
 
 # ----------------------------
@@ -74,6 +75,12 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             raise ValueError(f"Missing required fields from pod spec: {missing}")
 
         # ----- Load configuration from cache -----
+        await broadcast_progress({
+            "progress": 20, 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Loading cluster configuration for {cluster}"
+        })
+        
         snap_config = await get_snap_config_from_cluster_cache_api(cluster)
         cache_registry = snap_config["cache_registry"]
         cache_registry_user = snap_config["cache_registry_user"]
@@ -114,6 +121,12 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             kube_api_checkpoint_url
         ]
 
+        await broadcast_progress({
+            "progress": 30, 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Creating checkpoint for {pod_name}/{container_name}"
+        })
+        
         print(f"SnapAPI: Creating checkpoint: {pod_name}/{container_name}")
         print(f"SnapAPI: Checkpoint API URL: {kube_api_checkpoint_url}")
         
@@ -129,14 +142,32 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         try:
             checkpoint_data = json.loads(stdout)
         except json.JSONDecodeError:
-            raise RuntimeError(f"Checkpoint API did not return JSON.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+            error_msg = f"Checkpoint API did not return JSON.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            await broadcast_progress({
+                "progress": "failed", 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Checkpoint creation failed: Invalid JSON response"
+            })
+            raise RuntimeError(error_msg)
 
         items = checkpoint_data.get("items") or []
         if not items:
-            raise RuntimeError(f"No checkpoint file path found in API response.\n{stdout}")
+            error_msg = f"No checkpoint file path found in API response.\n{stdout}"
+            await broadcast_progress({
+                "progress": "failed", 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Checkpoint creation failed: No checkpoint file path in response"
+            })
+            raise RuntimeError(error_msg)
 
         checkpoint_file_path = items[0]
         checkpoint_filename = os.path.basename(checkpoint_file_path)
+        
+        await broadcast_progress({
+            "progress": 40, 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Checkpoint created successfully at {checkpoint_file_path}"
+        })
         
         print(f"SnapAPI: Checkpoint created at: {checkpoint_file_path}")
 
@@ -158,6 +189,12 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             "-F", f"file=@{checkpoint_file_path}"
         ]
         try:
+            await broadcast_progress({
+                "progress": 50, 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Uploading checkpoint file from node"
+            })
+            
             print(f"SnapAPI: Uploading checkpoint from node: {checkpoint_file_path}")
             print(f"SnapAPI: Curl Command: {debug_command}")
             print(f"SnapAPI: Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
@@ -173,6 +210,11 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             
             if debug_output.returncode != 0:
                 error_msg = f"Upload failed: {debug_output.stderr[:100]}..."
+                await broadcast_progress({
+                    "progress": "failed", 
+                    "task_name": "SnapWatcher Checkpoint", 
+                    "message": f"Upload failed: {debug_output.stderr[:100]}..."
+                })
                 print(f"SnapAPI: {error_msg}")
                 return {
                     "success": False,
@@ -182,6 +224,11 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
                 }
         except Exception as e:
             error_msg = f"Upload error: {str(e)}"
+            await broadcast_progress({
+                "progress": "failed", 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Upload error: {str(e)}"
+            })
             print(f"SnapAPI: {error_msg}")
             return {
                 "success": False,
@@ -201,6 +248,12 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         # =========================
         # Phase 2: Build & Push image
         # =========================
+
+        await broadcast_progress({
+            "progress": 60, 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Building checkpoint image"
+        })
 
         # Resolve digest with skopeo if we don't have one from the image string
         if not orig_image_short_digest:
@@ -247,6 +300,11 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             except Exception:
                 pass
 
+        await broadcast_progress({
+            "progress": 80, 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Pushing checkpoint image to registry"
+        })
 
         # Push
         await run(["buildah", "push", "--tls-verify=false", image_tag], capture_output=True, text=True, check=True)
@@ -265,6 +323,11 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
 
     except Exception as e:
         err = f"Combined operation failed: {e}"
+        await broadcast_progress({
+            "progress": "failed", 
+            "task_name": "SnapWatcher Checkpoint", 
+            "message": f"Operation failed: {str(e)}"
+        })
         return {
             "success": False,
             "message": err,

@@ -58,3 +58,29 @@ async def send_progress(username: str, data: dict):
     
     print(f"Websocket {username} not found")
 
+async def broadcast_progress(data: dict):
+    """Send a message to all connected users."""
+    data["type"] = "progress"
+    # Get the current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Check if 'message' key exists in the data dictionary
+    if 'message' in data:
+        # Prepend the timestamp to the message
+        data['message'] = f"{timestamp} \n{data['message']}"
+
+    # Send to all connected users
+    disconnected_users = []
+    for username, websocket in active_connections.items():
+        try:
+            await websocket.send_json(data)
+        except Exception as e:
+            print(f"Failed to send to {username}: {str(e)}")
+            disconnected_users.append(username)
+    
+    # Remove disconnected users
+    for username in disconnected_users:
+        active_connections.pop(username, None)
+    
+    return {"status": "success", "message": f"Broadcasted to {len(active_connections)} users"}
+

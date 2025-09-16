@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from classes.apirequests import PodSpecCheckpointRequest
 from classes.clusterconfig import ClusterConfig
 from flows.checkpoint_and_push import checkpoint_and_push_from_pod_spec
+from routes.websocket import broadcast_progress
 import threading
 
 
@@ -173,6 +174,8 @@ class SnapWatcherOperator:
         if containers:
             container_name = containers[0].get("name", "-")
 
+        # Use broadcast for snapWatcher logs - all users will see them
+        
         print(
             f"SnapWatcher: Processing checkpoint request\n"
             f"  Event:      {evt_type}\n"
@@ -187,16 +190,19 @@ class SnapWatcherOperator:
         # Directly call the checkpoint function instead of HTTP request
         # -----------------------------------------------------------------
         try:
+            await broadcast_progress({
+                "progress": 10, 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Starting checkpoint for pod {pod} in namespace {ns}"
+            })
+            
             # Prepare the complete pod specification for the request
             pod_spec_request = PodSpecCheckpointRequest(pod_spec=body)
-            
-            # Use a default username for operator-triggered checkpoints
-            username = "snapwatcher-operator"
             
             print(f"SnapWatcher: Calling checkpoint function directly for pod {pod} in cluster {self.cluster_name}")
             
             # Call the checkpoint function directly
-            result = await checkpoint_and_push_from_pod_spec(pod_spec_request, self.cluster_name, username)
+            result = await checkpoint_and_push_from_pod_spec(pod_spec_request, self.cluster_name, "snapwatcher-operator")
             
             print(f"SnapWatcher: Checkpoint operation completed: {result.get('success', False)}")
             
@@ -206,19 +212,51 @@ class SnapWatcherOperator:
                 
                 # Automatically delete the pod after successful checkpoint if enabled
                 if self.auto_delete_pod:
+                    await broadcast_progress({
+                        "progress": 95, 
+                        "task_name": "SnapWatcher Checkpoint", 
+                        "message": f"Deleting pod {pod} after successful checkpoint"
+                    })
                     print(f"SnapWatcher: Auto-deleting pod {pod} after successful checkpoint")
                     delete_success = self.delete_pod(pod, ns)
                     if delete_success:
+                        await broadcast_progress({
+                            "progress": 100, 
+                            "task_name": "SnapWatcher Checkpoint", 
+                            "message": f"Pod {pod} deleted successfully after checkpoint"
+                        })
                         print(f"SnapWatcher: Pod {pod} deletion initiated successfully")
                     else:
+                        await broadcast_progress({
+                            "progress": "failed", 
+                            "task_name": "SnapWatcher Checkpoint", 
+                            "message": f"Failed to delete pod {pod} after checkpoint"
+                        })
                         print(f"SnapWatcher: Failed to delete pod {pod}")
                 else:
+                    await broadcast_progress({
+                        "progress": 100, 
+                        "task_name": "SnapWatcher Checkpoint", 
+                        "message": f"Checkpoint completed successfully for pod {pod} (auto-deletion disabled)"
+                    })
                     print(f"SnapWatcher: Auto-deletion disabled, keeping pod {pod}")
             else:
-                print(f"SnapWatcher: Checkpoint operation failed: {result.get('message', 'Unknown error')}")
+                error_msg = result.get('message', 'Unknown error')
+                await broadcast_progress({
+                    "progress": "failed", 
+                    "task_name": "SnapWatcher Checkpoint", 
+                    "message": f"Checkpoint failed for pod {pod}: {error_msg}"
+                })
+                print(f"SnapWatcher: Checkpoint operation failed: {error_msg}")
                 
         except Exception as e:
-            print(f"SnapWatcher: Unexpected error during checkpoint operation: {e}")
+            error_msg = f"Unexpected error during checkpoint operation: {str(e)}"
+            await broadcast_progress({
+                "progress": "failed", 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Checkpoint failed for pod {pod}: {error_msg}"
+            })
+            print(f"SnapWatcher: {error_msg}")
 
 
 # Global operator instance - will be created via API request
