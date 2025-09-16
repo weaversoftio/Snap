@@ -5,6 +5,32 @@ from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
 from routes.websocket import send_progress
 
+def load_cluster_config(cluster_name: str) -> dict:
+    """
+    Load cluster configuration from config/clusters/{cluster_name}.json
+    
+    Args:
+        cluster_name: The cluster name to load configuration for
+        
+    Returns:
+        Dictionary containing kube_api_url and token
+        
+    Raises:
+        ValueError: If cluster configuration is not found
+    """
+    cluster_path = f"config/clusters/{cluster_name}.json"
+    if not os.path.exists(cluster_path):
+        raise ValueError(f"Cluster configuration not found: {cluster_name}")
+    
+    with open(cluster_path, 'r') as f:
+        cluster_data = json.load(f)
+    
+    cluster_details = cluster_data["cluster_config_details"]
+    return {
+        "kube_api_url": cluster_details["kube_api_url"],
+        "token": cluster_details["token"]
+    }
+
 SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,21 +52,16 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         namespace = request.namespace
         node_name = request.node_name
         container_name = request.container_name
-        kube_api_address = request.kube_api_address
+        cluster_name = request.cluster_name
 
         await send_progress(username, {"progress": 15, "task_name": "Create Checkpoint", "message": f"Creating Checkpoint initiated, name: {pod_name}"})
 
-        # Get service account token - handle both in-cluster and external access
-        try:
-            # Try to read the service account token from the mounted volume (in-cluster)
-            with open('/var/run/secrets/kubernetes.io/serviceaccount/token', 'r') as token_file:
-                token = token_file.read().strip()
-                print("Using in-cluster service account token")
-        except FileNotFoundError:
-            # Fallback to oc command for external access
-            token = (await run(["oc", "whoami", "-t"])).stdout.strip()
-            print("Using oc whoami token")
+        # Load cluster configuration from config/clusters
+        cluster_config = load_cluster_config(cluster_name)
+        kube_api_address = cluster_config["kube_api_url"]
+        token = cluster_config["token"]
         
+        print(f"Using cluster config: {cluster_name}")
         print(f"Token: {token[:20]}...")  # Only show first 20 chars for security
 
         # Handle different API address formats - match checkpoint_and_push.py logic

@@ -26,11 +26,13 @@ async def automation_trigger(request: AutomationRequest):
         logger.debug(f"Creating checkpoint for pod: {request.pod_name}")
         checkpoint_response = await checkpoint_container_kubelet(
             PodCheckpointRequest(
-                pod_id=request.pod_name,
+                pod_name=request.pod_name,
                 namespace=request.namespace,
                 node_name=request.node_name,
-                container_name=request.container_name
-            )
+                container_name=request.container_name,
+                cluster_name=request.cluster_name
+            ),
+            username=request.username
         )
         logger.debug(f"Checkpoint creation response: {checkpoint_response}")
         time.sleep(10)

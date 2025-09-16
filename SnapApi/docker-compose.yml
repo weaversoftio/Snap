@@ -28,8 +28,7 @@ services:
     volumes:
       # Mount src folder for development
       - ./src:/app:Z 
-      # Mount checkpoint storage
-      - snapapi-checkpoints:/app/checkpoints
+
     networks:
       - snapapi-network
     restart: unless-stopped
@@ -39,10 +38,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-volumes:
-  snapapi-checkpoints:
-    driver: local
 
 networks:
   snapapi-network:

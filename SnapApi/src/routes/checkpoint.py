@@ -45,7 +45,7 @@ async def create_checkpoint_and_push_combined(
         namespace=request.namespace,
         node_name=node_name,
         container_name=container_name,
-        kube_api_address=request.kube_api_address
+        cluster_name=request.cluster
     )
     
     # Call the combined function with new tagging parameters

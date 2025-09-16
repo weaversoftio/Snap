@@ -3,6 +3,32 @@ import subprocess
 import json
 from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
+
+def load_cluster_config(cluster_name: str) -> dict:
+    """
+    Load cluster configuration from config/clusters/{cluster_name}.json
+    
+    Args:
+        cluster_name: The cluster name to load configuration for
+        
+    Returns:
+        Dictionary containing kube_api_url and token
+        
+    Raises:
+        ValueError: If cluster configuration is not found
+    """
+    cluster_path = f"config/clusters/{cluster_name}.json"
+    if not os.path.exists(cluster_path):
+        raise ValueError(f"Cluster configuration not found: {cluster_name}")
+    
+    with open(cluster_path, 'r') as f:
+        cluster_data = json.load(f)
+    
+    cluster_details = cluster_data["cluster_config_details"]
+    return {
+        "kube_api_url": cluster_details["kube_api_url"],
+        "token": cluster_details["token"]
+    }
 SNAP_API_URL = os.getenv("SNAP_API_URL", "http://snapapi.apps-crc.testing")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,12 +50,23 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest) -> PodChec
         namespace = request.namespace
         node_name = request.node_name
         container_name = request.container_name
-        kube_api_address = request.kube_api_address
+        cluster_name = request.cluster_name
 
-        # Get service account token
-        token = (await run(["oc", "whoami", "-t"])).stdout.strip()
-        print(f"Token: {token}")
-        # Use OpenShift API URL format for checkpoint
+        # Load cluster configuration from config/clusters
+        cluster_config = load_cluster_config(cluster_name)
+        kube_api_address = cluster_config["kube_api_url"]
+        token = cluster_config["token"]
+        
+        print(f"Using cluster config: {cluster_name}")
+        print(f"Token: {token[:20]}...")  # Only show first 20 chars for security
+
+        # Handle different API address formats
+        if kube_api_address.startswith('kubernetes.default.svc'):
+            kube_api_address = "https://kubernetes.default.svc:443"
+        elif not kube_api_address.startswith("http"):
+            kube_api_address = f"https://{kube_api_address}"
+
+        # Use Kubernetes API URL format for checkpoint
         kube_api_checkpoint_url = f"{kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}"
         print(f"Kube API URL: {kube_api_checkpoint_url}")
         checkpoint_cmd = [

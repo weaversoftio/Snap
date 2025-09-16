@@ -7,7 +7,7 @@ class PodCheckpointRequest(BaseModel):
     namespace: str
     node_name: str
     container_name: str
-    kube_api_address: str
+    cluster_name: str
 
 class PodCheckpointResponse(BaseModel):
     success: bool
@@ -35,6 +35,7 @@ class AutomationRequest(BaseModel):
     namespace: str
     node_name: str
     container_name: str
+    cluster_name: str
 
 class ClusterLoginRequest(BaseModel):
     cluster_config_name: str
