@@ -1,7 +1,0 @@
-{
-    "cluster_cache_details": {
-        "cluster": "crc",
-        "registry": "nexus",
-        "repo": "cache_images"
-    }
-}
