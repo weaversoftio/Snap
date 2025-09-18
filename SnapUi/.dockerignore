@@ -5,3 +5,5 @@ __pycache__/
 *.swp
 .git
 .gitignore
+SnapApi/src/config/
+SnapApi/src/checkpoints/

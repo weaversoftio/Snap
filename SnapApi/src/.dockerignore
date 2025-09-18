@@ -2,3 +2,4 @@ checkpoints/
 k8s
 venv
 __pycache__
+config/
