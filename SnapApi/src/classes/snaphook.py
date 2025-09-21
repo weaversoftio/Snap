@@ -738,8 +738,15 @@ subjectAltName = @alt_names
             # Stop HTTPS server
             if self.https_server:
                 self.https_server.shutdown()
+                self.https_server.server_close()  # Immediately close the socket to free the port
                 self.is_running = False
-                logger.info("SnapHook: HTTPS server stopped")
+                logger.info("SnapHook: HTTPS server stopped and port released")
+            
+            # Wait for server thread to finish
+            if hasattr(self, 'server_thread') and self.server_thread.is_alive():
+                self.server_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
+                if self.server_thread.is_alive():
+                    logger.warning("SnapHook: Server thread did not stop gracefully")
             
             # Delete webhook configuration
             if self.kube_client:
