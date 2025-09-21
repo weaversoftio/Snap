@@ -75,6 +75,7 @@ async def create_snaphook(request: SnapHookCreateRequest):
         
         # Create SnapHook instance (webhook_url will be auto-generated from SNAP_API_URL)
         snaphook = SnapHook(
+            name=request.name,
             cluster_name=request.cluster_name,
             cluster_config=cluster_config,
             webhook_url=request.webhook_url,  # Optional - will be auto-generated if None

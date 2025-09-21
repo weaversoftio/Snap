@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to load and start SnapWatcher configurations: {e}")
     
+    # Initialize shared HTTPS server
+    try:
+        from classes.shared_https_server import shared_https_server
+        if shared_https_server.start_shared_server():
+            logger.info("Shared HTTPS server started successfully")
+        else:
+            logger.error("Failed to start shared HTTPS server")
+    except Exception as e:
+        logger.error(f"Failed to initialize shared HTTPS server: {e}")
+    
     # Load SnapHook configurations on startup
     try:
         from routes.snaphook import snaphook_instances
@@ -69,6 +79,16 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down SnapAPI application...")
+    
+    # Stop shared HTTPS server
+    try:
+        from classes.shared_https_server import shared_https_server
+        if shared_https_server.stop_shared_server():
+            logger.info("Shared HTTPS server stopped successfully")
+        else:
+            logger.warning("Failed to stop shared HTTPS server gracefully")
+    except Exception as e:
+        logger.error(f"Error stopping shared HTTPS server: {e}")
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)

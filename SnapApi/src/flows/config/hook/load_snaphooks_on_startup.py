@@ -50,6 +50,7 @@ async def load_snaphooks_on_startup(snaphook_instances: Dict[str, SnapHook]):
                 
                 # Create SnapHook instance
                 snaphook = SnapHook(
+                    name=name,
                     cluster_name=snaphook_details["cluster_name"],
                     cluster_config=cluster_config,
                     webhook_url=snaphook_details.get("webhook_url"),
