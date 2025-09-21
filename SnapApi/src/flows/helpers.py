@@ -205,7 +205,7 @@ async def extract_digest(pod: Dict[str, Any]) -> str:
     # Step 1: try from pod.status.containerStatuses
     in_pod = extract_digest_from_pod_obj(pod, prefer_container_name)
     if in_pod:
-        print(f"Digest from pod status: {strip_sha_repo(in_pod)}")
+        print(f"SnapAPI: Digest from pod status: {strip_sha_repo(in_pod)}")
         return strip_sha_repo(in_pod)
 
     # Step 2: fallback to skopeo
@@ -333,7 +333,7 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
             
     except Exception as e:
         print(f"Image check error: {e}")
-        logger.warning(f"Error checking image existence with skopeo: {str(e)}")
+        logger.warning(f"SnapAPI: Error checking image existence with skopeo: {str(e)}")
         return False
 
 

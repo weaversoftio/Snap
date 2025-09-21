@@ -1,18 +1,24 @@
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 import kopf
+import urllib3
 import flows.snap_init
+
+# Suppress urllib3 InsecureRequestWarning globally
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 flows.snap_init.snap_init()
 
 # Import operator functionality - this registers the kopf event handlers with the framework
 import classes.operator_watcher  # noqa: F401
 
-# Load watcher configurations on startup
-from routes.operator import load_watcher_configs_on_startup
-load_watcher_configs_on_startup()
+# Load watcher configurations on startup - will be called in lifespan function
+
+# SnapHook configurations will be loaded on FastAPI startup event
+
 
 # Import routers
 from routes.registry import router as registry_router
@@ -28,14 +34,44 @@ from routes.websocket import router as websocket_router
 from routes.imagetag import router as imagetag_router
 from routes.operator import router as operator_router
 from routes.cluster_status import router as cluster_status_router
+from routes.webhooks import router as webhooks_router
+from routes.snaphook import router as snaphook_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
 origins_env = os.getenv("SNAP_ORIGINS", "http://localhost,http://localhost:3000,*")
 origins = origins_env.split(",")
 
-# Initialize FastAPI app
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application lifespan events."""
+    # Startup
+    logger.info("Starting SnapAPI application...")
+    
+    # Load SnapWatcher configurations and auto-start them
+    try:
+        from routes.operator import load_watcher_configs_on_startup
+        await load_watcher_configs_on_startup()
+        logger.info("SnapWatcher configurations loaded and auto-started successfully")
+    except Exception as e:
+        logger.error(f"Failed to load and start SnapWatcher configurations: {e}")
+    
+    # Load SnapHook configurations on startup
+    try:
+        from routes.snaphook import snaphook_instances
+        from flows.config.hook.load_snaphooks_on_startup import load_snaphooks_on_startup
+        await load_snaphooks_on_startup(snaphook_instances)
+        logger.info("SnapHook configurations loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load SnapHook configurations: {e}")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down SnapAPI application...")
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,5 +109,7 @@ app.include_router(cluster_download, prefix="/download", tags=["download"])
 app.include_router(websocket_router, prefix="/ws", tags=["websocket"])
 app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])
 app.include_router(operator_router, prefix="/operator", tags=["operator"])
+app.include_router(webhooks_router, prefix="/webhooks", tags=["webhooks"])
+app.include_router(snaphook_router, tags=["snaphook"])
 
 # SnapWatcher operator will be started via API request

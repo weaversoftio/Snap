@@ -60,5 +60,5 @@ async def automation_trigger(request: AutomationRequest):
         logger.error(f"HTTP error occurred: {http_err.detail}")
         raise http_err
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"SnapAPI: Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")

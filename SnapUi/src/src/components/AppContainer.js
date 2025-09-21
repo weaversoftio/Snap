@@ -32,7 +32,7 @@ import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
 import ProgressTracker from './common/TaskProgressDetails';
 import { useProgress } from './common/ProgressContext';
-import { CloudUpload, Visibility as WatchersIcon } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon } from '@mui/icons-material';
 
 const drawerWidth = 240;
 const selectedBackgroundColor = "rgba(36, 143, 231, 1)";
@@ -371,6 +371,7 @@ export default function AppContainer({ children }) {
       { text: "Secrets", path: "/secrets", Icon: SecurityIcon },
       { text: "Users", path: "/users", Icon: UsersIcon },
       { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
+      { text: "SnapHook", path: "/snaphook", Icon: SnapHookIcon },
     ]
 
     const showNavigation = kubeAuthenticated && selectedCluster

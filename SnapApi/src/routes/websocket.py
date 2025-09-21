@@ -14,11 +14,12 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
     active_connections[username] = websocket
     print(f"User {username} connected")
 
+
     try:
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "ping":
-                print(f"Received Ping from {username}")
+                pass  # Ping received, no logging needed
 
                 await websocket.send_json({"type": "pong"})
             else:
@@ -75,7 +76,7 @@ async def broadcast_progress(data: dict):
         try:
             await websocket.send_json(data)
         except Exception as e:
-            print(f"Failed to send to {username}: {str(e)}")
+            print(f"SnapAPI: Failed to send to {username}: {str(e)}")
             disconnected_users.append(username)
     
     # Remove disconnected users

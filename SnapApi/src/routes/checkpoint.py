@@ -84,7 +84,7 @@ async def checkpoints_list():
                 pod_path = os.path.join(checkpoint_dir, pod)
                 if os.path.isdir(pod_path):
                     containers = os.listdir(pod_path)
-                    logger.info(containers)
+                    logger.info(f"SnapAPI: {containers}")
                     for container in containers:
                         if container.endswith(".tar"):
                             volatility_analysis_file = os.path.join(pod_path, f"{container.replace('.tar', '')}_volatility_analysis.txt")
@@ -164,7 +164,7 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
         # return {"output": output_file_path, "insights": CheckpointInsightsresponse.insights}
     except Exception as e:
         await send_progress(username, {"progress": "failed", "task_name": "Inspecting Checkpoint", "message": f"Failed with error: {str(e)}"})
-        logger.error(f"Failed to run checkpointctl: {str(e)}")
+        logger.error(f"SnapAPI: Failed to run checkpointctl: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to run checkpointctl: {str(e)}")
 
 @router.get("/checkpointctl/information")

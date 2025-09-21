@@ -11,6 +11,10 @@ from classes.apirequests import PodSpecCheckpointRequest
 from classes.clusterconfig import ClusterConfig
 from flows.checkpoint_and_push import checkpoint_and_push_from_pod_spec
 from routes.websocket import broadcast_progress
+import urllib3
+
+# Suppress urllib3 InsecureRequestWarning for Kubernetes client
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import threading
 
 
@@ -53,8 +57,22 @@ class SnapWatcherOperator:
             kube_config.host = self.cluster_config.cluster_config_details.kube_api_url
             kube_config.api_key = {'authorization': f'Bearer {self.cluster_config.cluster_config_details.token}'}
             
-            # Disable SSL verification for self-signed certificates
-            kube_config.verify_ssl = False
+            # SSL configuration - check environment variable for verification control
+            verify_ssl = os.getenv('KUBE_VERIFY_SSL', 'false').lower() == 'true'
+            kube_config.verify_ssl = verify_ssl
+            
+            if not verify_ssl:
+                # Create SSL context that doesn't verify certificates
+                import ssl
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                kube_config.ssl_ca_cert = None
+                kube_config.cert_file = None
+                kube_config.key_file = None
+                print(f"SnapWatcher: SSL verification disabled for cluster {self.cluster_name}")
+            else:
+                print(f"SnapWatcher: SSL verification enabled for cluster {self.cluster_name}")
             
             # Create API client with the configuration
             self.kube_client = client.ApiClient(kube_config)

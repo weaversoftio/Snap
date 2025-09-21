@@ -41,7 +41,7 @@ async def create_directory(checkpoint_path: str, directory_name: str) -> str:
     directory_path = f"{checkpoint_path}/{directory_name}"
     try:
         await run(["mkdir", "-p", directory_path])
-        print(f"Directory {directory_path} created successfully.")
+        print(f"SnapAPI: Directory {directory_path} created successfully.")
         return directory_path
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to create directory {directory_path}: {e}")
@@ -61,8 +61,8 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         kube_api_address = cluster_config["kube_api_url"]
         token = cluster_config["token"]
         
-        print(f"Using cluster config: {cluster_name}")
-        print(f"Token: {token[:20]}...")  # Only show first 20 chars for security
+        print(f"SnapAPI: Using cluster config: {cluster_name}")
+        print(f"SnapAPI: Token: {token[:20]}...")  # Only show first 20 chars for security
 
         # Handle different API address formats - match checkpoint_and_push.py logic
         if kube_api_address.startswith('kubernetes.default.svc'):
@@ -74,14 +74,18 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         kube_api_checkpoint_url = (
             f"{kube_api_address}/api/v1/nodes/{node_name}/proxy/checkpoint/{namespace}/{pod_name}/{container_name}"
         )
-        print(f"Kube API URL: {kube_api_checkpoint_url}")
+        print(f"SnapAPI: Kube API URL: {kube_api_checkpoint_url}")
 
-        # Build curl command with Bearer token - match checkpoint_and_push.py
+        # Build curl command with Bearer token and SSL verification control
+        verify_ssl = os.getenv('KUBE_VERIFY_SSL', 'false').lower() == 'true'
         checkpoint_cmd = [
-            "curl", "-k", "-X", "POST",
+            "curl", "-X", "POST",
             "--header", f"Authorization: Bearer {token}",
             kube_api_checkpoint_url
         ]
+        
+        if not verify_ssl:
+            checkpoint_cmd.insert(1, "-k")  # Add -k flag for insecure connections
 
         await send_progress(username, {"progress": 30, "task_name": "Create Checkpoint", "message": f"Creating checkpoint for {pod_name}/{container_name}"})
         

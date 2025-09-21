@@ -24,6 +24,9 @@ operator_instance: Optional[SnapWatcherOperator] = None
 operator_thread: Optional[threading.Thread] = None
 operator_running = False
 
+# Dictionary to manage multiple watcher instances
+active_watchers: Dict[str, Dict[str, Any]] = {}
+
 
 class OperatorStartRequest(BaseModel):
     """Request model for starting the operator."""
@@ -221,6 +224,40 @@ async def get_operator_status():
         running=True,
         cluster_name=operator_instance.cluster_name
     )
+
+
+@router.get("/watchers/status")
+async def get_all_watchers_status():
+    """
+    Get the status of all active SnapWatchers.
+    
+    Returns:
+        Dict containing status of all watchers
+    """
+    try:
+        watcher_statuses = {}
+        
+        for watcher_name, watcher_info in active_watchers.items():
+            watcher_statuses[watcher_name] = {
+                "running": watcher_info["running"],
+                "cluster_name": watcher_info["config"].cluster_name,
+                "scope": watcher_info["config"].scope,
+                "namespace": watcher_info["config"].namespace,
+                "thread_alive": watcher_info["thread"].is_alive() if watcher_info["thread"] else False
+            }
+        
+        return {
+            "success": True,
+            "active_watchers": len(active_watchers),
+            "watchers": watcher_statuses
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get watchers status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get watchers status: {str(e)}"
+        )
 
 
 # SnapWatcher Configuration Management Endpoints
@@ -612,13 +649,98 @@ async def get_snapwatcher_status(watcher_name: str):
         )
 
 
-# Startup function to load watcher configs
-def load_watcher_configs_on_startup():
-    """Load all watcher configurations on startup."""
+def start_individual_watcher(config: WatcherConfig) -> bool:
+    """
+    Start an individual SnapWatcher.
+    
+    Args:
+        config: WatcherConfig instance to start
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        logger.info(f"Starting individual SnapWatcher: {config.name}")
+        
+        # Create operator instance for this watcher
+        watcher_instance = SnapWatcherOperator(
+            cluster_name=config.cluster_name,
+            cluster_config=ClusterConfig(**config.cluster_config),
+            scope=config.scope,
+            namespace=config.namespace,
+            auto_delete_pod=config.auto_delete_pod
+        )
+        
+        if not watcher_instance.is_ready():
+            logger.error(f"SnapWatcher {config.name} is not ready. Check cluster configuration.")
+            return False
+        
+        # Start operator in background thread
+        namespace_param = config.namespace if config.scope == "namespace" else None
+        watcher_thread = threading.Thread(
+            target=run_operator, 
+            args=(namespace_param,), 
+            daemon=True,
+            name=f"SnapWatcher-{config.name}"
+        )
+        watcher_thread.start()
+        
+        # Store watcher info in active_watchers
+        active_watchers[config.name] = {
+            "instance": watcher_instance,
+            "thread": watcher_thread,
+            "config": config,
+            "running": True
+        }
+        
+        # Update watcher status
+        update_watcher_status(config.name, "running")
+        
+        logger.info(f"Successfully started SnapWatcher: {config.name}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to start SnapWatcher {config.name}: {e}")
+        update_watcher_status(config.name, "error")
+        return False
+
+
+# Startup function to load watcher configs and auto-start them
+async def load_watcher_configs_on_startup():
+    """Load all watcher configurations on startup and auto-start them."""
     try:
         from flows.config.watcher.watcher_config import load_watcher_configs_on_startup as load_configs
         configs = load_configs()
-        logger.info(f"Loaded {len(configs)} watcher configurations on startup")
+        logger.info(f"SnapAPI: Loaded {len(configs)} watcher configurations on startup")
+        
+        # Auto-start all existing Snapwatchers
+        if configs:
+            logger.info("Auto-starting all existing Snapwatchers...")
+            started_count = 0
+            failed_count = 0
+            
+            for config in configs:
+                try:
+                    if config.status != "running":
+                        logger.info(f"Starting SnapWatcher: {config.name}")
+                        
+                        # Start the individual watcher
+                        if start_individual_watcher(config):
+                            started_count += 1
+                        else:
+                            failed_count += 1
+                    else:
+                        logger.info(f"SnapWatcher {config.name} is already running")
+                        started_count += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error processing SnapWatcher {config.name}: {e}")
+                    failed_count += 1
+            
+            logger.info(f"SnapWatcher auto-start completed: {started_count} started, {failed_count} failed")
+        else:
+            logger.info("No SnapWatcher configurations found to auto-start")
+            
         return configs
     except Exception as e:
         logger.error(f"Failed to load watcher configurations on startup: {e}")

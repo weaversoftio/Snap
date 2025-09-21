@@ -31,29 +31,34 @@ async def kubectl_cluster_login(cluster_config_name: str, username: str):
         
         message=f"Logging in to the kubernetes cluster"
         await send_progress(username, {"progress": 16, "task_name": "Cluster Login", "message": message})
-        print(f"Logging in to the kubernetes cluster with token authentication: {kube_api_url}")
-        print("Using token-based authentication")
+        print(f"SnapAPI: Logging in to the kubernetes cluster with token authentication: {kube_api_url}")
+        print("SnapAPI: Using token-based authentication")
         
-        # Use token-based login
-        await run([
+        # Use token-based login with SSL verification control
+        verify_ssl = os.getenv('KUBE_VERIFY_SSL', 'false').lower() == 'true'
+        login_cmd = [
             "oc", "login", 
             "--token", token,
-            "--server", kube_api_url,
-            "--insecure-skip-tls-verify=true"
-        ])
+            "--server", kube_api_url
+        ]
+        
+        if not verify_ssl:
+            login_cmd.append("--insecure-skip-tls-verify=true")
+        
+        await run(login_cmd)
         await send_progress(username, {"progress": 32, "task_name": "Cluster Login", "message": "Successfully logged in to the kubernetes cluster"})
-        print("Logged in to the kubernetes cluster")
+        print("SnapAPI: Logged in to the kubernetes cluster")
 
         # Get the current context   
         await send_progress(username, {"progress": 48, "task_name": "Cluster Login", "message": "Getting the current context"})
         context = (await run(["oc", "config", "current-context"])).stdout.strip()
-        print(f"Current context: {context}")
+        print(f"SnapAPI: Current context: {context}")
         await send_progress(username, {"progress": 64, "task_name": "Cluster Login", "message": f"Current context: {context}"})
 
         # Get the current user
         await send_progress(username, {"progress": 80, "task_name": "Cluster Login", "message": f"Getting the current user"})
         user = (await run(["oc", "whoami"])).stdout.strip()
-        print(f"Current user: {user}")
+        print(f"SnapAPI: Current user: {user}")
 
         await send_progress(username, {"progress": 100, "task_name": "Cluster Login", "message": f"Current user: {user}\nLogged in to the kubernetes cluster"})
         return {"success": True, "message": "Logged in to the kubernetes cluster"}

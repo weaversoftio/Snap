@@ -18,10 +18,11 @@ services:
       - label=disable
     ports:
       - "8000:8000"
+      - "8443:8443"
     environment:
       # SnapApi configuration
       - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,http://192.168.33.209:3000,*
-      - SNAP_API_URL=http://192.168.130.1:8000
+      - SNAP_API_URL=http://192.168.33.209:8000
       # SnapWatcher operator configuration
       - WATCHER_CLUSTER_NAME=crc
       - WATCHER_MODE=compose

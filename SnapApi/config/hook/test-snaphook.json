@@ -1,0 +1,18 @@
+{
+    "name": "test-snaphook",
+    "snaphook_config_details": {
+        "cluster_name": "test-cluster",
+        "webhook_url": "https://test.example.com/mutate",
+        "namespace": "snap",
+        "cert_expiry_days": 365,
+        "created_at": "2025-09-21T16:23:01.068441",
+        "last_started_at": null
+    },
+    "cluster_config": {
+        "cluster_config_details": {
+            "kube_api_url": "https://test-cluster:6443",
+            "token": "test-token-123"
+        },
+        "name": "test-cluster"
+    }
+}
