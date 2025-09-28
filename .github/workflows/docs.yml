@@ -34,7 +34,12 @@ jobs:
         uses: actions/configure-pages@v4
         with:
           enablement: true
-        
+          
+      - name: Install dependencies
+        run: |
+          cd docs
+          bundle install
+          
       - name: Build with Jekyll
         run: |
           cd docs
