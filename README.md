@@ -183,6 +183,7 @@ Access the interactive API documentation at `http://localhost:8000/docs`
 
 ### Project Structure
 
+
 ```
 Snap/
 ├── SnapApi/                 # Backend API service
