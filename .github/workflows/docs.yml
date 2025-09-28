@@ -3,7 +3,10 @@ name: Deploy Documentation
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+    paths: [ 'docs/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'docs/**' ]
 
 permissions:
   contents: read
@@ -29,6 +32,8 @@ jobs:
           
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
           
       - name: Install dependencies
         run: |
@@ -51,6 +56,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
