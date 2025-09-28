@@ -4,6 +4,8 @@ title: SNAP Documentation
 description: Comprehensive documentation for SNAP container checkpointing platform
 ---
 
+<!-- Updated: Testing GitHub Pages deployment - $(date) -->
+
 # Welcome to SNAP Documentation
 
 **SNAP** is an enterprise-grade container checkpointing and state management platform that revolutionizes how organizations handle container lifecycle management, disaster recovery, and application migration in Openshift environments.
