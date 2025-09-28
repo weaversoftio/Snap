@@ -28,10 +28,10 @@ spec:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("", 9000))
             s.listen(5)
-            print("Listening on port 9000", flush=True)
+            print("Listening test server on port 9000", flush=True)
             while True:
                 conn, addr = s.accept()
-                print("Connection from", addr, flush=True)
+                print("Connection from test server", addr, flush=True)
                 while True:
                     data = conn.recv(1024)
                     if not data:

@@ -59,8 +59,8 @@ services:
       - "0.0.0.0:3000:3000"
     environment:
       # API configuration
-      - API_URL=${API_URL:-http://192.168.33.209:8000}
-      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
+      - REACT_APP_API_URL=${API_URL:-http://192.168.33.209:8000}
+      - REACT_APP_WS_URL=${WS_URL:-ws://192.168.33.209:8000}
       
       # React app configuration
       - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}

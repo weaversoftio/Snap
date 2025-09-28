@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Grid2 as Grid, TextField, Typography, Card, Paper, FormLabel } from "@mui/material"
+import { Box, Button, CircularProgress, Grid2 as Grid, TextField, Typography, Card, Paper, FormLabel, Chip } from "@mui/material"
 import { useEffect, useState } from "react";
 import TableComponent from "../common/Table";
 import { useSnackbar } from 'notistack';
@@ -13,8 +13,9 @@ import { Loading } from "../common/loading";
 import AddIcon from '@mui/icons-material/Add';
 import { CustomerContainer } from "../common/CustomContainer";
 import { validateFormData } from "../../utils/validateFormData";
-import { Visibility as WatchersIcon, PlayArrow as StartIcon, Stop as StopIcon } from '@mui/icons-material';
+import { Visibility as WatchersIcon, PlayArrow as StartIcon, Stop as StopIcon, Info as InfoIcon } from '@mui/icons-material';
 import { snapWatcherApi } from '../../api/snapWatcherApi';
+import SnapWatcherStatus from './SnapWatcherStatus';
 
 const SnapWatcherScreen = ({ classes }) => {
   const dispatch = useDispatch()
@@ -37,6 +38,8 @@ const SnapWatcherScreen = ({ classes }) => {
   const [searchTerm, setSearchTerm] = useState("")
   const [errors, setErrors] = useState({})
   const [watchers, setWatchers] = useState([])
+  const [statusView, setStatusView] = useState(false)
+  const [selectedWatcherForStatus, setSelectedWatcherForStatus] = useState(null)
 
   useEffect(() => {
     handleGetWatcherList();
@@ -224,6 +227,16 @@ const SnapWatcherScreen = ({ classes }) => {
     setPage(0)
   }
 
+  const handleViewStatus = (watcher) => {
+    setSelectedWatcherForStatus(watcher)
+    setStatusView(true)
+  }
+
+  const handleCloseStatusView = () => {
+    setStatusView(false)
+    setSelectedWatcherForStatus(null)
+  }
+
   const renderWatcherDeleteDialog = () => {
     return (
       <DialogComponent open={!!dialogType} onClose={() => handleClearDialog("")} paperProps={{ maxWidth: 500 }}>
@@ -312,21 +325,26 @@ const SnapWatcherScreen = ({ classes }) => {
     { name: "Scope", key: "scope" },
     { name: "Trigger", key: "trigger" },
     { name: "Namespace", key: "namespace" },
-    { name: "Status", key: "status", render: (data) => (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            backgroundColor: data.status === 'running' ? 'success.main' : 'grey.400'
-          }}
-        />
-        <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
-          {data.status}
-        </Typography>
-      </Box>
-    )},
+    { name: "Status", key: "status", render: (data) => {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: data.status === 'running' ? 'success.main' : 'grey.400'
+            }}
+          />
+          <Chip 
+            label={data.status} 
+            color={data.status === 'running' ? 'success' : 'default'}
+            size="small"
+            variant="outlined"
+          />
+        </Box>
+      );
+    }},
     {
       name: "Actions", key: "", action: (data) => {
         console.log("Table action data:", data)
@@ -348,6 +366,11 @@ const SnapWatcherScreen = ({ classes }) => {
                         color={data.status === 'running' ? "warning" : "success"}
                       >
                         {data.status === 'running' ? <StopIcon fontSize="small" /> : <StartIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="View Status">
+                      <IconButton aria-label="view status" onClick={() => handleViewStatus(data)} size="small">
+                        <InfoIcon fontSize="small" color="info" />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete Watcher">
@@ -412,51 +435,68 @@ const SnapWatcherScreen = ({ classes }) => {
     <CustomerContainer title="SnapWatcher" subtitle={`Manage watchers for ${selectedCluster.name}`}>
       {loading ? <Loading /> : (
         <>
-          <Button
-            variant="contained"
-            onClick={() => setDialogType("watcherForm")}
-            sx={{
-              backgroundColor: 'primary.main',
-              borderRadius: '8px',
-              textTransform: 'none',
-              mb: 2,
-              px: 3,
-              py: 1,
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-                boxShadow: 2,
-              },
-            }}
-            startIcon={<AddIcon />}
-          >
-            Add SnapWatcher
-          </Button>
-          <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
-            {renderError()}
-            {renderDialog()}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, marginBlock: 2, ml: 1 }}>
-              <Typography variant="h6" gutterBottom component="div">
-                Search
-              </Typography>
-              <TextField
-                sx={{ width: '300px' }}
-                size="small"
-                placeholder="Name, Scope, Trigger, Namespace"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {statusView ? (
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="outlined"
+                onClick={handleCloseStatusView}
+                sx={{ mb: 2 }}
+              >
+                ← Back to Watchers
+              </Button>
+              {selectedWatcherForStatus && (
+                <SnapWatcherStatus watcherName={selectedWatcherForStatus.name} />
+              )}
             </Box>
-            <TableComponent
-              classes={classes}
-              data={filteredData}
-              tableHeaders={tableHeaders}
-              total={filteredData.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              handleRowsPerPageChange={handleRowsPerPageChange}
-              handlePageChange={handlePageChange}
-            />
-          </Paper>
+          ) : (
+            <>
+              <Button
+                variant="contained"
+                onClick={() => setDialogType("watcherForm")}
+                sx={{
+                  backgroundColor: 'primary.main',
+                  borderRadius: '8px',
+                  textTransform: 'none',
+                  mb: 2,
+                  px: 3,
+                  py: 1,
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                    boxShadow: 2,
+                  },
+                }}
+                startIcon={<AddIcon />}
+              >
+                Add SnapWatcher
+              </Button>
+              <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
+                {renderError()}
+                {renderDialog()}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, marginBlock: 2, ml: 1 }}>
+                  <Typography variant="h6" gutterBottom component="div">
+                    Search
+                  </Typography>
+                  <TextField
+                    sx={{ width: '300px' }}
+                    size="small"
+                    placeholder="Name, Scope, Trigger, Namespace"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </Box>
+                <TableComponent
+                  classes={classes}
+                  data={filteredData}
+                  tableHeaders={tableHeaders}
+                  total={filteredData.length}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  handleRowsPerPageChange={handleRowsPerPageChange}
+                  handlePageChange={handlePageChange}
+                />
+              </Paper>
+            </>
+          )}
         </>
       )}
     </CustomerContainer>

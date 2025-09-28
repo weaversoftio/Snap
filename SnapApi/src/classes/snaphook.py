@@ -418,9 +418,16 @@ subjectAltName = @alt_names
                         orig_image_short_digest = self._extract_digest_from_pod(pod_spec)
                         
                         # Generate new image tag
-                        # We need to get registry and repo from cluster config
-                        registry = "nexus.weaversoft.io:8081"  # Default registry
-                        repo = "snap"  # Default repo
+                        # We need to get registry and repo from cluster cache configuration
+                        try:
+                            snap_config = self._get_snap_config_from_cluster_cache_api(self.cluster_name)
+                            registry = snap_config["cache_registry"]
+                            repo = snap_config["cache_repo"]
+                        except Exception as e:
+                            print(f"SnapHook: Failed to load cluster cache config: {e}")
+                            # Fallback to default values
+                            registry = "nexus.weaversoft.io:8081"  # Default registry
+                            repo = "snap"  # Default repo
                         pod_template_hash = labels.get("pod-template-hash", "unknown")
                         
                         generated_image_tag = self._generate_image_tag(
@@ -433,14 +440,38 @@ subjectAltName = @alt_names
                             PodTemplateHash=pod_template_hash
                         )
                         
-                        # Create patch for image
-                        patch = {
-                            "op": "replace",
-                            "path": f"/spec/containers/{containers.index(container)}/image",
-                            "value": generated_image_tag
-                        }
-                        patches.append(patch)
-                        should_patch_image = True
+                        print(f"SnapHook: Generated image tag: {generated_image_tag}")
+                        
+                        if generated_image_tag:
+                            # Check if image exists in registry using skopeo
+                            print(f"SnapHook: Checking if image exists: {generated_image_tag}")
+                            image_exists = self._check_image_exists_multi_registry(
+                                registry, repo, self.cluster_name, namespace, app_name, 
+                                orig_image_short_digest, pod_template_hash
+                            )
+                            
+                            if image_exists:
+                                print(f"SnapHook: Image exists, will patch pod")
+                                # Create patch for image
+                                patch = {
+                                    "op": "replace",
+                                    "path": f"/spec/containers/{containers.index(container)}/image",
+                                    "value": generated_image_tag
+                                }
+                                patches.append(patch)
+                                
+                                # Add mutation label
+                                mutation_patch = {
+                                    "op": "replace",
+                                    "path": "/metadata/labels/snap.weaversoft.io~1mutated",
+                                    "value": "true"
+                                }
+                                patches.append(mutation_patch)
+                                should_patch_image = True
+                            else:
+                                print(f"SnapHook: Image does not exist, skipping patch")
+                        else:
+                            print(f"SnapHook: Failed to generate image tag, skipping patch")
                 
                 # Create response
                 if should_patch_image and patches:

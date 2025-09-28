@@ -19,7 +19,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            echo "Starting CPU stress test..."
+            echo "Starting CPU stress tester..."
             
             # Run CPU stress for 10 seconds with monitoring
             echo "Running CPU stress for 10 seconds..."

@@ -359,6 +359,91 @@ GET /operator/status
 }
 ```
 
+## SnapWatcher Management Endpoints
+
+### Create SnapWatcher
+```http
+POST /operator/snapwatcher
+```
+
+**Request Body:**
+```json
+{
+  "name": "production-watcher",
+  "cluster_name": "production-cluster",
+  "cluster_config": {
+    "api_server_url": "https://api.cluster.com:6443",
+    "auth_type": "kubeconfig"
+  },
+  "scope": "cluster",
+  "namespace": "snap",
+  "trigger": "startupProbe",
+  "auto_delete_pod": true
+}
+```
+
+### Get SnapWatcher Status
+```http
+GET /operator/snapwatcher/{watcher_name}/status
+```
+
+**Response:**
+```json
+{
+  "name": "production-watcher",
+  "cluster_name": "production-cluster",
+  "cluster_config": {
+    "api_server_url": "https://api.cluster.com:6443",
+    "auth_type": "kubeconfig"
+  },
+  "scope": "cluster",
+  "namespace": "snap",
+  "trigger": "startupProbe",
+  "status": "running",
+  "auto_delete_pod": true,
+  "thread_alive": true,
+  "last_update": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T10:00:00Z"
+}
+```
+
+### Start SnapWatcher
+```http
+POST /operator/snapwatcher/{watcher_name}/start
+```
+
+### Stop SnapWatcher
+```http
+POST /operator/snapwatcher/{watcher_name}/stop
+```
+
+### Delete SnapWatcher
+```http
+DELETE /operator/snapwatcher/{watcher_name}
+```
+
+### Get All Watchers Status
+```http
+GET /operator/watchers/status
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "active_watchers": 2,
+  "watchers": {
+    "production-watcher": {
+      "running": true,
+      "cluster_name": "production-cluster",
+      "scope": "cluster",
+      "namespace": "snap",
+      "thread_alive": true
+    }
+  }
+}
+```
+
 ## SnapHook Endpoints
 
 ### Create SnapHook

@@ -28,7 +28,8 @@ import {
   PlayArrow as StartIcon,
   Stop as StopIcon,
   Delete as DeleteIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { snapHookApi } from '../../api/snapHookApi';
 
@@ -382,7 +383,14 @@ const SnapHookManagement = ({ clusterName, clusterConfig, onHookSelect }) => {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getStatusIcon(hook.is_running ? 'running' : 'stopped')}
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                backgroundColor: hook.is_running ? 'success.main' : 'grey.400'
+                              }}
+                            />
                             <Chip 
                               label={hook.is_running ? 'running' : 'stopped'} 
                               color={getStatusColor(hook.is_running ? 'running' : 'stopped')}
@@ -414,6 +422,18 @@ const SnapHookManagement = ({ clusterName, clusterConfig, onHookSelect }) => {
                                     }}
                                   >
                                     {hook.is_running ? <StopIcon fontSize="small" /> : <StartIcon fontSize="small" />}
+                                  </IconButton>
+                                </Tooltip>
+                                
+                                <Tooltip title="View Status">
+                                  <IconButton 
+                                    size="small"
+                                    color="info"
+                                    onClick={() => {
+                                      onHookSelect && onHookSelect(hook.name);
+                                    }}
+                                  >
+                                    <InfoIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                                 
