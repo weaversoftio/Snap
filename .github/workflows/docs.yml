@@ -2,8 +2,8 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [ main ]
-    paths: [ 'docs/**' ]
+    branches: [ main, v1.2 ]
+    paths: [ 'docs/**', '.github/workflows/docs.yml' ]
   pull_request:
     branches: [ main ]
     paths: [ 'docs/**' ]
