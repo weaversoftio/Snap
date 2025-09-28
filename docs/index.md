@@ -4,7 +4,7 @@ title: SNAP Documentation
 description: Comprehensive documentation for SNAP container checkpointing platform
 ---
 
-<!-- Updated: Testing GitHub Pages deployment from v1.2 branch -->
+<!-- Updated: Testing GitHub Pages deployment from main branch -->
 
 # Welcome to SNAP Documentation
 
