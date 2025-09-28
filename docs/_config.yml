@@ -1,0 +1,86 @@
+# GitHub Pages configuration for SNAP documentation
+
+title: SNAP Documentation
+description: Comprehensive documentation for SNAP container checkpointing platform
+author: WeaverSoft
+email: support@weaversoft.io
+
+# GitHub Pages settings
+baseurl: "/Snap"
+url: "https://weaversoftio.github.io"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Navigation
+navigation:
+  - title: Home
+    url: /
+  - title: Installation
+    url: /installation
+  - title: Quick Start
+    url: /quick-start
+  - title: API Reference
+    url: /api-endpoints
+  - title: GitHub
+    url: https://github.com/weaversoftio/Snap
+
+# Collections
+collections:
+  guides:
+    output: true
+    permalink: /:collection/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: ""
+      type: "guides"
+    values:
+      layout: "guide"
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+# Include in site
+include:
+  - _pages
+
+# SEO
+seo:
+  type: "WebSite"
+  name: "SNAP Documentation"
+  description: "Comprehensive documentation for SNAP container checkpointing platform"
+  url: "https://weaversoftio.github.io/Snap"
+  image: "https://weaversoftio.github.io/Snap/assets/logo.png"
+
+# Social links
+social:
+  github: weaversoftio
+  twitter: weaversoftio
+  email: support@weaversoft.io
+
+# Footer
+footer:
+  message: "SNAP - Container State Management Platform"
+  copyright: "© 2024 WeaverSoft. All rights reserved."
