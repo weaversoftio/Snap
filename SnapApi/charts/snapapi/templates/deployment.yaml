@@ -75,8 +75,6 @@ spec:
               mountPath: /app/checkpoints
             - name: config-volume
               mountPath: /app/config
-            - name: crio-socket
-              mountPath: /run/crio/crio.sock
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -90,10 +88,6 @@ spec:
           hostPath:
             path: {{ .Values.configPath }}
             type: DirectoryOrCreate
-        - name: crio-socket
-          hostPath:
-            path: /run/crio/crio.sock
-            type: Socket
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
