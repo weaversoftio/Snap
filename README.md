@@ -34,7 +34,9 @@ SNAP enables organizations to capture the complete runtime state of running cont
 │   Management    │    │   Registry      │    │   Clusters      │
 │   Interface     │    │   (Nexus, etc.) │    │   (Openshift)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-
+                                │                       ▲
+                                │                       │
+                                └───────────────────────┘
 ```
 
 ## Quick Start
