@@ -120,10 +120,6 @@ Access the interactive API documentation at `http://localhost:8000/docs`
 - Testing with real production-like states
 - Rapid environment provisioning and teardown
 
-### Compliance & Audit
-- Application state auditing and compliance reporting
-- Forensic analysis of application states
-- Regulatory compliance with state preservation requirements
 
 ## Components
 
@@ -221,10 +217,9 @@ Snap/
 
 ## Support
 
-- **Documentation**: [https://docs.snap-platform.com](https://docs.snap-platform.com)
+- **Documentation**: [https://?.com](https://docs.snap-platform.com)
 - **Issues**: [GitHub Issues](https://github.com/weaversoftio/Snap/issues)
 - **Support**: support@weaversoft.io
-- **Community**: [Discord Community](https://discord.gg/snap-platform)
 
 ## License
 
@@ -236,6 +231,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Kubernetes community for container orchestration platform
 - Openshift community for enterprise Kubernetes distribution
 
----
-
-**SNAP** - Transforming containers from ephemeral to persistent, enabling unprecedented agility while maintaining data integrity and application continuity.
