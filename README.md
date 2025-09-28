@@ -23,8 +23,8 @@ SNAP enables organizations to capture the complete runtime state of running cont
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   SnapUI        │    │   SnapAPI       │    │   SnapWatcher   │
-│   (React)       │◄──►│   (FastAPI)     │◄──►│   (Operator)    │
-│   Port: 3000    │    │   Port: 8000    │    │   DaemonSet     │
+│   (React)       │◄──►│   (FastAPI)     │◄──►│  (Operator      │
+│   Port: 3000    │    │   Port: 8000    │    │  Inside SnapAPI)│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │                       │                       │
@@ -34,6 +34,7 @@ SNAP enables organizations to capture the complete runtime state of running cont
 │   Management    │    │   Registry      │    │   Clusters      │
 │   Interface     │    │   (Nexus, etc.) │    │   (Openshift)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+
 ```
 
 ## Quick Start
@@ -63,7 +64,8 @@ SNAP enables organizations to capture the complete runtime state of running cont
 4. **Configure your first cluster**
    - Navigate to **Configuration > Registry** and add your registry
    - Go to **Configuration > Clusters** and add your Openshift cluster
-   - Deploy **SnapWatcher** operator and **SnapHook** webhooks
+   - Deploy **SnapWatcher DaemonSet** using the provided YAML file
+   - Start **SnapWatcher** operator and **SnapHook** webhooks
 
 ### Configuration Steps
 
@@ -76,9 +78,15 @@ SNAP enables organizations to capture the complete runtime state of running cont
    - Upload kubeconfig or enter authentication token
    - Select configured registry
 
-3. **Deploy Components**
-   - **SnapWatcher**: Monitors containers and performs checkpointing
-   - **SnapHook**: Provides webhook endpoints for automation
+3. **Deploy Cluster Monitor DaemonSet**
+   ```bash
+   # Deploy the cluster monitoring DaemonSet to your cluster
+   kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml
+   ```
+
+4. **Start Components**
+   - **SnapWatcher Operator**: Start the operator inside SnapAPI to monitor containers
+   - **SnapHook**: Create webhook endpoints for automation
 
 ## API Documentation
 
@@ -130,16 +138,22 @@ Access the interactive API documentation at `http://localhost:8000/docs`
 - User-friendly configuration management
 
 ### SnapWatcher
-- Kubernetes DaemonSet for cluster monitoring
+- **Operator**: Runs inside SnapAPI, monitors containers and performs checkpointing
 - Automatic checkpointing capabilities
-- Real-time cluster health monitoring
-- Node-level configuration management
+- Real-time container monitoring
+- Event-driven checkpoint operations
 
 ### SnapHook
 - Webhook system for automation
 - Event-driven checkpoint operations
 - CI/CD pipeline integration
 - Custom workflow triggers
+
+### Cluster Monitor DaemonSet
+- User-deployed Kubernetes DaemonSet for cluster monitoring
+- Real-time cluster health monitoring
+- Node-level configuration management
+- Cluster status reporting
 
 ## Security
 
@@ -180,6 +194,7 @@ Snap/
 │   │   ├── classes/        # Data models and utilities
 │   │   ├── flows/          # Business logic flows
 │   │   └── middleware/     # Authentication and middleware
+│   ├── snap-cluster-monitor-daemonset.yaml  # Cluster monitoring DaemonSet
 │   ├── Dockerfile
 │   └── docker-compose.yml
 ├── SnapUi/                 # Frontend React application
