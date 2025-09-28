@@ -44,12 +44,20 @@ jobs:
       - name: Build with Jekyll
         run: |
           cd docs
-          bundle exec jekyll build --baseurl "${{ steps.prep.outputs.base_path }}"
+          bundle exec jekyll build
         env:
           JEKYLL_ENV: production
           
+      - name: Verify build output
+        run: |
+          cd docs
+          ls -la _site/
+          echo "Build completed successfully"
+          
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
 
   deploy:
     environment:
