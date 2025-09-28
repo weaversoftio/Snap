@@ -108,75 +108,7 @@ POST /checkpoint/insights
 
 ## Cluster Endpoints
 
-### ⚠️ Deprecated Endpoints
-
-The following cluster endpoints have been **deprecated** and return deprecation messages:
-
-#### ❌ Enable Checkpointing (Deprecated)
-```http
-POST /cluster/enable_checkpointing
-```
-
-**Request Body:**
-```json
-{
-  "cluster_name": "production-cluster",
-  "node_names": ["worker-node-1", "worker-node-2"]
-}
-```
-
-**Response (Deprecated):**
-```json
-{
-  "success": false,
-  "message": "This endpoint is deprecated. Checkpointing is now handled automatically by the DaemonSet."
-}
-```
-
-#### ❌ Install runC (Deprecated)
-```http
-POST /cluster/install_runc
-```
-
-**Request Body:**
-```json
-{
-  "cluster_name": "production-cluster",
-  "runc_version": "1.2.4"
-}
-```
-
-**Response (Deprecated):**
-```json
-{
-  "success": false,
-  "message": "This endpoint is deprecated. runc installation is now handled automatically by the DaemonSet."
-}
-```
-
-#### ❌ Verify Checkpointing (Deprecated)
-```http
-POST /cluster/verify_checkpointing
-```
-
-**Request Body:**
-```json
-{
-  "cluster_name": "production-cluster"
-}
-```
-
-**Response (Deprecated):**
-```json
-{
-  "success": false,
-  "message": "This endpoint is deprecated. Cluster verification is now handled automatically by the DaemonSet."
-}
-```
-
-### ✅ Active Endpoints
-
-#### Get Cluster Statistics
+### Get Cluster Statistics
 ```http
 GET /cluster/statistics
 ```
@@ -191,7 +123,7 @@ GET /cluster/statistics
 }
 ```
 
-#### Get Cluster Status (from DaemonSet)
+### Get Cluster Status
 ```http
 GET /cluster/status/{cluster_name}
 ```
@@ -479,6 +411,24 @@ ws.onmessage = function(event) {
 };
 ```
 
+## Deprecated Endpoints
+
+The following endpoints are **no longer available** and have been replaced by DaemonSet functionality:
+
+### ❌ Removed Cluster Management Endpoints
+- ~~`POST /cluster/enable_checkpointing`~~ - Replaced by DaemonSet
+- ~~`POST /cluster/install_runc`~~ - Replaced by DaemonSet
+- ~~`POST /cluster/verify_checkpointing`~~ - Replaced by DaemonSet
+- ~~`POST /cluster/configure_nodes`~~ - Replaced by DaemonSet
+- ~~`POST /cluster/run_playbook`~~ - Replaced by DaemonSet
+
+### Migration Notes
+- **Cluster verification**: Now handled automatically by DaemonSet
+- **Checkpointing enablement**: Automatic via DaemonSet deployment
+- **runC installation**: Managed by DaemonSet
+- **Node configuration**: Automatic via DaemonSet
+- **Playbook execution**: Integrated into DaemonSet
+
 ## Error Responses
 
 All endpoints may return error responses in this format:
@@ -500,6 +450,7 @@ All endpoints may return error responses in this format:
 - `CHECKPOINT_FAILED`: Checkpoint creation failed
 - `PERMISSION_DENIED`: Insufficient permissions
 - `VALIDATION_ERROR`: Invalid request parameters
+- `DAEMONSET_NOT_DEPLOYED`: Cluster monitor DaemonSet not found
 
 ## Rate Limiting
 
@@ -551,7 +502,4 @@ curl -X GET "http://localhost:8000/cluster/status/production-cluster" \
 # Get cluster statistics
 curl -X GET "http://localhost:8000/cluster/statistics" \
   -H "Authorization: Bearer $TOKEN"
-
-# Deploy cluster monitor DaemonSet
-kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml
 ```

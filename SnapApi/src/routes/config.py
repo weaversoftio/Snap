@@ -87,17 +87,15 @@ async def delete_cluster_config_endpoint(request: DeleteClusterConfigRequest):
 
 @router.get("/cluster/node")
 async def get_cluster_node_config_endpoint(cluster_name: str):  # Change to query parameter
-    try:
-        return await get_cluster_node_config(cluster_name)
-    except Exception as error:
-        return {"success": False, "message": str(error)}
+    # DEPRECATED: This endpoint is no longer used after deploying the DaemonSet
+    # The DaemonSet automatically handles node configuration
+    return {"success": False, "message": "This endpoint is deprecated. Node configuration is now handled automatically by the DaemonSet."}
 
 @router.put("/cluster/nodes/edit")
 async def edit_cluster_nodes_endpoint(request: EditClusterNodesRequest):
-    try:
-        return await edit_cluster_nodes(request)
-    except Exception as error:
-        return {"success": False, "message": str(error)}
+    # DEPRECATED: This endpoint is no longer used after deploying the DaemonSet
+    # The DaemonSet automatically handles node configuration updates
+    return {"success": False, "message": "This endpoint is deprecated. Node configuration updates are now handled automatically by the DaemonSet."}
     
 @router.post("/cluster/nodes/upload-ssh-key")
 async def upload_ssh_key_endpoint(cluster_name: str, file: UploadFile = File(...)):
@@ -195,14 +193,12 @@ async def delete_secret_endpoint(request: DeleteSecretRequest):
 
 @router.get("/playbooks/list")
 async def list_playbooks_endpoint():
-    try:
-        return await list_playbooks_config()
-    except Exception as error:
-        return {"success": False, "message": str(error)}
+    # DEPRECATED: This endpoint is no longer used after deploying the DaemonSet
+    # The DaemonSet automatically handles playbook configurations
+    return {"success": False, "message": "This endpoint is deprecated. Playbook configurations are now handled automatically by the DaemonSet."}
 
 @router.put("/playbooks/update")
 async def update_playbook_config_endpoint(request: UpdatePlaybookRequest):
-    try:
-        return await update_playbook_config(request)
-    except Exception as error:
-        return {"success": False, "message": str(error)}
+    # DEPRECATED: This endpoint is no longer used after deploying the DaemonSet
+    # The DaemonSet automatically handles playbook configuration updates
+    return {"success": False, "message": "This endpoint is deprecated. Playbook configuration updates are now handled automatically by the DaemonSet."}

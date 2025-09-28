@@ -86,7 +86,7 @@ SNAP enables organizations to capture the complete runtime state of running cont
 4. **Configure your first cluster**
    - Navigate to **Configuration > Registry** and add your registry
    - Go to **Configuration > Clusters** and add your Openshift cluster
-   - Deploy **SnapWatcher DaemonSet** using the provided YAML file
+   - Deploy **Cluster Monitor DaemonSet** using the provided YAML file
    - Start **SnapWatcher** operator and **SnapHook** webhooks
 
 ### Configuration Steps
@@ -109,6 +109,18 @@ SNAP enables organizations to capture the complete runtime state of running cont
 4. **Start Components**
    - **SnapWatcher Operator**: Start the operator inside SnapAPI to monitor containers
    - **SnapHook**: Create webhook endpoints for automation
+
+## ⚠️ Important Notice: Deprecated Features
+
+The following cluster management features have been **deprecated** and are now handled automatically by the DaemonSet:
+
+- **Cluster Verification** - Now monitored automatically
+- **Checkpointing Enablement** - Now configured automatically  
+- **runc Installation** - Now managed automatically
+- **Node Configuration** - Now handled automatically
+- **Playbook Configurations** - Now integrated into DaemonSet
+
+These features are no longer available in the UI and API endpoints return deprecation messages. The DaemonSet automatically handles all cluster setup and monitoring tasks.
 
 ## API Documentation
 

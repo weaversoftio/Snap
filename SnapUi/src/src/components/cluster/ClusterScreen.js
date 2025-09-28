@@ -158,64 +158,28 @@ const ClusterScreen = () => {
   }
 
   const handleClusterVerification = async () => {
-    enqueueSnackbar("Cluster verification started", { variant: "info" })
-    const { payload = null } = await dispatch(clusterActions.verify(selectedCluster.name))
-    const { success = false } = payload || {}
-    if (!success) {
-      enqueueSnackbar("Cluster verification failed", { variant: "error" })
-      return
-    }
-    enqueueSnackbar("Cluster verification successful", { variant: "success" })
+    // DEPRECATED: Cluster verification is now handled automatically by the DaemonSet
+    enqueueSnackbar("Cluster verification is now handled automatically by the DaemonSet", { variant: "info" })
   }
 
   const handleEnableCheckpointing = async (clusterType) => {
-    enqueueSnackbar("Enable checkpointing started", { variant: "info" })
-    setDialogType("")
-    const { payload = null } = await dispatch(clusterActions.enableCheckpointing({ clusterType, clusterName: selectedCluster.name }))
-    const { success = false } = payload || {}
-    if (!success) {
-      enqueueSnackbar("Enable checkpointing failed", { variant: "error" })
-    } else {
-      enqueueSnackbar("Enable checkpointing successful", { variant: "success" })
-    }
+    // DEPRECATED: Checkpointing enablement is now handled automatically by the DaemonSet
+    enqueueSnackbar("Checkpointing is now enabled automatically by the DaemonSet", { variant: "info" })
   }
 
   const handleInstallRunc = async () => {
-    try {
-      enqueueSnackbar("Installing runc", { variant: "info" })
-      const result = await dispatch(clusterActions.installRunC(selectedCluster.name))
-      if (!result?.success) {
-        enqueueSnackbar(`Failed to install runc`, { variant: "error" })
-        return
-      }
-      enqueueSnackbar("RunC installation successful", { variant: "success" })
-    } catch (error) {
-      console.error("Failed to install runc", error)
-      enqueueSnackbar("Failed to install runc", { variant: "error" })
-    }
+    // DEPRECATED: runc installation is now handled automatically by the DaemonSet
+    enqueueSnackbar("runc installation is now handled automatically by the DaemonSet", { variant: "info" })
   }
 
   const handleShowNodeConfig = async () => {
-    const { success = false, message = "", cluster_config = null } = await clusterApi.getNodeConfig(selectedCluster.name)
-    if (!success) {
-      enqueueSnackbar(`Node configuration failed, ${message}`, { variant: "error" })
-    } else {
-      setDialogType("nodeConfig")
-      setDialogData(cluster_config)
-    }
+    // DEPRECATED: Node configuration is now handled automatically by the DaemonSet
+    enqueueSnackbar("Node configuration is now handled automatically by the DaemonSet", { variant: "info" })
   }
 
   const handlePlaybookConfigs = async () => {
-    setDialogType("playbookConfigs")
-    setDialogData({ loading: true })
-
-    const result = await clusterApi.getPlaybookConfigs()
-    if (!result?.success) {
-      enqueueSnackbar(`Failed to get playbook configs`, { variant: "error" })
-      return
-    }
-    setDialogData(null)
-    setPlaybookConfigs(result?.config_list)
+    // DEPRECATED: Playbook configurations are now handled automatically by the DaemonSet
+    enqueueSnackbar("Playbook configurations are now handled automatically by the DaemonSet", { variant: "info" })
   }
 
   const handleEnableCheckpointingConfirmation = (type) => {
@@ -860,6 +824,7 @@ const ClusterScreen = () => {
                 </Grid>
               </Paper>
 
+
               {/* Actions Section */}
               <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 3 }}>
@@ -872,66 +837,11 @@ const ClusterScreen = () => {
                         <Button
                           fullWidth
                           variant="outlined"
-                          onClick={handleClusterVerification}
-                          startIcon={<VerifyIcon />}
-                          sx={{ height: 48, textTransform: 'none' }}
-                        >
-                          Verify Cluster
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          onClick={() => setDialogType("enableCheckpoint")}
-                          startIcon={<TaskAltIcon />}
-                          sx={{ height: 48, textTransform: 'none' }}
-                        >
-                          Enable Checkpointing
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          onClick={handleInstallRunc}
-                          startIcon={<InstallIcon />}
-                          sx={{ height: 48, textTransform: 'none' }}
-                        >
-                          Install runc
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          onClick={handleShowNodeConfig}
-                          startIcon={<PolylineIcon />}
-                          sx={{ height: 48, textTransform: 'none' }}
-                        >
-                          Node Config
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
                           onClick={handleShowClusterCacheConfig}
                           startIcon={<StorageIcon />}
                           sx={{ height: 48, textTransform: 'none' }}
                         >
                           Cluster Cache Config
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          onClick={handlePlaybookConfigs}
-                          startIcon={<LibraryBooksIcon />}
-                          sx={{ height: 48, textTransform: 'none' }}
-                        >
-                          Playbook Configs
                         </Button>
                       </Grid>
                     </>
@@ -981,6 +891,40 @@ const ClusterScreen = () => {
                     Delete Cluster
                   </Button>
                 </Box>
+              </Paper>
+
+              {/* Important Notice */}
+              <Paper elevation={0} sx={{ p: 3, bgcolor: 'warning.light', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <WarningIcon color="warning" sx={{ mr: 1 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.contrastText' }}>
+                    Important Notice: Deprecated Features
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: 'warning.contrastText', mb: 2 }}>
+                  The following cluster management features have been deprecated and are now handled automatically by the DaemonSet:
+                </Typography>
+                <Box component="ul" sx={{ pl: 2, mb: 2 }}>
+                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
+                    Cluster Verification - Now monitored automatically
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
+                    Checkpointing Enablement - Now configured automatically
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
+                    runc Installation - Now managed automatically
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
+                    Node Configuration - Now handled automatically
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
+                    Playbook Configurations - Now integrated into DaemonSet
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: 'warning.contrastText', fontStyle: 'italic' }}>
+                  These features are no longer available in the UI as they are now handled automatically by the DaemonSet. 
+                  The DaemonSet automatically handles all cluster setup and monitoring tasks.
+                </Typography>
               </Paper>
                 </Stack>
             </Box>

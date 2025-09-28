@@ -36,33 +36,56 @@ This guide covers how to manage Openshift and Kubernetes clusters in SNAP.
    - **SSL Verification**: Enable/disable SSL verification
    - **Timeout**: API request timeout settings
 
-## Cluster Operations
+## ⚠️ Deprecated Operations
 
-### Enable Checkpointing
+The following cluster operations have been **deprecated** and are now handled automatically by the DaemonSet:
+
+### ❌ Enable Checkpointing (Deprecated)
 ```bash
+# DEPRECATED: This endpoint is no longer available
 curl -X POST http://localhost:8000/cluster/enable_checkpointing \
   -H "Content-Type: application/json" \
   -d '{
     "cluster_name": "production-cluster",
     "node_names": ["worker-node-1", "worker-node-2"]
   }'
+# Returns: {"success": false, "message": "This endpoint is deprecated. Checkpointing is now handled automatically by the DaemonSet."}
 ```
 
-### Install runC
+### ❌ Install runC (Deprecated)
 ```bash
+# DEPRECATED: This endpoint is no longer available
 curl -X POST http://localhost:8000/cluster/install_runc \
   -H "Content-Type: application/json" \
   -d '{
     "cluster_name": "production-cluster",
     "runc_version": "1.2.4"
   }'
+# Returns: {"success": false, "message": "This endpoint is deprecated. runc installation is now handled automatically by the DaemonSet."}
 ```
 
-### Verify Checkpointing
+### ❌ Verify Checkpointing (Deprecated)
 ```bash
+# DEPRECATED: This endpoint is no longer available
 curl -X POST http://localhost:8000/cluster/verify_checkpointing \
   -H "Content-Type: application/json" \
   -d '{"cluster_name": "production-cluster"}'
+# Returns: {"success": false, "message": "This endpoint is deprecated. Cluster verification is now handled automatically by the DaemonSet."}
+```
+
+## ✅ Current Operations
+
+### Deploy Cluster Monitor DaemonSet
+```bash
+# Deploy the cluster monitoring DaemonSet to your cluster
+kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml
+```
+
+### Check Cluster Status (via DaemonSet)
+```bash
+# Check cluster status from DaemonSet
+curl -X GET http://localhost:8000/cluster/status/production-cluster \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ## Cluster Monitoring
@@ -99,3 +122,22 @@ kubectl get daemonset -n snap
 # View cluster events
 kubectl get events --all-namespaces
 ```
+
+## Add Cluster Interface Guide
+
+For detailed step-by-step instructions on using the "Add Cluster" form, see our comprehensive [Add Cluster Configuration Guide](add-cluster-guide.md).
+
+### Quick Reference
+- **Cluster Name**: Unique identifier for your cluster
+- **Cluster API URL**: Kubernetes/Openshift API server endpoint
+- **Token**: Authentication token for cluster access
+- **Upload SSH Key**: Secure access for node operations
+- **Registry**: Container registry for checkpoint images (optional)
+
+### Form Validation
+The form validates:
+- Cluster name uniqueness
+- API URL format and connectivity
+- Token validity and permissions
+- SSH key format and node access
+- Registry connectivity (if specified)

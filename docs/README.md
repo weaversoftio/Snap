@@ -77,3 +77,6 @@ We welcome contributions to improve this documentation! Please see our [Contribu
 ---
 
 **Need help?** Check our [Troubleshooting](troubleshooting.md) guide or contact support at support@weaversoft.io
+
+### Cluster Configuration
+- [Add Cluster Guide](add-cluster-guide.md) - Step-by-step cluster addition process
