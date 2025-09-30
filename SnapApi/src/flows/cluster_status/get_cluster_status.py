@@ -46,8 +46,8 @@ async def get_cluster_status(cluster_name: str = None) -> ClusterStatusListRespo
                     
                     # Check if all required checks pass
                     checks = node_data.get('checks', {})
-                    crio_ok = checks.get('crio', '').startswith('crio:pass')
-                    criu_ok = checks.get('criu', '').startswith('criu:pass')
+                    crio_ok = checks.get('crio', '').startswith('crio:crio version') or checks.get('crio', '').startswith('crio:pass')
+                    criu_ok = checks.get('criu', '').startswith('criu:Version:') or checks.get('criu', '').startswith('criu:pass')
                     criu_config_ok = checks.get('criu_config', '').startswith('criu_config:pass')
                     
                     node_ready = crio_ok and criu_ok and criu_config_ok and is_recent

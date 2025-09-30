@@ -42,7 +42,7 @@ spec:
               if [ -n "$crio_bin" ]; then
                 local version=$("$crio_bin" -v 2>/dev/null | grep -o "crio version [0-9.]*" || echo "")
                 if [[ "$version" == *"crio version 1.31.2"* ]]; then
-                  echo "crio:pass"
+                  echo "crio:$version"
                 else
                   echo "crio:fail:$version"
                 fi
@@ -74,7 +74,7 @@ spec:
                 
                 # Check if version matches expected
                 if [[ "$version" == *"Version: 3.19"* ]]; then
-                  echo "criu:pass"
+                  echo "criu:$version"
                 else
                   echo "criu:fail:$version"
                 fi
@@ -83,23 +83,41 @@ spec:
               fi
             }
             
-            # Function to check criu config
+            # Function to check and auto-configure criu config
             check_criu_config() {
+              local config_file=""
+              
               # Check host-mounted config first
               if [ -f "/host/etc/criu/default.conf" ]; then
-                if grep -q "tcp-close" /host/etc/criu/default.conf; then
-                  echo "criu_config:pass"
-                else
-                  echo "criu_config:fail:missing_tcp_close"
-                fi
+                config_file="/host/etc/criu/default.conf"
               elif [ -f "/etc/criu/default.conf" ]; then
-                if grep -q "tcp-close" /etc/criu/default.conf; then
-                  echo "criu_config:pass"
-                else
-                  echo "criu_config:fail:missing_tcp_close"
-                fi
+                config_file="/etc/criu/default.conf"
               else
                 echo "criu_config:fail:config_not_found"
+                return
+              fi
+              
+              # Check if tcp-close is configured
+              if grep -q "tcp-close" "$config_file"; then
+                echo "criu_config:pass"
+              else
+                # Auto-configure tcp-close
+                echo "Auto-configuring tcp-close in $config_file..."
+                
+                # Create backup
+                cp "$config_file" "$config_file.backup.$(date +%s)" 2>/dev/null || true
+                
+                # Add tcp-close configuration
+                echo "" >> "$config_file"
+                echo "# Auto-configured tcp-close setting" >> "$config_file"
+                echo "tcp-close" >> "$config_file"
+                
+                # Verify the configuration was added
+                if grep -q "tcp-close" "$config_file"; then
+                  echo "criu_config:pass:auto_configured"
+                else
+                  echo "criu_config:fail:auto_config_failed"
+                fi
               fi
             }
             
@@ -159,9 +177,9 @@ spec:
                 local crio_version=$("$crio_bin" -v 2>/dev/null | grep -o "crio version [0-9.]*" || echo "unknown")
                 echo "  Version: $crio_version"
                 if [[ "$crio_version" == *"crio version 1.31.2"* ]]; then
-                  echo "  Status: PASS (Expected version)"
+                  echo "  Status: PASS ($crio_version)"
                 else
-                  echo "  Status: FAIL (Unexpected version)"
+                  echo "  Status: FAIL ($crio_version)"
                 fi
               else
                 echo "  Status: FAIL (Not found)"
@@ -190,9 +208,9 @@ spec:
                 if [ -n "$criu_version" ]; then
                   echo "  Version: $criu_version"
                   if [[ "$criu_version" == *"Version: 3.19"* ]]; then
-                    echo "  Status: PASS (Expected version)"
+                    echo "  Status: PASS ($criu_version)"
                   else
-                    echo "  Status: FAIL (Unexpected version)"
+                    echo "  Status: FAIL ($criu_version)"
                   fi
                 else
                   echo "  Version: Cannot execute binary"
@@ -215,7 +233,17 @@ spec:
                 if grep -q "tcp-close" /host/etc/criu/default.conf; then
                   echo "  Status: PASS (tcp-close configured)"
                 else
-                  echo "  Status: FAIL (tcp-close not found)"
+                  echo "  Status: FAIL (tcp-close not found) - attempting auto-configuration..."
+                  # Try to auto-configure
+                  echo "" >> /host/etc/criu/default.conf
+                  echo "# Auto-configured tcp-close setting" >> /host/etc/criu/default.conf
+                  echo "tcp-close" >> /host/etc/criu/default.conf
+                  
+                  if grep -q "tcp-close" /host/etc/criu/default.conf; then
+                    echo "  Status: PASS (tcp-close auto-configured)"
+                  else
+                    echo "  Status: FAIL (auto-configuration failed)"
+                  fi
                 fi
               else
                 echo "  Config file not found: /host/etc/criu/default.conf"
