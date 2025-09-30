@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { styled, useTheme } from '@mui/material/styles';
+import { useEffect, useState, useCallback } from 'react';
+import { styled } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import MuiDrawer from '@mui/material/Drawer';
 import MuiAppBar from '@mui/material/AppBar';
@@ -21,7 +21,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { getCookie, setCookie } from '../utils/cookies';
 import { authActions } from '../features/auth/authSlice';
-import { Button, FormControl, IconButton, MenuItem, Select, TextField, InputLabel } from '@mui/material';
+import { Button, FormControl, MenuItem, Select, TextField, InputLabel } from '@mui/material';
 import DialogComponent from './common/Dialog';
 import { useSnackbar } from 'notistack';
 import Stack from '@mui/material/Stack';
@@ -30,9 +30,9 @@ import { clusterApi } from '../api/clusterApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
-import ProgressTracker from './common/TaskProgressDetails';
-import { useProgress } from './common/ProgressContext';
 import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon } from '@mui/icons-material';
+import LogsSection from './common/LogsSection';
+import { useLogs } from './common/LogsContext';
 
 const drawerWidth = 240;
 const selectedBackgroundColor = "rgba(36, 143, 231, 1)";
@@ -120,10 +120,10 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 
 export default function AppContainer({ children }) {
   const { enqueueSnackbar } = useSnackbar();
-  const { setUsername } = useProgress();
+  const { setUsername } = useLogs();
   const navigate = useNavigate()
   const dispatch = useDispatch()
-  const [open, setOpen] = useState(true);
+  const [open] = useState(true);
   const [switchCluster, setSwitchCluster] = useState(false);
   const [clusterName, setClusterName] = useState("");
   const [clusterUrl, setClusterUrl] = useState("");
@@ -136,7 +136,7 @@ export default function AppContainer({ children }) {
   const [availableRegistries, setAvailableRegistries] = useState([]);
 
   const [clusterOpen, setClusterOpen] = useState(false);
-  const { list: clusterList = [], selectedCluster = "", checkpointingEnabled = false, kubeAuthenticated = false } = useSelector(state => state.cluster)
+  const { list: clusterList = [], selectedCluster = "", kubeAuthenticated = false } = useSelector(state => state.cluster)
   const { authenticated = false, user } = useSelector(state => state.auth)
   const c_selectedCluster = getCookie("selectedCluster")
 
@@ -158,24 +158,18 @@ export default function AppContainer({ children }) {
   }, []);
   const token = getCookie("token")
 
-  useEffect(() => {
-    !token && handleLogout()
-  }, [token])
-  useEffect(() => {
-    handleConfirmSelectCluster(c_selectedCluster)
-  }, [clusterList, authenticated])
-
-  useEffect(() => {
-    if (!authenticated) return
-    setUsername(user.username)
-    handleGetClusterList()
-  }, [authenticated])
-
-  const handleGetClusterList = async () => {
+  const handleGetClusterList = useCallback(async () => {
     dispatch(clusterActions.getList())
-  }
+  }, [dispatch]);
 
-  const handleConfirmSelectCluster = async (name) => {
+  const handleLogout = useCallback(() => {
+    dispatch(authActions.logout())
+    dispatch(clusterActions.clearState())
+    dispatch(registryActions.clearState())
+    navigate("/")
+  }, [dispatch, navigate]);
+
+  const handleConfirmSelectCluster = useCallback(async (name) => {
     if (!authenticated || !name || !clusterList?.length || clusterAction) {
       setClusterAction("")
       return
@@ -187,7 +181,20 @@ export default function AppContainer({ children }) {
     dispatch(clusterActions.login(cluster))
     setCookie("selectedCluster", name)
     setSwitchCluster("")
-  }
+  }, [authenticated, clusterList, clusterAction, navigate, dispatch]);
+
+  useEffect(() => {
+    !token && handleLogout()
+  }, [token, handleLogout])
+  useEffect(() => {
+    handleConfirmSelectCluster(c_selectedCluster)
+  }, [clusterList, authenticated, c_selectedCluster, handleConfirmSelectCluster])
+
+  useEffect(() => {
+    if (!authenticated || !user) return
+    setUsername(user.username)
+    handleGetClusterList()
+  }, [authenticated, user, setUsername, handleGetClusterList])
 
   const handleSelectCluster = (name) => {
     setSwitchCluster(name)
@@ -205,12 +212,6 @@ export default function AppContainer({ children }) {
     }
   }
 
-  const handleLogout = () => {
-    dispatch(authActions.logout())
-    dispatch(clusterActions.clearState())
-    dispatch(registryActions.clearState())
-    navigate("/")
-  }
 
   const handleAddCluster = async () => {
     // Clear previous errors
@@ -480,11 +481,11 @@ export default function AppContainer({ children }) {
           </Toolbar>
         </AppBar>}
         {renderDrawer()}
-        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: "#f5f5f5", position: "relative" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
+        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: "#f5f5f5", position: "relative", paddingBottom: "80px" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
           <DrawerHeader />
-          {authenticated && <ProgressTracker />}
           {children}
         </Box>
+        {authenticated && <LogsSection />}
       </Box>
     </>
   );

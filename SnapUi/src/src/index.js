@@ -5,16 +5,16 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { Provider } from "react-redux"
 import store from './store';
-import { ProgressProvider } from './components/common/ProgressContext';
+import { LogsProvider } from './components/common/LogsContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <ProgressProvider>
+    <LogsProvider>
       <Provider store={store}>
         <App />
       </Provider>
-    </ProgressProvider>
+    </LogsProvider>
   </React.StrictMode>
 );
 
