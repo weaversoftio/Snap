@@ -1,8 +1,0 @@
-{
-    "registry_config_details": {
-        "registry": "192.168.33.204:8082",
-        "username": "k8s",
-        "password": "k8s"
-    },
-    "name": "nexus"
-}
