@@ -46,49 +46,57 @@ origins = origins_env.split(",")
 async def lifespan(app: FastAPI):
     """Handle application lifespan events."""
     # Startup
-    logger.info("Starting SnapAPI application...")
+    log_info(logger, 'SnapApi', 'Application Start', f'Starting SnapAPI application...')
     
     # Load SnapWatcher configurations and auto-start them
     try:
         from routes.operator import load_watcher_configs_on_startup
         await load_watcher_configs_on_startup()
-        logger.info("SnapWatcher configurations loaded and auto-started successfully")
+        log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapWatcher configurations loaded and auto-started successfully')
     except Exception as e:
-        logger.error(f"Failed to load and start SnapWatcher configurations: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to load and start SnapWatcher configurations: {e}')
     
     # Initialize shared HTTPS server
     try:
         from classes.shared_https_server import shared_https_server
         if shared_https_server.start_shared_server():
-            logger.info("Shared HTTPS server started successfully")
+            log_success(logger, 'SnapApi', 'HTTPS Server', f'Shared HTTPS server started successfully')
         else:
-            logger.error("Failed to start shared HTTPS server")
+            log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start shared HTTPS server')
     except Exception as e:
-        logger.error(f"Failed to initialize shared HTTPS server: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to initialize shared HTTPS server: {e}')
     
     # Load SnapHook configurations on startup
     try:
         from routes.snaphook import snaphook_instances
         from flows.config.hook.load_snaphooks_on_startup import load_snaphooks_on_startup
         await load_snaphooks_on_startup(snaphook_instances)
-        logger.info("SnapHook configurations loaded successfully")
+        log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapHook configurations loaded successfully')
     except Exception as e:
-        logger.error(f"Failed to load SnapHook configurations: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to load SnapHook configurations: {e}')
     
     yield
     
     # Shutdown
-    logger.info("Shutting down SnapAPI application...")
+    log_info(logger, 'SnapApi', 'Application Stop', f'Shutting down SnapAPI application...')
+    
+    # Cleanup WebSocket logging handler
+    try:
+        from classes.websocket_log_handler import cleanup_websocket_logging
+        cleanup_websocket_logging()
+        log_success(logger, 'SnapApi', 'Cleanup', f'WebSocket logging handler cleaned up successfully')
+    except Exception as e:
+        log_error(logger, 'SnapApi', 'Error Handling', f'Error cleaning up WebSocket logging handler: {e}')
     
     # Stop shared HTTPS server
     try:
         from classes.shared_https_server import shared_https_server
         if shared_https_server.stop_shared_server():
-            logger.info("Shared HTTPS server stopped successfully")
+            log_success(logger, 'SnapApi', 'HTTPS Server', f'Shared HTTPS server stopped successfully')
         else:
-            logger.warning("Failed to stop shared HTTPS server gracefully")
+            log_warning(logger, 'SnapApi', 'HTTPS Server', f'Failed to stop shared HTTPS server gracefully')
     except Exception as e:
-        logger.error(f"Error stopping shared HTTPS server: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Error stopping shared HTTPS server: {e}')
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)
@@ -110,10 +118,18 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("automation_api")
+logger.setLevel(logging.INFO)  # Ensure automation_api logger accepts INFO, WARNING, ERROR
 logging.getLogger().setLevel(logging.ERROR)  # Root logger
 logging.getLogger("multipart.multipart").setLevel(logging.ERROR)  # Full path to multipart logger
 logging.getLogger("multipart.multipart.parse").setLevel(logging.ERROR)  # Parser specific logger
 logging.getLogger("uvicorn").setLevel(logging.ERROR)
+
+# Setup WebSocket logging handler
+from classes.websocket_log_handler import setup_websocket_logging, log_info, log_error, log_warning, log_success
+from routes.websocket import broadcast_progress
+
+# Initialize WebSocket logging handler
+websocket_log_handler = setup_websocket_logging(broadcast_progress)
 
 # Include routers
 app.include_router(registry_router, prefix="/registry", tags=["registry"])

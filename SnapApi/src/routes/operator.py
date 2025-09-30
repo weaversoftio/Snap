@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from classes.operator_watcher import SnapWatcherOperator, set_global_operator
 from classes.clusterconfig import ClusterConfig
+from classes.websocket_log_handler import log_info, log_error, log_warning, log_success
 from flows.config.watcher.watcher_config import (
     WatcherConfig, save_watcher_config, load_watcher_config, 
     list_watcher_configs, delete_watcher_config, update_watcher_status,
@@ -89,17 +90,17 @@ def run_operator(namespace=None):
     """Run the operator in a separate thread."""
     global operator_running
     try:
-        logger.info("Starting SnapWatcher operator...")
+        log_info(logger, 'SnapApi', 'Operator Start', f'Starting SnapWatcher operator...')
         import kopf
         
         if namespace:
-            logger.info(f"Starting operator with namespace scope: {namespace}")
+            log_info(logger, 'SnapApi', 'Operator Start', f'Starting operator with namespace scope: {namespace}')
             kopf.run(namespace=namespace)
         else:
-            logger.info("Starting operator with cluster-wide scope")
+            log_info(logger, 'SnapApi', 'Operator Start', f'Starting operator with cluster-wide scope')
             kopf.run(clusterwide=True)
     except Exception as e:
-        logger.error(f"Operator thread error: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Operator thread error: {e}')
         operator_running = False
 
 
@@ -148,7 +149,7 @@ async def start_operator(request: OperatorStartRequest, background_tasks: Backgr
         operator_thread.start()
         operator_running = True
         
-        logger.info(f"SnapWatcher operator started successfully for cluster: {request.cluster_name}")
+        log_success(logger, 'SnapApi', 'Operator Start', f'SnapWatcher operator started successfully for cluster: {request.cluster_name}')
         
         return OperatorStatusResponse(
             running=True,
@@ -156,7 +157,7 @@ async def start_operator(request: OperatorStartRequest, background_tasks: Backgr
         )
         
     except Exception as e:
-        logger.error(f"Failed to start operator: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start operator: {e}')
         operator_running = False
         raise HTTPException(
             status_code=500,
@@ -191,7 +192,7 @@ async def stop_operator():
         # Clear the global operator instance
         set_global_operator(None)
         
-        logger.info("SnapWatcher operator stopped")
+        log_success(logger, 'SnapApi', 'Operator Stop', f'SnapWatcher operator stopped')
         
         return OperatorStatusResponse(
             running=False,
@@ -199,7 +200,7 @@ async def stop_operator():
         )
         
     except Exception as e:
-        logger.error(f"Failed to stop operator: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to stop operator: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to stop operator: {str(e)}"
@@ -255,7 +256,7 @@ async def get_all_watchers_status():
         }
         
     except Exception as e:
-        logger.error(f"Failed to get watchers status: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to get watchers status: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get watchers status: {str(e)}"
@@ -307,7 +308,7 @@ async def create_snapwatcher(request: SnapWatcherCreateRequest):
         try:
             # Check if there's already a running operator
             if operator_running:
-                logger.warning(f"Operator is already running. Stopping current operator to start new watcher: {request.name}")
+                log_warning(logger, 'SnapApi', 'Operator Management', f'Operator is already running. Stopping current operator to start new watcher: {request.name}')
                 await stop_operator()
             
             # Start the operator with this watcher's configuration
@@ -336,19 +337,19 @@ async def create_snapwatcher(request: SnapWatcherCreateRequest):
             # Reload config to get updated status
             watcher_config = load_watcher_config(request.name)
             
-            logger.info(f"SnapWatcher created and started: {request.name}")
+            log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher created and started: {request.name}')
             
         except Exception as start_error:
-            logger.error(f"Failed to start SnapWatcher {request.name}: {start_error}")
+            log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start SnapWatcher {request.name}: {start_error}')
             # Don't fail the creation if start fails, just log the error
-            logger.info(f"SnapWatcher created but not started: {request.name}")
+            log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher created but not started: {request.name}')
         
         return SnapWatcherResponse(**watcher_config.to_dict())
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create SnapWatcher: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to create SnapWatcher: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create SnapWatcher: {str(e)}"
@@ -399,7 +400,7 @@ async def get_snapwatchers(cluster_name: str):
         )
         
     except Exception as e:
-        logger.error(f"Failed to get SnapWatchers for cluster {cluster_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to get SnapWatchers for cluster {cluster_name}: {e}')
         return SnapWatcherListResponse(
             success=False,
             watchers=[],
@@ -433,7 +434,7 @@ async def get_snapwatcher(watcher_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get SnapWatcher {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to get SnapWatcher {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get SnapWatcher: {str(e)}"
@@ -475,7 +476,7 @@ async def update_snapwatcher(watcher_name: str, request: SnapWatcherUpdateReques
                 detail="Failed to save updated SnapWatcher configuration"
             )
         
-        logger.info(f"SnapWatcher updated: {watcher_name}")
+        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher updated: {watcher_name}')
         
         config_dict = config.to_dict()
         config_dict['cluster_config'] = config.cluster_config
@@ -484,7 +485,7 @@ async def update_snapwatcher(watcher_name: str, request: SnapWatcherUpdateReques
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update SnapWatcher {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to update SnapWatcher {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update SnapWatcher: {str(e)}"
@@ -521,14 +522,14 @@ async def delete_snapwatcher(watcher_name: str):
                 detail="Failed to delete SnapWatcher configuration"
             )
         
-        logger.info(f"SnapWatcher deleted: {watcher_name}")
+        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher deleted: {watcher_name}')
         
         return {"success": True, "message": f"SnapWatcher '{watcher_name}' deleted successfully"}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete SnapWatcher {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to delete SnapWatcher {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete SnapWatcher: {str(e)}"
@@ -585,14 +586,14 @@ async def start_snapwatcher(watcher_name: str):
         # Reload config to get updated status
         updated_config = load_watcher_config(watcher_name)
         
-        logger.info(f"SnapWatcher started: {watcher_name}")
+        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher started: {watcher_name}')
         
         return SnapWatcherResponse(**updated_config.to_dict())
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to start SnapWatcher {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start SnapWatcher {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to start SnapWatcher: {str(e)}"
@@ -637,14 +638,14 @@ async def stop_snapwatcher(watcher_name: str):
         # Reload config to get updated status
         updated_config = load_watcher_config(watcher_name)
         
-        logger.info(f"SnapWatcher stopped: {watcher_name}")
+        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher stopped: {watcher_name}')
         
         return SnapWatcherResponse(**updated_config.to_dict())
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to stop SnapWatcher {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to stop SnapWatcher {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to stop SnapWatcher: {str(e)}"
@@ -693,7 +694,7 @@ async def get_snapwatcher_status(watcher_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get SnapWatcher status {watcher_name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to get SnapWatcher status {watcher_name}: {e}')
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get SnapWatcher status: {str(e)}"
@@ -711,7 +712,7 @@ def start_individual_watcher(config: WatcherConfig) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        logger.info(f"Starting individual SnapWatcher: {config.name}")
+        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Starting individual SnapWatcher: {config.name}')
         
         # Create operator instance for this watcher
         watcher_instance = SnapWatcherOperator(
@@ -723,7 +724,7 @@ def start_individual_watcher(config: WatcherConfig) -> bool:
         )
         
         if not watcher_instance.is_ready():
-            logger.error(f"SnapWatcher {config.name} is not ready. Check cluster configuration.")
+            log_error(logger, 'SnapApi', 'Error Handling', f'SnapWatcher {config.name} is not ready. Check cluster configuration.')
             return False
         
         # Start operator in background thread
@@ -747,11 +748,11 @@ def start_individual_watcher(config: WatcherConfig) -> bool:
         # Update watcher status
         update_watcher_status(config.name, "running")
         
-        logger.info(f"Successfully started SnapWatcher: {config.name}")
+        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'Successfully started SnapWatcher: {config.name}')
         return True
         
     except Exception as e:
-        logger.error(f"Failed to start SnapWatcher {config.name}: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start SnapWatcher {config.name}: {e}')
         update_watcher_status(config.name, "error")
         return False
 
@@ -762,31 +763,31 @@ async def load_watcher_configs_on_startup():
     try:
         from flows.config.watcher.watcher_config import load_watcher_configs_on_startup as load_configs
         configs = load_configs()
-        logger.info(f"SnapAPI: Loaded {len(configs)} watcher configurations on startup")
+        log_info(logger, 'SnapApi', 'Configuration Loading', f'SnapAPI: Loaded {len(configs)} watcher configurations on startup')
         
         # Clear all "running" statuses since API just restarted
-        logger.info("Clearing all 'running' statuses since API restarted...")
+        log_info(logger, 'SnapApi', 'Configuration Loading', f'Clearing all \'running\' statuses since API restarted...')
         for config in configs:
             if config.status == "running":
                 update_watcher_status(config.name, "stopped")
-                logger.info(f"Marked SnapWatcher '{config.name}' as stopped (API restart)")
+                log_info(logger, 'SnapApi', 'Configuration Loading', f'Marked SnapWatcher \'{config.name}\' as stopped (API restart)')
         
         # Check if we should auto-start watchers based on WATCHER_MODE
         watcher_mode = os.getenv("WATCHER_MODE", "kubernetes")
         if watcher_mode.lower() == "compose":
-            logger.info("WATCHER_MODE=compose detected, skipping SnapWatcher auto-start")
+            log_info(logger, 'SnapApi', 'Configuration Loading', f'WATCHER_MODE=compose detected, skipping SnapWatcher auto-start')
             return
         
         # Auto-start all existing Snapwatchers
         if configs:
-            logger.info("Auto-starting all existing Snapwatchers...")
+            log_info(logger, 'SnapApi', 'Configuration Loading', f'Auto-starting all existing Snapwatchers...')
             started_count = 0
             failed_count = 0
             
             for config in configs:
                 try:
                     if config.status != "running":
-                        logger.info(f"Starting SnapWatcher: {config.name}")
+                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Starting SnapWatcher: {config.name}')
                         
                         # Start the individual watcher
                         if start_individual_watcher(config):
@@ -794,18 +795,18 @@ async def load_watcher_configs_on_startup():
                         else:
                             failed_count += 1
                     else:
-                        logger.info(f"SnapWatcher {config.name} is already running")
+                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher {config.name} is already running')
                         started_count += 1
                         
                 except Exception as e:
-                    logger.error(f"Error processing SnapWatcher {config.name}: {e}")
+                    log_error(logger, 'SnapApi', 'Error Handling', f'Error processing SnapWatcher {config.name}: {e}')
                     failed_count += 1
             
-            logger.info(f"SnapWatcher auto-start completed: {started_count} started, {failed_count} failed")
+            log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapWatcher auto-start completed: {started_count} started, {failed_count} failed')
         else:
-            logger.info("No SnapWatcher configurations found to auto-start")
+            log_info(logger, 'SnapApi', 'Configuration Loading', f'No SnapWatcher configurations found to auto-start')
             
         return configs
     except Exception as e:
-        logger.error(f"Failed to load watcher configurations on startup: {e}")
+        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to load watcher configurations on startup: {e}')
         return []

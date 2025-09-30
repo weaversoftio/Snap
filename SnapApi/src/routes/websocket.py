@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
 from typing import Dict
-from datetime import datetime, timedelta
+from datetime import datetime
 
 active_connections: Dict[str, WebSocket] = {}
 
@@ -41,13 +41,8 @@ async def disconnect(username: str):
 async def send_progress(username: str, data: dict):
     """Send a message to a specific user if they are connected."""
     data["type"] = "progress"
-    # Get the current timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Check if 'message' key exists in the data dictionary
-    if 'message' in data:
-        # Prepend the timestamp to the message
-        data['message'] = f"{timestamp} \n{data['message']}"
+    # Add timestamp to the data structure (not to the message)
+    data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if username in active_connections:
         try:
@@ -62,13 +57,8 @@ async def send_progress(username: str, data: dict):
 async def broadcast_progress(data: dict):
     """Send a message to all connected users."""
     data["type"] = "progress"
-    # Get the current timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Check if 'message' key exists in the data dictionary
-    if 'message' in data:
-        # Prepend the timestamp to the message
-        data['message'] = f"{timestamp} \n{data['message']}"
+    # Add timestamp to the data structure (not to the message)
+    data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Send to all connected users
     disconnected_users = []

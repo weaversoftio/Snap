@@ -51,19 +51,9 @@ export const LogsProvider = ({ children }) => {
         const logType = data.progress === "failed" ? "error" : 
                        data.progress === 100 ? "success" : "info";
         
-        // Parse the message to extract timestamp and clean message
-        let logMessage = data.message || `${data.task_name || "Task"} - Progress: ${data.progress}%`;
-        let serverTimestamp = null;
-        
-        // Check if message contains server timestamp (format: "YYYY-MM-DD HH:MM:SS \nmessage")
-        const timestampMatch = logMessage.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \n(.+)$/);
-        if (timestampMatch) {
-          serverTimestamp = timestampMatch[1];
-          logMessage = timestampMatch[2];
-        }
-        
-        // Use server timestamp if available, otherwise use current time
-        const timestamp = serverTimestamp || new Date().toLocaleTimeString();
+        // Use the timestamp from the data structure, or fallback to current time
+        const logMessage = data.message || `${data.task_name || "Task"} - Progress: ${data.progress}%`;
+        const timestamp = data.timestamp || new Date().toLocaleString();
         const newLog = {
           id: `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           timestamp,

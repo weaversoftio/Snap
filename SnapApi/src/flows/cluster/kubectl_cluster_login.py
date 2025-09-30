@@ -60,7 +60,7 @@ async def kubectl_cluster_login(cluster_config_name: str, username: str):
         user = (await run(["oc", "whoami"])).stdout.strip()
         print(f"SnapAPI: Current user: {user}")
 
-        await send_progress(username, {"progress": 100, "task_name": "Cluster Login", "message": f"Current user: {user}\nLogged in to the kubernetes cluster"})
+        await send_progress(username, {"progress": 100, "task_name": "Cluster Login", "message": f"Current user: {user} Logged in to the kubernetes cluster"})
         return {"success": True, "message": "Logged in to the kubernetes cluster"}
     except Exception as e:
         await send_progress(username, {"progress": "failed", "task_name": "Cluster Login", "message": f"Unexpected error: {str(e)}"})

@@ -5,17 +5,22 @@ This module contains the SnapWatcherOperator class that watches for pods and tri
 
 import os
 import kopf
+import logging
 from kubernetes import client, config
 from typing import Optional, Dict, Any
 from classes.apirequests import PodSpecCheckpointRequest
 from classes.clusterconfig import ClusterConfig
 from flows.checkpoint_and_push import checkpoint_and_push_from_pod_spec
 from routes.websocket import broadcast_progress
+from classes.websocket_log_handler import log_info, log_error, log_warning, log_success
 import urllib3
 
 # Suppress urllib3 InsecureRequestWarning for Kubernetes client
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import threading
+
+# Setup logger for SnapWatcher
+logger = logging.getLogger("automation_api.SnapWatcher")
 
 
 class SnapWatcherOperator:
@@ -35,7 +40,7 @@ class SnapWatcherOperator:
             namespace: Specific namespace to watch (required if scope is "namespace")
             auto_delete_pod: Whether to automatically delete pods after successful checkpoint
         """
-        # Using print instead of logger
+        # Using proper logging instead of print
         self.cluster_name = cluster_name
         self.cluster_config = cluster_config
         self.scope = scope
@@ -70,16 +75,16 @@ class SnapWatcherOperator:
                 kube_config.ssl_ca_cert = None
                 kube_config.cert_file = None
                 kube_config.key_file = None
-                print(f"SnapWatcher: SSL verification disabled for cluster {self.cluster_name}")
+                log_info(logger, 'SnapWatcher', 'SSL Configuration', f'SSL verification disabled for cluster {self.cluster_name}')
             else:
-                print(f"SnapWatcher: SSL verification enabled for cluster {self.cluster_name}")
+                log_info(logger, 'SnapWatcher', 'SSL Configuration', f'SSL verification enabled for cluster {self.cluster_name}')
             
             # Create API client with the configuration
             self.kube_client = client.ApiClient(kube_config)
-            print(f"SnapWatcher: Configured Kubernetes client for cluster {self.cluster_name}")
+            log_info(logger, 'SnapWatcher', 'Kubernetes Setup', f'Configured Kubernetes client for cluster {self.cluster_name}')
             
         except Exception as e:
-            print(f"SnapWatcher: Could not setup Kubernetes configuration: {e}")
+            log_error(logger, 'SnapWatcher', 'Error Handling', f'Could not setup Kubernetes configuration: {e}')
             raise
     
     def update_cluster_config(self, cluster_config: ClusterConfig) -> None:
@@ -109,9 +114,9 @@ class SnapWatcherOperator:
         """
         try:
             if not self.is_ready():
-                print(f"SnapWatcher: Kubernetes client not ready, cannot delete pod {pod_name}")
+                log_warning(logger, 'SnapWatcher', 'Client Status', f'Kubernetes client not ready, cannot delete pod {pod_name}')
                 return False
-            
+                
             # Create CoreV1Api instance for pod operations
             v1 = client.CoreV1Api(self.kube_client)
             
@@ -122,22 +127,22 @@ class SnapWatcherOperator:
                 body=client.V1DeleteOptions()
             )
             
-            print(f"SnapWatcher: Successfully initiated deletion of pod {pod_name} in namespace {namespace}")
+            log_success(logger, 'SnapWatcher', 'Pod Management', f'Successfully initiated deletion of pod {pod_name} in namespace {namespace}')
             return True
             
         except client.exceptions.ApiException as e:
-            print(f"SnapWatcher: Failed to delete pod {pod_name}: {e}")
+            log_error(logger, 'SnapWatcher', 'Error Handling', f'Failed to delete pod {pod_name}: {e}')
             return False
         except Exception as e:
-            print(f"SnapWatcher: Unexpected error deleting pod {pod_name}: {e}")
+            log_error(logger, 'SnapWatcher', 'Error Handling', f'Unexpected error deleting pod {pod_name}: {e}')
             return False
     
     def configure_kopf_namespace(self):
         """Configure kopf to watch specific namespace if scope is namespace."""
         if self.scope == "namespace":
-            print(f"SnapWatcher: Will watch namespace: {self.namespace}")
+            log_info(logger, 'SnapWatcher', 'Monitoring Setup', f'Will watch namespace: {self.namespace}')
         else:
-            print(f"SnapWatcher: Will watch cluster-wide")
+            log_info(logger, 'SnapWatcher', 'Monitoring Setup', f'Will watch cluster-wide')
     
     async def handle_pod_event(self, event: Dict[str, Any], body: Dict[str, Any], logger, **kwargs) -> None:
         """
@@ -150,7 +155,7 @@ class SnapWatcherOperator:
             **kwargs: Additional keyword arguments
         """
         if not self.is_ready():
-            print("SnapWatcher: Operator not ready, skipping pod event")
+            log_warning(logger, 'SnapWatcher', 'Client Status', f'Operator not ready, skipping pod event')
             return
             
         evt_type = (event or {}).get("type") or "UNKNOWN"
@@ -194,15 +199,8 @@ class SnapWatcherOperator:
 
         # Use broadcast for snapWatcher logs - all users will see them
         
-        print(
-            f"SnapWatcher: Processing checkpoint request\n"
-            f"  Event:      {evt_type}\n"
-            f"  Namespace:  {ns}\n"
-            f"  Pod:        {pod}\n"
-            f"  Container:  {container_name}\n"
-            f"  Node:       {node_name}\n"
-            f"  Scope:      {self.scope}"
-        )
+        log_info(logger, 'SnapWatcher', 'Checkpoint Processing', 
+                f'Processing checkpoint request - Event: {evt_type}, Namespace: {ns}, Pod: {pod}, Container: {container_name}, Node: {node_name}, Scope: {self.scope}')
 
         # -----------------------------------------------------------------
         # Directly call the checkpoint function instead of HTTP request
@@ -217,16 +215,16 @@ class SnapWatcherOperator:
             # Prepare the complete pod specification for the request
             pod_spec_request = PodSpecCheckpointRequest(pod_spec=body)
             
-            print(f"SnapWatcher: Calling checkpoint function directly for pod {pod} in cluster {self.cluster_name}")
+            log_info(logger, 'SnapWatcher', 'Checkpoint Processing', f'Calling checkpoint function directly for pod {pod} in cluster {self.cluster_name}')
             
             # Call the checkpoint function directly
             result = await checkpoint_and_push_from_pod_spec(pod_spec_request, self.cluster_name, "snapwatcher-operator")
             
-            print(f"SnapWatcher: Checkpoint operation completed: {result.get('success', False)}")
+            log_info(logger, 'SnapWatcher', 'Checkpoint Processing', f'Checkpoint operation completed: {result.get("success", False)}')
             
             if result.get("success"):
-                print(f"SnapWatcher: Checkpoint and push completed successfully for pod {pod}")
-                print(f"SnapWatcher: Image tag: {result.get('image_tag', 'N/A')}")
+                log_success(logger, 'SnapWatcher', 'Checkpoint Processing', f'Checkpoint and push completed successfully for pod {pod}')
+                log_info(logger, 'SnapWatcher', 'Checkpoint Processing', f'Image tag: {result.get("image_tag", "N/A")}')
                 
                 # Automatically delete the pod after successful checkpoint if enabled
                 if self.auto_delete_pod:
@@ -235,7 +233,7 @@ class SnapWatcherOperator:
                         "task_name": "SnapWatcher Checkpoint", 
                         "message": f"Deleting pod {pod} after successful checkpoint"
                     })
-                    print(f"SnapWatcher: Auto-deleting pod {pod} after successful checkpoint")
+                    log_info(logger, 'SnapWatcher', 'Pod Management', f'Auto-deleting pod {pod} after successful checkpoint')
                     delete_success = self.delete_pod(pod, ns)
                     if delete_success:
                         await broadcast_progress({
@@ -243,21 +241,21 @@ class SnapWatcherOperator:
                             "task_name": "SnapWatcher Checkpoint", 
                             "message": f"Pod {pod} deleted successfully after checkpoint"
                         })
-                        print(f"SnapWatcher: Pod {pod} deletion initiated successfully")
+                        log_success(logger, 'SnapWatcher', 'Pod Management', f'Pod {pod} deletion initiated successfully')
                     else:
                         await broadcast_progress({
                             "progress": "failed", 
                             "task_name": "SnapWatcher Checkpoint", 
                             "message": f"Failed to delete pod {pod} after checkpoint"
                         })
-                        print(f"SnapWatcher: Failed to delete pod {pod}")
+                        log_error(logger, 'SnapWatcher', 'Error Handling', f'Failed to delete pod {pod}')
                 else:
                     await broadcast_progress({
                         "progress": 100, 
                         "task_name": "SnapWatcher Checkpoint", 
                         "message": f"Checkpoint completed successfully for pod {pod} (auto-deletion disabled)"
                     })
-                    print(f"SnapWatcher: Auto-deletion disabled, keeping pod {pod}")
+                    log_info(logger, 'SnapWatcher', 'Pod Management', f'Auto-deletion disabled, keeping pod {pod}')
             else:
                 error_msg = result.get('message', 'Unknown error')
                 await broadcast_progress({
@@ -265,7 +263,7 @@ class SnapWatcherOperator:
                     "task_name": "SnapWatcher Checkpoint", 
                     "message": f"Checkpoint failed for pod {pod}: {error_msg}"
                 })
-                print(f"SnapWatcher: Checkpoint operation failed: {error_msg}")
+                log_error(logger, 'SnapWatcher', 'Error Handling', f'Checkpoint operation failed: {error_msg}')
                 
         except Exception as e:
             error_msg = f"Unexpected error during checkpoint operation: {str(e)}"
@@ -274,7 +272,7 @@ class SnapWatcherOperator:
                 "task_name": "SnapWatcher Checkpoint", 
                 "message": f"Checkpoint failed for pod {pod}: {error_msg}"
             })
-            print(f"SnapWatcher: {error_msg}")
+            log_error(logger, 'SnapWatcher', 'Error Handling', error_msg)
 
 
 # Global operator instance - will be created via API request
@@ -292,9 +290,9 @@ def set_global_operator(operator_instance: Optional[SnapWatcherOperator]):
         scope_info = f"scope: {operator_instance.scope}"
         if operator_instance.scope == "namespace":
             scope_info += f", namespace: {operator_instance.namespace}"
-        print(f"SnapWatcher: Global operator set for cluster {operator_instance.cluster_name} ({scope_info})")
+        log_success(logger, 'SnapWatcher', 'Operator Start', f'Global operator set for cluster {operator_instance.cluster_name} ({scope_info})')
     else:
-        print("SnapWatcher: Global operator cleared")
+        log_info(logger, 'SnapWatcher', 'Operator Stop', f'Global operator cleared')
 
 
 # Define the pod event handler using the operator instance
@@ -309,14 +307,14 @@ async def on_pod_event(event, body, logger, **kwargs):
     """Integrated SnapWatcher: Handle pod events for checkpointing using operator instance."""
     global operator
     if operator is None:
-        print("SnapWatcher: Operator not initialized, skipping pod event")
+        log_warning(logger, 'SnapWatcher', 'Client Status', f'Operator not initialized, skipping pod event')
         return
     
     # Namespace filtering for namespace scope
     if operator.scope == "namespace":
         pod_namespace = body.get("metadata", {}).get("namespace", "")
         if pod_namespace != operator.namespace:
-            print(f"SnapWatcher: Skipping pod in namespace {pod_namespace} (watching {operator.namespace})")
+            log_info(logger, 'SnapWatcher', 'Monitoring Setup', f'Skipping pod in namespace {pod_namespace} (watching {operator.namespace})')
             return
     
     await operator.handle_pod_event(event, body, logger, **kwargs)
