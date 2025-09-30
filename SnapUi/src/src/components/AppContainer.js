@@ -174,14 +174,17 @@ export default function AppContainer({ children }) {
       setClusterAction("")
       return
     }
-    navigate("/")
+    // Only navigate to cluster page if explicitly switching clusters
+    if (switchCluster) {
+      navigate("/")
+    }
     const cluster = clusterList.find(item => item.name === name)
 
     dispatch(clusterActions.setSelectedCluster(cluster))
     dispatch(clusterActions.login(cluster))
     setCookie("selectedCluster", name)
     setSwitchCluster("")
-  }, [authenticated, clusterList, clusterAction, navigate, dispatch]);
+  }, [authenticated, clusterList, clusterAction, navigate, dispatch, switchCluster]);
 
   useEffect(() => {
     !token && handleLogout()
