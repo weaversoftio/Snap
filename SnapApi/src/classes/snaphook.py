@@ -426,8 +426,8 @@ subjectAltName = @alt_names
                         except Exception as e:
                             print(f"SnapHook: Failed to load cluster cache config: {e}")
                             # Fallback to default values
-                            registry = "nexus.weaversoft.io:8081"  # Default registry
-                            repo = "snap"  # Default repo
+                            registry = "Need.Registry.Here:8081"  # Default registry
+                            repo = "Repo.Name.Here"  # Default repo
                         pod_template_hash = labels.get("pod-template-hash", "unknown")
                         
                         generated_image_tag = self._generate_image_tag(
