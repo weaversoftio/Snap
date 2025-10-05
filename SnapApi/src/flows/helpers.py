@@ -519,3 +519,87 @@ async def get_snap_config_from_cluster_cache_api(cluster_cache: str) -> Dict[str
         "kube_api_address": kube_api_address,
         "token": cluster_auth.get("token", "")
     }
+
+
+def create_checkpoint_metadata_json(
+    checkpoint_file_path: str,
+    image_tag: str,
+    pod_name: str,
+    namespace: str,
+    container_name: str,
+    app: str,
+    cluster: str,
+    pod_template_hash: str,
+    orig_image_short_digest: str,
+    cache_registry: str,
+    cache_repo: str,
+    container_image: str,
+    node_name: str
+) -> str:
+    """
+    Create a JSON metadata file next to the checkpoint .tar file with all relevant information.
+    
+    Args:
+        checkpoint_file_path: Path to the checkpoint .tar file
+        image_tag: The generated image tag for the checkpoint
+        pod_name: Name of the pod
+        namespace: Kubernetes namespace
+        container_name: Name of the container
+        app: Application name extracted from pod
+        cluster: Cluster name
+        pod_template_hash: Pod template hash
+        orig_image_short_digest: Short digest of original image
+        cache_registry: Registry URL for caching
+        cache_repo: Repository name for caching
+        container_image: Original container image reference
+        node_name: Name of the node where checkpoint was created
+        
+    Returns:
+        Path to the created JSON metadata file
+    """
+    # Create metadata dictionary
+    metadata = {
+        "checkpoint_info": {
+            "checkpoint_file_path": checkpoint_file_path,
+            "checkpoint_filename": os.path.basename(checkpoint_file_path),
+            "created_at": None,  # Could be added if timestamp is needed
+        },
+        "image_info": {
+            "image_tag": image_tag,
+            "original_image": container_image,
+            "original_image_digest": orig_image_short_digest,
+            "registry": cache_registry,
+            "repository": cache_repo,
+        },
+        "pod_info": {
+            "pod_name": pod_name,
+            "namespace": namespace,
+            "container_name": container_name,
+            "app": app,
+            "cluster": cluster,
+            "pod_template_hash": pod_template_hash,
+            "node_name": node_name,
+        },
+        "generation_info": {
+            "image_tag_format": f"{cache_registry}/{cache_repo}/{cluster.lower()}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}",
+            "cluster_normalized": cluster.lower(),
+        }
+    }
+    
+    # Generate JSON file path (same directory as checkpoint file, with .json extension)
+    checkpoint_dir = os.path.dirname(checkpoint_file_path)
+    checkpoint_filename = os.path.basename(checkpoint_file_path)
+    json_filename = os.path.splitext(checkpoint_filename)[0] + ".json"
+    json_file_path = os.path.join(checkpoint_dir, json_filename)
+    
+    # Write JSON file
+    try:
+        with open(json_file_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        print(f"SnapAPI: Created checkpoint metadata JSON: {json_file_path}")
+        return json_file_path
+        
+    except Exception as e:
+        print(f"SnapAPI: Error creating checkpoint metadata JSON: {e}")
+        raise RuntimeError(f"Failed to create checkpoint metadata JSON: {e}")

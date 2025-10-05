@@ -133,6 +133,7 @@ const TableComponent = ({
 }) => {
   const { selectedCluster = null } = useSelector(state => state.cluster)
   const { kube_api_url: kubeApi = "" } = selectedCluster?.cluster_config_details || {}
+  const clusterName = selectedCluster?.name || ""
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -195,6 +196,7 @@ const TableComponent = ({
           <Row
             key={item.metadata?.name || item.id}
             kubeApi={kubeApi}
+            clusterName={clusterName}
             nestedTableHeaders={nestedTableHeaders}
             row={item}
             tableHeaders={tableHeaders}
@@ -229,7 +231,7 @@ const TableComponent = ({
 const Row = (props) => {
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false)
-  const { row, tableHeaders, nestedTableHeaders, kubeApi = "" } = props;
+  const { row, tableHeaders, nestedTableHeaders, kubeApi = "", clusterName = "" } = props;
   const { metadata = null, spec = null } = row || {}
   const { name: podName = "", namespace } = metadata || {}
   const { nodeName = "" } = spec || {}
@@ -245,7 +247,7 @@ const Row = (props) => {
         namespace: namespace,
         node_name: nodeName,
         container_name: containerName,
-        kube_api_address: kubeApi
+        cluster_name: clusterName
       })
       if (!result?.success) {
         enqueueSnackbar("Checkpoint creation failed", { variant: "error" })

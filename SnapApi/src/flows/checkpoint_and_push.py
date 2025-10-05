@@ -3,7 +3,7 @@ import json
 from fastapi import HTTPException
 from classes.apirequests import PodSpecCheckpointRequest, PodCheckpointResponse
 from flows.proccess_utils import run
-from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache_api
+from flows.helpers import _short_digest_from_full, _skopeo_extract_digest, extract_app_name_from_pod, get_snap_config_from_cluster_cache_api, create_checkpoint_metadata_json
 from routes.websocket import broadcast_progress
 
 
@@ -246,6 +246,45 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         )
 
         # =========================
+        # Phase 1.6: Create checkpoint metadata JSON file
+        # =========================
+        
+        # Generate the image tag that will be used (same logic as later in the code)
+        cluster_norm = cluster.lower()
+        image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
+        # Create JSON metadata file next to the checkpoint file
+        try:
+            await broadcast_progress({
+                "progress": 55, 
+                "task_name": "SnapWatcher Checkpoint", 
+                "message": f"Creating checkpoint metadata file"
+            })
+            
+            json_file_path = create_checkpoint_metadata_json(
+                checkpoint_file_path=checkpoint_file_path,
+                image_tag=image_tag,
+                pod_name=pod_name,
+                namespace=namespace,
+                container_name=container_name,
+                app=app,
+                cluster=cluster,
+                pod_template_hash=pod_template_hash,
+                orig_image_short_digest=orig_image_short_digest,
+                cache_registry=cache_registry,
+                cache_repo=cache_repo,
+                container_image=container_image,
+                node_name=node_name
+            )
+            
+            print(f"SnapAPI: Checkpoint metadata JSON created at: {json_file_path}")
+            
+        except Exception as e:
+            print(f"SnapAPI: Warning - Failed to create checkpoint metadata JSON: {e}")
+            # Don't fail the entire operation if JSON creation fails
+            json_file_path = None
+
+        # =========================
         # Phase 2: Build & Push image
         # =========================
 
@@ -318,7 +357,8 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             "push_result": push_result,
             "image_tag": image_tag,
             "pod_name": pod_name,
-            "container_name": container_name
+            "container_name": container_name,
+            "metadata_json_path": json_file_path
         }
 
     except Exception as e:
