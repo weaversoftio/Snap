@@ -253,7 +253,7 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         cluster_norm = cluster.lower()
         image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
         
-        # Create JSON metadata file next to the checkpoint file
+        # Create JSON metadata file locally in SnapAPI container
         try:
             await broadcast_progress({
                 "progress": 55, 
@@ -261,23 +261,49 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
                 "message": f"Creating checkpoint metadata file"
             })
             
-            json_file_path = create_checkpoint_metadata_json(
-                checkpoint_file_path=checkpoint_file_path,
-                image_tag=image_tag,
-                pod_name=pod_name,
-                namespace=namespace,
-                container_name=container_name,
-                app=app,
-                cluster=cluster,
-                pod_template_hash=pod_template_hash,
-                orig_image_short_digest=orig_image_short_digest,
-                cache_registry=cache_registry,
-                cache_repo=cache_repo,
-                container_image=container_image,
-                node_name=node_name
-            )
+            # Create metadata dictionary
+            metadata = {
+                "checkpoint_info": {
+                    "checkpoint_file_path": checkpoint_file_path,
+                    "checkpoint_filename": checkpoint_filename,
+                    "created_at": None,  # Could be added if timestamp is needed
+                },
+                "image_info": {
+                    "image_tag": image_tag,
+                    "original_image": container_image,
+                    "original_image_digest": orig_image_short_digest,
+                    "registry": cache_registry,
+                    "repository": cache_repo,
+                },
+                "pod_info": {
+                    "pod_name": pod_name,
+                    "namespace": namespace,
+                    "container_name": container_name,
+                    "app": app,
+                    "cluster": cluster,
+                    "pod_template_hash": pod_template_hash,
+                    "node_name": node_name,
+                },
+                "generation_info": {
+                    "image_tag_format": f"{cache_registry}/{cache_repo}/{cluster.lower()}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}",
+                    "cluster_normalized": cluster.lower(),
+                }
+            }
             
-            print(f"SnapAPI: Checkpoint metadata JSON created at: {json_file_path}")
+            # Create JSON file locally in SnapAPI container
+            local_checkpoint_path = f"/app/checkpoints/{pod_name}"
+            os.makedirs(local_checkpoint_path, exist_ok=True)
+            
+            # Generate JSON file path locally with normalized filename
+            json_filename = os.path.splitext(checkpoint_filename)[0] + ".json"
+            json_filename = json_filename.replace('-', '_').replace(':', '_').replace('+', '_')
+            json_file_path = os.path.join(local_checkpoint_path, json_filename)
+            
+            # Write JSON file locally
+            with open(json_file_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            print(f"SnapAPI: Checkpoint metadata JSON created locally at: {json_file_path}")
             
         except Exception as e:
             print(f"SnapAPI: Warning - Failed to create checkpoint metadata JSON: {e}")
@@ -322,7 +348,7 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             if not processed_filename.endswith('.tar'):
                 processed_filename = f"{processed_filename}.tar"
             
-            checkpoint_file_in_pod = f"./checkpoints/{pod_name}/{processed_filename}"
+            checkpoint_file_in_pod = f"/app/checkpoints/{pod_name}/{processed_filename}"
             print(f"SnapAPI: Looking for checkpoint file at: {checkpoint_file_in_pod}")
             
             await run(["buildah", "add", newcontainer, checkpoint_file_in_pod, "/"])

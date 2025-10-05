@@ -765,18 +765,10 @@ async def load_watcher_configs_on_startup():
         configs = load_configs()
         log_info(logger, 'SnapApi', 'Configuration Loading', f'SnapAPI: Loaded {len(configs)} watcher configurations on startup')
         
-        # Clear all "running" statuses since API just restarted
-        log_info(logger, 'SnapApi', 'Configuration Loading', f'Clearing all \'running\' statuses since API restarted...')
-        for config in configs:
-            if config.status == "running":
-                update_watcher_status(config.name, "stopped")
-                log_info(logger, 'SnapApi', 'Configuration Loading', f'Marked SnapWatcher \'{config.name}\' as stopped (API restart)')
+        # Don't clear running statuses - we want to restore them
+        log_info(logger, 'SnapApi', 'Configuration Loading', f'Found {len([c for c in configs if c.status == "running"])} SnapWatchers with running status to restore')
         
-        # Check if we should auto-start watchers based on WATCHER_MODE
-        watcher_mode = os.getenv("WATCHER_MODE", "kubernetes")
-        if watcher_mode.lower() == "compose":
-            log_info(logger, 'SnapApi', 'Configuration Loading', f'WATCHER_MODE=compose detected, skipping SnapWatcher auto-start')
-            return
+        # Always auto-start SnapWatchers that were running before restart
         
         # Auto-start all existing Snapwatchers
         if configs:
@@ -786,25 +778,26 @@ async def load_watcher_configs_on_startup():
             
             for config in configs:
                 try:
-                    if config.status != "running":
-                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Starting SnapWatcher: {config.name}')
+                    if config.status == "running":
+                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Restoring SnapWatcher: {config.name} (was running before restart)')
                         
-                        # Start the individual watcher
+                        # Start the individual watcher to restore its running state
                         if start_individual_watcher(config):
                             started_count += 1
+                            log_success(logger, 'SnapApi', 'SnapWatcher Management', f'Successfully restored SnapWatcher: {config.name}')
                         else:
                             failed_count += 1
+                            log_error(logger, 'SnapApi', 'SnapWatcher Management', f'Failed to restore SnapWatcher: {config.name}')
                     else:
-                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher {config.name} is already running')
-                        started_count += 1
+                        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher {config.name} was stopped, not auto-starting')
                         
                 except Exception as e:
                     log_error(logger, 'SnapApi', 'Error Handling', f'Error processing SnapWatcher {config.name}: {e}')
                     failed_count += 1
             
-            log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapWatcher auto-start completed: {started_count} started, {failed_count} failed')
+            log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapWatcher restoration completed: {started_count} restored, {failed_count} failed')
         else:
-            log_info(logger, 'SnapApi', 'Configuration Loading', f'No SnapWatcher configurations found to auto-start')
+            log_info(logger, 'SnapApi', 'Configuration Loading', f'No SnapWatcher configurations found to restore')
             
         return configs
     except Exception as e:
