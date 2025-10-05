@@ -469,17 +469,15 @@ export default function AppContainer({ children }) {
               <Typography variant="h6" noWrap component="div">
                 Admin Panel
               </Typography>
-              <Stack direction="row" spacing={1} alignItems="flex-end" divider={<Divider variant="inset" orientation="vertical" sx={{ borderColor: "white" }} flexItem />}>
-                <Typography variant="h6" sx={{ lineHeight: 1 }} noWrap component="div">SNAP</Typography>
-                <Box
-                  component="img"
-                  sx={{
-                    height: 28,
-                  }}
-                  alt="Your logo."
-                  src="/weaver_06.svg"
-                />
-              </Stack>
+              <Box
+                component="img"
+                sx={{
+                  height: 45,
+                  filter: 'brightness(0) invert(1)',
+                }}
+                alt="SNAP logo."
+                src="/logo.png"
+              />
             </Stack>
           </Toolbar>
         </AppBar>}
