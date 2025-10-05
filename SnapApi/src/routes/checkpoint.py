@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import FileResponse
 import shutil
@@ -49,7 +50,7 @@ async def create_checkpoint_and_push_combined(
     )
     
     # Call the combined function with new tagging parameters
-    return await checkpoint_and_push_combined(
+    return await checkpoint_and_push_from_pod_spec(
         checkpoint_request, 
         checkpoint_config_name, 
         username,
@@ -87,14 +88,29 @@ async def checkpoints_list():
                     logger.info(f"SnapAPI: {containers}")
                     for container in containers:
                         if container.endswith(".tar"):
-                            volatility_analysis_file = os.path.join(pod_path, f"{container.replace('.tar', '')}_volatility_analysis.txt")
-                            analysis_result = f"{container.replace('.tar', '')}.json"
+                            checkpoint_name = container.replace('.tar', '')
+                            
+                            # Check for analysis results (_inspect.json contains the actual analysis)
+                            analysis_result = f"{checkpoint_name}_inspect.json"
                             analysis_result_path = os.path.join(pod_path, analysis_result)
+                            
+                            # Check for metadata file (.json contains metadata for image creation)
+                            metadata_result = f"{checkpoint_name}.json"
+                            metadata_result_path = os.path.join(pod_path, metadata_result)
+                            
+                            # Check for volatility analysis
+                            volatility_analysis_file = os.path.join(pod_path, f"{checkpoint_name}_volatility_analysis.txt")
+                            
+                            # Determine which analysis file exists (prioritize _inspect.json for analysis)
+                            has_analysis = os.path.exists(analysis_result_path)
+                            analysis_file = analysis_result if has_analysis else None
+                            
                             pod_container_mapping.append({
                                 "pod_name": pod,
                                 "checkpoint_name": container,
-                                "analysis_result": analysis_result if os.path.exists(analysis_result_path) else None,
-                                "scan_result": os.path.exists(volatility_analysis_file)
+                                "analysis_result": analysis_file if has_analysis else None,
+                                "scan_result": os.path.exists(volatility_analysis_file),
+                                "has_analysis": has_analysis
                             })
 
                         
@@ -148,50 +164,15 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
         checkpoint_dir = os.path.join(checkpoint_path, pod_name)
         checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.tar")
         print(f"Inspecting checkpoint: {checkpoint_name}")
+        
         # Run the `checkpointctl` command
         await send_progress(username, {"progress": 70, "task_name": "Inspecting Checkpoint", "message": f"Running command checkpointctl inspect {checkpoint_file_path} --all --format json"})
-        
-        try:
-            # Try multiple checkpointctl approaches to handle different failure modes
-            inspect_output = None
-            
-            # Approach 1: Basic inspect without --all flag
-            try:
-                print("SnapAPI: Trying checkpointctl inspect without --all flag...")
-                inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--format', 'json'], True, True, True)
-            except Exception as first_error:
-                print(f"SnapAPI: First checkpointctl attempt failed: {str(first_error)}")
-                
-                # Approach 2: Try with --all flag
-                try:
-                    print("SnapAPI: Trying checkpointctl inspect with --all flag...")
-                    inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
-                except Exception as second_error:
-                    print(f"SnapAPI: Second checkpointctl attempt failed: {str(second_error)}")
-                    
-                    # Approach 3: Try without JSON format (raw output)
-                    try:
-                        print("SnapAPI: Trying checkpointctl inspect without JSON format...")
-                        inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path], True, True, True)
-                        # Convert raw output to JSON-like format
-                        raw_output = inspect_output.stdout
-                        json_output = f'{{"raw_inspect_output": "{raw_output.replace(chr(34), chr(92)+chr(34))}"}}'
-                        inspect_output.stdout = json_output
-                    except Exception as third_error:
-                        print(f"SnapAPI: All checkpointctl attempts failed: {str(third_error)}")
-                        raise third_error
-            
-            # Save the output in the same folder as the checkpoint file with a different name to avoid conflicts
-            # Use "_inspect" suffix to distinguish from metadata JSON files
-            output_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
-            with open(output_file_path, 'w') as file:
-                file.write(inspect_output.stdout)
-                
-        except Exception as checkpointctl_error:
-            # Handle checkpointctl specific errors (like environment variable parsing issues)
-            error_msg = f"Checkpointctl inspect failed: {str(checkpointctl_error)}"
-            await send_progress(username, {"progress": "failed", "task_name": "Inspecting Checkpoint", "message": error_msg})
-            raise HTTPException(status_code=500, detail=error_msg)
+        inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
+
+        # Save the output in the same folder as the checkpoint file with _inspect suffix for analysis results
+        output_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
+        with open(output_file_path, 'w') as file:
+            file.write(inspect_output.stdout)
 
         # Get the insights
         # CheckpointInsightsresponse = await CheckpointInsightsUseCase(CheckpointInsightsRequest(checkpoint_info_path=output_file_path, openai_api_key_secret_name="openai-api-key"))
@@ -205,23 +186,40 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
 
 @router.get("/checkpointctl/information")
 async def checkpointctl_information(params: CheckpointctlRequest = Depends(), username: str = Depends(verify_token)):
-    pod_name = params.pod_name  # Assuming pod_id is provided in the request
+    pod_name = params.pod_name
     checkpoint_name = params.checkpoint_name
-    checkpoint_dir = os.path.join(checkpoint_path, pod_name)  # Include pod_id in the directory path
-    # Look for the inspect output file with _inspect suffix
-    checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
-    # Check if the checkpoint inspect file exists
-    if not os.path.exists(checkpoint_file_path):
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Checkpoint inspect file not found: {checkpoint_file_path}. Please run analysis first using the checkpointctl endpoint."
-        )
+    checkpoint_dir = os.path.join(checkpoint_path, pod_name)
+    
+    # Look for the analysis results file (_inspect.json) - this is for analysis results
+    analysis_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
+    
+    logger.info(f"Looking for analysis results file: {analysis_file_path}")
+    
+    # Check if the analysis results file exists
+    if not os.path.exists(analysis_file_path):
+        # Fallback to the regular .json file if _inspect.json doesn't exist
+        fallback_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.json")
+        if os.path.exists(fallback_file_path):
+            analysis_file_path = fallback_file_path
+            logger.info(f"Using fallback analysis file: {fallback_file_path}")
+        else:
+            error_msg = f"Analysis results file not found: {analysis_file_path}. Please run analysis first using the checkpointctl endpoint."
+            logger.error(error_msg)
+            raise HTTPException(status_code=404, detail=error_msg)
+    
     try:
-        with open(checkpoint_file_path, 'r') as file:
+        with open(analysis_file_path, 'r') as file:
             content = json.load(file)  # Parse JSON content from the file
+            logger.info(f"Successfully loaded analysis data from: {analysis_file_path}")
             return {"logs": content}
+    except json.JSONDecodeError as json_error:
+        error_msg = f"Failed to parse JSON from analysis file: {str(json_error)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        error_msg = f"Unexpected error reading analysis file: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post("/analyze/volatility")
 async def analyze_volatility(request: VolatilityRequest):

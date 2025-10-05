@@ -7,6 +7,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DialogComponent from "../common/Dialog";
 import { useSelector } from "react-redux";
 import ReactJson from "react-json-view";
+import BeautifulAnalysisResults from "../common/BeautifulAnalysisResults";
 import CircularProgress from '@mui/material/CircularProgress';
 import TableComponent from "./PodsTable";
 import { Loading } from "../common/loading";
@@ -93,13 +94,12 @@ const PodsScreen = ({ classes }) => {
     const { name = "" } = metadata
 
     return (
-      <DialogComponent
-        title={`Name: ${name}`}
+      <BeautifulAnalysisResults
+        data={currentPod}
         open={!!name}
         onClose={() => setCurrentPod(null)}
-        renderButtons={() => <Button onClick={() => setCurrentPod(null)} variant="contained">Ok</Button>}>
-        <ReactJson src={currentPod} theme="pop" collapseStringsAfterLength={50} />
-      </DialogComponent>
+        title={`Pod Analysis: ${name}`}
+      />
     )
   }
 

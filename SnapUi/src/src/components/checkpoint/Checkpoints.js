@@ -5,6 +5,7 @@ import { useSnackbar } from 'notistack';
 import { checkpointApi } from "../../api/checkpointApi";
 import { SimpleDialog } from "../common/SimpleDialog";
 import ReactJson from 'react-json-view';
+import BeautifulAnalysisResults from "../common/BeautifulAnalysisResults";
 import Stack from '@mui/material/Stack';
 import IconButton from '@mui/material/IconButton';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
@@ -305,9 +306,12 @@ const CheckpointsScreen = ({ classes }) => {
   const renderDialog = () => {
     const dialogContent = {
       log: (
-        <SimpleDialog open={isLogsOpen} handleClose={closeLogs} title="Analysis Results">
-          <ReactJson src={logs} theme="pop" collapseStringsAfterLength={50} />
-        </SimpleDialog>
+        <BeautifulAnalysisResults 
+          data={logs} 
+          open={isLogsOpen} 
+          onClose={closeLogs} 
+          title="Analysis Results" 
+        />
       ),
       registryForm: renderRegistryLoginForm(),
       createAndPushCheckpoint: renderCreateAnPushCheckpointDialog(),
