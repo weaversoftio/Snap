@@ -448,6 +448,8 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
             
             # Generate JSON file path locally
             json_filename = os.path.splitext(checkpoint_filename)[0] + ".json"
+            # Apply same normalization as TAR files to ensure consistent naming
+            json_filename = json_filename.replace('-', '_').replace(':', '_').replace('+', '_')
             local_json_file_path = os.path.join(local_checkpoint_path, json_filename)
             
             # Validate metadata before writing

@@ -589,7 +589,9 @@ def create_checkpoint_metadata_json(
     # Generate JSON file path (same directory as checkpoint file, with .json extension)
     checkpoint_dir = os.path.dirname(checkpoint_file_path)
     checkpoint_filename = os.path.basename(checkpoint_file_path)
+    # Apply same normalization as TAR files to ensure consistent naming
     json_filename = os.path.splitext(checkpoint_filename)[0] + ".json"
+    json_filename = json_filename.replace('-', '_').replace(':', '_').replace('+', '_')
     json_file_path = os.path.join(checkpoint_dir, json_filename)
     
     # Write JSON file

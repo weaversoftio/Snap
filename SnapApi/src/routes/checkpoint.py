@@ -150,12 +150,48 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
         print(f"Inspecting checkpoint: {checkpoint_name}")
         # Run the `checkpointctl` command
         await send_progress(username, {"progress": 70, "task_name": "Inspecting Checkpoint", "message": f"Running command checkpointctl inspect {checkpoint_file_path} --all --format json"})
-        inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
-
-        # Save the output in the same folder as the checkpoint file
-        output_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.json")
-        with open(output_file_path, 'w') as file:
-            file.write(inspect_output.stdout)
+        
+        try:
+            # Try multiple checkpointctl approaches to handle different failure modes
+            inspect_output = None
+            
+            # Approach 1: Basic inspect without --all flag
+            try:
+                print("SnapAPI: Trying checkpointctl inspect without --all flag...")
+                inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--format', 'json'], True, True, True)
+            except Exception as first_error:
+                print(f"SnapAPI: First checkpointctl attempt failed: {str(first_error)}")
+                
+                # Approach 2: Try with --all flag
+                try:
+                    print("SnapAPI: Trying checkpointctl inspect with --all flag...")
+                    inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
+                except Exception as second_error:
+                    print(f"SnapAPI: Second checkpointctl attempt failed: {str(second_error)}")
+                    
+                    # Approach 3: Try without JSON format (raw output)
+                    try:
+                        print("SnapAPI: Trying checkpointctl inspect without JSON format...")
+                        inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path], True, True, True)
+                        # Convert raw output to JSON-like format
+                        raw_output = inspect_output.stdout
+                        json_output = f'{{"raw_inspect_output": "{raw_output.replace(chr(34), chr(92)+chr(34))}"}}'
+                        inspect_output.stdout = json_output
+                    except Exception as third_error:
+                        print(f"SnapAPI: All checkpointctl attempts failed: {str(third_error)}")
+                        raise third_error
+            
+            # Save the output in the same folder as the checkpoint file with a different name to avoid conflicts
+            # Use "_inspect" suffix to distinguish from metadata JSON files
+            output_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
+            with open(output_file_path, 'w') as file:
+                file.write(inspect_output.stdout)
+                
+        except Exception as checkpointctl_error:
+            # Handle checkpointctl specific errors (like environment variable parsing issues)
+            error_msg = f"Checkpointctl inspect failed: {str(checkpointctl_error)}"
+            await send_progress(username, {"progress": "failed", "task_name": "Inspecting Checkpoint", "message": error_msg})
+            raise HTTPException(status_code=500, detail=error_msg)
 
         # Get the insights
         # CheckpointInsightsresponse = await CheckpointInsightsUseCase(CheckpointInsightsRequest(checkpoint_info_path=output_file_path, openai_api_key_secret_name="openai-api-key"))
@@ -172,10 +208,14 @@ async def checkpointctl_information(params: CheckpointctlRequest = Depends(), us
     pod_name = params.pod_name  # Assuming pod_id is provided in the request
     checkpoint_name = params.checkpoint_name
     checkpoint_dir = os.path.join(checkpoint_path, pod_name)  # Include pod_id in the directory path
-    checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.json")
-    # Check if the checkpoint file exists
+    # Look for the inspect output file with _inspect suffix
+    checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
+    # Check if the checkpoint inspect file exists
     if not os.path.exists(checkpoint_file_path):
-        raise HTTPException(status_code=404, detail=f"Checkpoint file not found: {checkpoint_file_path}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Checkpoint inspect file not found: {checkpoint_file_path}. Please run analysis first using the checkpointctl endpoint."
+        )
     try:
         with open(checkpoint_file_path, 'r') as file:
             content = json.load(file)  # Parse JSON content from the file

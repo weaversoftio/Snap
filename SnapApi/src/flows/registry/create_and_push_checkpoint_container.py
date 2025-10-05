@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from flows.proccess_utils import run
 import uuid
 import os
+import json
 from classes.registryconfig import RegistryConfigDetails, RegistryConfig, login_to_registry, get_registry
 from flows.checkpoint.checkpoint_config import CheckpointConfig
 from flows.config.configLoder import load_config
@@ -11,17 +12,52 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
     try:
         await send_progress(loggeduser, {"progress": 12.5,"task_name": "Create and Push Checkpoint Container", "message": f"Create and Push Checkpoint Container {container_name}"})
 
+        # Read metadata from JSON file to get all required variables for new image tag format
+        # Use /app/checkpoints/ since we're running inside a container
+        checkpoint_dir = f"/app/checkpoints/{pod_name}"
+        # Remove .tar extension if present to get the base name for JSON file
+        base_name = container_name.replace('.tar', '') if container_name.endswith('.tar') else container_name
+        json_file_path = os.path.join(checkpoint_dir, f"{base_name}.json")
+        
+        print(f"SnapAPI: Looking for JSON metadata file at: {json_file_path}")
+        print(f"SnapAPI: Checkpoint directory exists: {os.path.exists(checkpoint_dir)}")
+        if os.path.exists(checkpoint_dir):
+            files_in_dir = os.listdir(checkpoint_dir)
+            print(f"SnapAPI: Files in checkpoint directory: {files_in_dir}")
+        
+        if not os.path.exists(json_file_path):
+            await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": f"Checkpoint metadata JSON file not found: {json_file_path}"})
+            return {"success": False, "message": "Checkpoint metadata JSON file not found"}
+        
+        # Load metadata from JSON file
+        with open(json_file_path, 'r') as f:
+            metadata = json.load(f)
+        
+        # Extract required variables for new image tag format
+        cache_registry = metadata["image_info"]["registry"]
+        cache_repo = metadata["image_info"]["repository"]
+        cluster_norm = metadata["pod_info"]["cluster"].lower()
+        namespace = metadata["pod_info"]["namespace"]
+        app = metadata["pod_info"]["app"]
+        orig_image_short_digest = metadata["image_info"]["original_image_digest"]
+        pod_template_hash = metadata["pod_info"]["pod_template_hash"]
+        
+        print(f"SnapAPI: Extracted metadata for image tag:")
+        print(f"  cache_registry: {cache_registry}")
+        print(f"  cache_repo: {cache_repo}")
+        print(f"  cluster_norm: {cluster_norm}")
+        print(f"  namespace: {namespace}")
+        print(f"  app: {app}")
+        print(f"  orig_image_short_digest: {orig_image_short_digest}")
+        print(f"  pod_template_hash: {pod_template_hash}")
+
         registry_config_name = checkpoint_config_name
         checkpoint_file_name = container_name
 
-
         checkpoint_config = get_registry(registry_config_name)
-
         print(f"checkpoint_config: {checkpoint_config.registry}")
 
         await login_to_registry(registry_config_name)
-        
-        
         
         if not checkpoint_config:
             await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": f"Checkpoint config {checkpoint_config_name} not found"})
@@ -33,29 +69,31 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
 
         # Add checkpoint tar to container
         await send_progress(loggeduser, {"progress": 37.5,"task_name": "Create and Push Checkpoint Container", "message": f"Addding checkpoint tar to container"})
-        await run(["buildah", "add", newcontainer, f"./checkpoints/{pod_name}/{checkpoint_file_name}", "/"])
+        # Use the base_name for the TAR file as well
+        checkpoint_tar_path = os.path.join(checkpoint_dir, f"{base_name}.tar")
+        await run(["buildah", "add", newcontainer, checkpoint_tar_path, "/"])
 
         # Configure container annotation
         await send_progress(loggeduser, {"progress": 50,"task_name": "Create and Push Checkpoint Container", "message": f"Configuring container annotation"})
         await run([
             "buildah", "config",
-            f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={checkpoint_file_name}",
+            f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={base_name}",
             newcontainer
         ])
 
-        # Generate a short UUID for the image tag
-        short_uid = str(uuid.uuid4())[:8]
-        # Construct the full image tag using the registry URL
-        image_tag = f"{checkpoint_config.registry.rstrip('/')}/{pod_name[:6].rstrip('-')}-{checkpoint_file_name[:6].rstrip('-')}:{short_uid}"
+        # Generate image tag using new format: {cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}
+        image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
         print(f"*************\n")
-        print(f"checkpoint_config.registry: {checkpoint_config.registry}")
-        print(f"checkpoint_config.registry_rstrip: {checkpoint_config.registry.rstrip('/')}\n")
-        print(f"pod_name: {pod_name}")
-        print(f"pod_name_short_rstrip: {pod_name[:6].rstrip('-')}\n")
-        print(f"checkpoint_file_name: {checkpoint_file_name}")
-        print(f"checkpoint_file_name_short_rstrip: {checkpoint_file_name[:6].rstrip('-')}\n")
-        print(f"short_uid: {short_uid}\n")
-        print(f"image_tag: {image_tag}")
+        print(f"SnapAPI: Using new image tag format:")
+        print(f"  cache_registry: {cache_registry}")
+        print(f"  cache_repo: {cache_repo}")
+        print(f"  cluster_norm: {cluster_norm}")
+        print(f"  namespace: {namespace}")
+        print(f"  app: {app}")
+        print(f"  orig_image_short_digest: {orig_image_short_digest}")
+        print(f"  pod_template_hash: {pod_template_hash}")
+        print(f"  Final image_tag: {image_tag}")
         print(f"\n*************\n")
 
 
