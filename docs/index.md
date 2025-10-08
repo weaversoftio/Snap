@@ -4,124 +4,69 @@ title: SNAP Documentation
 description: Comprehensive documentation for SNAP container checkpointing platform
 ---
 
-<!-- Updated: Testing GitHub Pages deployment from main branch -->
+# SNAP Documentation
 
-# Welcome to SNAP Documentation
+**"SNAP it, Save it, Start again."**
 
-**SNAP** is an enterprise-grade container checkpointing and state management platform that revolutionizes how organizations handle container lifecycle management, disaster recovery, and application migration in Openshift environments.
+Welcome to the comprehensive documentation for SNAP, the enterprise-grade container checkpointing and state management platform.
 
-## 🚀 Quick Start
+## What is SNAP?
 
-Get up and running with SNAP in minutes:
+SNAP enables organizations to capture the complete runtime state of running containers, convert them into portable images, and restore them across different environments. This breakthrough technology transforms containerized applications from stateless to stateful, enabling unprecedented flexibility in application management.
 
-1. **[Installation Guide](installation.md)** - Complete setup instructions
-2. **[Quick Start Tutorial](quick-start.md)** - Create your first checkpoint
-3. **[API Reference](api-endpoints.md)** - Complete API documentation
+## Key Features
 
-## 📚 Documentation Sections
-
-### Getting Started
-- **[Installation Guide](installation.md)** - System requirements and installation methods
-- **[Quick Start](quick-start.md)** - Step-by-step tutorial to create your first checkpoint
-- **[Configuration](configuration.md)** - System configuration and setup
-
-### User Guides
-- **[Cluster Management](cluster-management.md)** - Managing Openshift/Kubernetes clusters
-- **[Checkpointing](checkpointing.md)** - Creating and managing checkpoints
-- **[Registry Integration](registry-integration.md)** - Container registry setup and management
-- **[Automation](automation.md)** - Automated workflows and webhooks
-
-### API Reference
-- **[API Overview](api-overview.md)** - REST API introduction and authentication
-- **[API Endpoints](api-endpoints.md)** - Complete endpoint reference
-- **[Webhooks](webhooks.md)** - Webhook configuration and usage
-
-### Advanced Topics
-- **[SnapWatcher Operator](snapwatcher.md)** - Operator configuration and management
-- **[SnapHook System](snaphook.md)** - Webhook automation system
-- **[Security](security.md)** - Security best practices and configuration
-- **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
-
-## 🎯 Key Features
-
-- **Live Container Checkpointing**: Capture complete runtime state without downtime
+- **Live Container Checkpointing**: Capture complete runtime state without downtime using CRIU
 - **Checkpoint-to-Image Conversion**: Transform checkpoints into portable container images
-- **Cross-Environment Restoration**: Restore states across different clusters
+- **Cross-Environment Restoration**: Restore states across different Kubernetes/Openshift clusters
 - **Multi-Cluster Management**: Centralized management across multiple clusters
 - **Enterprise Security**: RBAC, audit logging, SSL/TLS encryption
 - **Automated Workflows**: SnapHook webhooks and SnapWatcher operator integration
+- **Real-time Monitoring**: WebSocket-based progress tracking and health monitoring
 
-## 🏗️ Architecture
+## Quick Start
 
-SNAP consists of several key components:
+New to SNAP? Get started quickly:
 
-- **SnapAPI**: FastAPI-based backend service with REST API endpoints
-- **SnapUI**: React-based web interface for management and monitoring
-- **SnapWatcher**: Operator that runs inside SnapAPI for container monitoring
-- **SnapHook**: Webhook system for automation and event-driven operations
-- **Cluster Monitor DaemonSet**: User-deployed component for cluster monitoring
+1. **[Quick Start Guide](quick-start)** - Get up and running in minutes
+2. **[Installation Guide](installation)** - Detailed setup instructions
+3. **[RBAC Setup Guide](rbac-setup)** - Configure permissions for OpenShift
 
-## 📖 Use Cases
+## Documentation Sections
 
-### Disaster Recovery
-- Instant application state backup and recovery
-- Cross-region disaster recovery with minimal RTO/RPO
-- Application state preservation during infrastructure failures
+### Getting Started
+- **[Quick Start Guide](quick-start)** - Essential steps to create your first checkpoint
+- **[Installation Guide](installation)** - Complete installation and setup
+- **[Configuration Guide](configuration)** - System and cluster configuration
 
-### Application Migration
-- Seamless migration between Openshift clusters
-- Legacy application containerization with state preservation
-- Blue-green deployments with instant rollback capabilities
+### User Guides
+- **[Cluster Management](cluster-management)** - Managing Kubernetes/OpenShift clusters
+- **[Checkpointing Guide](checkpointing)** - Creating and managing checkpoints
+- **[Registry Integration](registry-integration)** - Container registry setup and management
+- **[Automation Guide](automation)** - Automated workflows and triggers
 
-### Development & Testing
-- Development environment state capture and sharing
-- Testing with real production-like states
-- Rapid environment provisioning and teardown
+### API Reference
+- **[API Overview](api-overview)** - Understanding the SNAP API
+- **[API Endpoints](api-endpoints)** - Complete API reference
+- **[Authentication](authentication)** - API authentication and security
 
-## 🔧 Installation Methods
+### Security & Operations
+- **[Security Guide](security)** - Security best practices and configuration
+- **[RBAC Setup Guide](rbac-setup)** - Role-based access control setup
+- **[Troubleshooting Guide](troubleshooting)** - Common issues and solutions
 
-### Docker Compose (Recommended)
-```bash
-git clone https://github.com/weaversoftio/Snap.git
-cd Snap
-docker-compose up -d
-```
+### Additional Resources
+- **[FAQ](faq)** - Frequently asked questions
+- **[Add Cluster Guide](add-cluster-guide)** - Adding new clusters
+- **[Migration Guide](migration-guide)** - Migrating between versions
 
-### Kubernetes Deployment
-```bash
-kubectl create namespace snap
-kubectl apply -f k8s/
-```
+## Support
 
-### Helm Chart
-```bash
-helm repo add snap https://weaversoftio.github.io/Snap/charts
-helm install snap snap/snap
-```
+- **📖 Documentation**: Comprehensive guides and tutorials
+- **🐛 Issues**: [GitHub Issues](https://github.com/weaversoftio/Snap/issues)
+- **📧 Support**: support@weaversoft.io
+- **💬 Community**: Join our community discussions
 
-## 🚀 Getting Started
+## License
 
-1. **Install SNAP** following the [Installation Guide](installation.md)
-2. **Configure your first cluster** using the [Quick Start](quick-start.md)
-3. **Create your first checkpoint** and convert it to an image
-4. **Set up automation** with SnapHook webhooks
-5. **Explore advanced features** in the user guides
-
-## 📞 Support
-
-- **Documentation**: Browse the comprehensive guides above
-- **Issues**: [GitHub Issues](https://github.com/weaversoftio/Snap/issues)
-- **Support**: support@weaversoft.io
-- **Community**: Join our community discussions
-
-## 🤝 Contributing
-
-We welcome contributions to improve SNAP! Please see our [Contributing Guide](contributing.md) for details on how to:
-
-- Report issues and suggest improvements
-- Submit code changes and documentation updates
-- Add new features and capabilities
-
----
-
-**Ready to get started?** Begin with our [Installation Guide](installation.md) or jump straight to the [Quick Start Tutorial](quick-start.md)!
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/weaversoftio/Snap/blob/main/LICENSE) file for details.

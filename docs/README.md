@@ -1,82 +1,46 @@
-# SNAP Documentation
+# SNAP Documentation Site
 
-Welcome to the SNAP documentation! This comprehensive guide will help you understand, install, configure, and use the SNAP container checkpointing platform.
+This directory contains the Jekyll-based documentation site for SNAP.
 
-## 📚 Documentation Structure
+## Theme: Just the Docs
 
-### Getting Started
-- [Installation Guide](installation.md) - Complete setup instructions
-- [Quick Start](quick-start.md) - Get up and running in minutes
-- [Configuration](configuration.md) - System configuration guide
+The documentation now uses the **Just the Docs** Jekyll theme, which provides:
+- **Left sidebar navigation** instead of top navbar
+- **Collapsible navigation** with foldable sections
+- **Built-in search functionality**
+- **Mobile-responsive design**
+- **Clean, professional appearance**
 
-### User Guides
-- [Cluster Management](cluster-management.md) - Managing Openshift/Kubernetes clusters
-- [Checkpointing](checkpointing.md) - Creating and managing checkpoints
-- [Registry Integration](registry-integration.md) - Container registry setup
-- [Automation](automation.md) - Automated workflows and webhooks
+## Navigation Structure
 
-### API Reference
-- [API Overview](api-overview.md) - REST API introduction
-- [Authentication](authentication.md) - API authentication methods
-- [Endpoints](api-endpoints.md) - Complete API reference
-- [Webhooks](webhooks.md) - Webhook configuration and usage
+The sidebar navigation is defined in `_data/navigation.yml` and organized into logical sections:
 
-### Advanced Topics
-- [SnapWatcher Operator](snapwatcher.md) - Operator configuration and management
-- [SnapHook System](snaphook.md) - Webhook automation system
-- [Security](security.md) - Security best practices
-- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- **Getting Started**: Quick Start, Installation, Configuration
+- **User Guides**: Cluster Management, Checkpointing, Registry, Automation
+- **API Reference**: API Overview, Endpoints, Authentication
+- **Security & Operations**: Security, RBAC Setup, Troubleshooting
+- **Additional Resources**: FAQ, Add Cluster Guide, Migration Guide
 
-### Developer Resources
-- [Development Setup](development.md) - Local development environment
-- [Contributing](contributing.md) - How to contribute to SNAP
-- [Architecture](architecture.md) - System architecture overview
+## Local Development
 
-## 🚀 Quick Navigation
+To run the documentation site locally:
 
-### For New Users
-1. Start with [Installation Guide](installation.md)
-2. Follow the [Quick Start](quick-start.md) tutorial
-3. Configure your first cluster with [Configuration](configuration.md)
+```bash
+cd docs
+bundle install
+bundle exec jekyll serve
+```
 
-### For Developers
-1. Review the [API Overview](api-overview.md)
-2. Check out [Development Setup](development.md)
-3. Read the [Contributing](contributing.md) guidelines
+The site will be available at `http://localhost:4000`
 
-### For Administrators
-1. Understand [Security](security.md) requirements
-2. Configure [SnapWatcher Operator](snapwatcher.md)
-3. Set up [Automation](automation.md) workflows
+## Deployment
 
-## 📖 About This Documentation
+The site is automatically deployed to GitHub Pages when changes are pushed to the main branch.
 
-This documentation is built using GitHub Pages and is automatically updated with each release. The documentation covers:
+## Configuration
 
-- **Complete installation and setup procedures**
-- **Step-by-step configuration guides**
-- **Comprehensive API reference**
-- **Real-world use cases and examples**
-- **Troubleshooting and best practices**
-
-## 🔗 External Resources
-
-- **GitHub Repository**: [https://github.com/weaversoftio/Snap](https://github.com/weaversoftio/Snap)
-- **Issue Tracker**: [GitHub Issues](https://github.com/weaversoftio/Snap/issues)
-- **Support**: support@weaversoft.io
-
-## 📝 Contributing to Documentation
-
-We welcome contributions to improve this documentation! Please see our [Contributing](contributing.md) guide for details on how to:
-
-- Report documentation issues
-- Suggest improvements
-- Submit documentation updates
-- Add new guides and tutorials
-
----
-
-**Need help?** Check our [Troubleshooting](troubleshooting.md) guide or contact support at support@weaversoft.io
-
-### Cluster Configuration
-- [Add Cluster Guide](add-cluster-guide.md) - Step-by-step cluster addition process
+- `_config.yml`: Main Jekyll configuration
+- `_data/navigation.yml`: Sidebar navigation structure
+- `_layouts/`: Custom layout templates
+- `_includes/`: Custom includes and components
+- `assets/`: Static assets (images, CSS, JS)

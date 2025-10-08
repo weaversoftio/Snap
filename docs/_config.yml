@@ -12,26 +12,34 @@ url: "https://weaversoftio.github.io"
 # Build settings
 markdown: kramdown
 highlighter: rouge
-theme: minima
+theme: just-the-docs
 
 # Plugins
 plugins:
   - jekyll-feed
   - jekyll-sitemap
   - jekyll-seo-tag
+  - jekyll-include-cache
 
-# Navigation
-navigation:
-  - title: Home
-    url: /
-  - title: Installation
-    url: /installation
-  - title: Quick Start
-    url: /quick-start
-  - title: API Reference
-    url: /api-endpoints
-  - title: GitHub
+# Navigation (Sidebar)
+nav_external_links:
+  - title: GitHub Repository
     url: https://github.com/weaversoftio/Snap
+
+# Sidebar navigation structure
+just_the_docs:
+  nav_fold: 1
+  nav_external_links:
+    - title: GitHub Repository
+      url: https://github.com/weaversoftio/Snap
+  search: true
+  search_tokenizer_separator: /[\s/]+/
+  heading_anchors: true
+  color_scheme: light
+  aux_links:
+    GitHub Repository:
+      - "//github.com/weaversoftio/Snap"
+  logo: "/assets/logo.png"
 
 # Collections
 collections:

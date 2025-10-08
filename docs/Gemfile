@@ -1,6 +1,14 @@
 source "https://rubygems.org"
 
-# Use GitHub Pages compatible versions
+# Jekyll theme for sidebar navigation
+gem "just-the-docs"
+
+# Jekyll plugins
+gem "jekyll-feed", "~> 0.12"
+gem "jekyll-sitemap"
+gem "jekyll-seo-tag"
+
+# GitHub Pages compatibility
 gem "github-pages", group: :jekyll_plugins
 
 # Windows and JRuby does not include zoneinfo files, so bundle the tzinfo-data gem
