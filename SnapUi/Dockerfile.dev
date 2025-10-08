@@ -7,7 +7,7 @@ WORKDIR /app
 COPY src/package*.json ./
 
 # Install dependencies
-RUN yarn install
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY src/. .
@@ -16,4 +16,4 @@ COPY src/. .
 EXPOSE 3000
 
 # Start development server with hot reload
-CMD ["yarn", "start"]
+CMD ["npm", "start"]

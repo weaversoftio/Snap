@@ -155,6 +155,124 @@ async def download_checkpoint_route(pod_name: str, filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
 
+async def run_checkpointctl_fallback(checkpoint_file_path: str, username: str, error_message: str):
+    """
+    Dynamic fallback method for checkpointctl inspection when specific flags fail.
+    Detects which flag is problematic and runs all other flags individually.
+    """
+    try:
+        await send_progress(username, {"progress": 65, "task_name": "Inspecting Checkpoint", "message": f"Running dynamic fallback inspection"})
+        
+        # Define all available checkpointctl inspect flags (excluding --all, --format, --help which are handled separately)
+        # Note: --pid requires a PID parameter, so we'll handle it separately
+        # Other checkpointctl commands available: build, list, memparse, show
+        all_flags = [
+            '--files',           # Display open file descriptors
+            '--metadata',        # Show metadata
+            '--mounts',          # Display mounts overview
+            '--ps-tree',         # Display process tree
+            '--ps-tree-cmd',     # Display process tree with command line arguments
+            '--ps-tree-env',     # Display process tree with environment variables
+            '--sockets',         # Display open sockets
+            '--stats'            # Display checkpoint statistics
+        ]
+        
+        # Special flags that require parameters
+        special_flags = {
+            '--pid': '1'  # Default to PID 1 (main process)
+        }
+        
+        # Detect problematic flag from error message
+        problematic_flag = None
+        
+        # Try to detect the specific flag that's causing issues
+        for flag in all_flags:
+            flag_name = flag.replace('--', '').replace('-', ' ')
+            # Check if the flag name appears in the error message
+            if flag_name in error_message.lower() or flag.replace('--', '') in error_message.lower():
+                problematic_flag = flag
+                break
+        
+        # Additional specific checks for common error patterns
+        if not problematic_flag:
+            if 'environment variable' in error_message.lower():
+                problematic_flag = '--ps-tree-env'
+            elif 'process tree' in error_message.lower():
+                problematic_flag = '--ps-tree'
+            elif 'file descriptor' in error_message.lower():
+                problematic_flag = '--files'
+            elif 'socket' in error_message.lower():
+                problematic_flag = '--sockets'
+        
+        # If we still can't detect the specific flag, exclude --ps-tree-env as default
+        if not problematic_flag:
+            problematic_flag = '--ps-tree-env'
+            logger.warning(f"SnapAPI: Could not detect specific problematic flag, defaulting to exclude {problematic_flag}")
+        
+        logger.info(f"SnapAPI: Detected problematic flag: {problematic_flag}, excluding from inspection")
+        
+        # Get list of flags to run (exclude the problematic one)
+        flags_to_run = [flag for flag in all_flags if flag != problematic_flag]
+        
+        await send_progress(username, {"progress": 70, "task_name": "Inspecting Checkpoint", "message": f"Running inspection with {len(flags_to_run)} flags (excluding {problematic_flag})"})
+        
+        # Collect all inspection results
+        inspection_results = []
+        
+        # First, get basic checkpoint information (no flags)
+        await send_progress(username, {"progress": 75, "task_name": "Inspecting Checkpoint", "message": f"Getting basic checkpoint information"})
+        basic_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--format', 'json'], True, True, True)
+        basic_data = json.loads(basic_output.stdout)
+        inspection_results.extend(basic_data)
+        
+        # Run each flag individually and merge results
+        total_flags = len(flags_to_run)
+        for i, flag in enumerate(flags_to_run):
+            try:
+                progress = 75 + int((i + 1) * 20 / total_flags)
+                flag_name = flag.replace('--', '').replace('-', ' ').title()
+                await send_progress(username, {"progress": progress, "task_name": "Inspecting Checkpoint", "message": f"Getting {flag_name} information"})
+                
+                # Build command with special handling for flags that require parameters
+                cmd = ['checkpointctl', 'inspect', checkpoint_file_path, flag, '--format', 'json']
+                if flag in special_flags:
+                    cmd.insert(-2, special_flags[flag])  # Insert parameter before --format
+                
+                flag_output = await run(cmd, True, True, True)
+                flag_data = json.loads(flag_output.stdout)
+                
+                # Merge the flag data into the main result
+                if flag_data and len(flag_data) > 0 and inspection_results:
+                    inspection_results[0].update(flag_data[0])
+                    
+            except Exception as flag_error:
+                logger.warning(f"SnapAPI: Flag {flag} also failed: {str(flag_error)}")
+                # Continue with other flags even if one fails
+        
+        # Add metadata about the fallback method
+        if inspection_results and len(inspection_results) > 0:
+            inspection_results[0]['fallback_note'] = {
+                'message': f'Some inspection data could not be displayed due to parsing error',
+                'excluded_flag': problematic_flag,
+                'reason': 'Detected problematic flag from error message',
+                'method': 'dynamic_fallback_inspection',
+                'flags_executed': flags_to_run,
+                'original_error': error_message
+            }
+        
+        await send_progress(username, {"progress": 98, "task_name": "Inspecting Checkpoint", "message": f"Dynamic fallback inspection completed successfully"})
+        
+        # Create a mock output object similar to what run() returns
+        class MockOutput:
+            def __init__(self, stdout_data):
+                self.stdout = stdout_data
+        
+        return MockOutput(json.dumps(inspection_results, indent=2))
+        
+    except Exception as e:
+        logger.error(f"SnapAPI: Dynamic fallback checkpointctl inspection failed: {str(e)}")
+        raise e
+
 @router.post("/checkpointctl")
 async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(verify_token)):
     try:
@@ -165,9 +283,23 @@ async def checkpointctl(request: CheckpointctlRequest, username: str = Depends(v
         checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.tar")
         print(f"Inspecting checkpoint: {checkpoint_name}")
         
-        # Run the `checkpointctl` command
-        await send_progress(username, {"progress": 70, "task_name": "Inspecting Checkpoint", "message": f"Running command checkpointctl inspect {checkpoint_file_path} --all --format json"})
-        inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
+        # Try full inspection first
+        await send_progress(username, {"progress": 50, "task_name": "Inspecting Checkpoint", "message": f"Attempting full checkpoint inspection"})
+        try:
+            inspect_output = await run(['checkpointctl', 'inspect', checkpoint_file_path, '--all', '--format', 'json'], True, True, True)
+            await send_progress(username, {"progress": 100, "task_name": "Inspecting Checkpoint", "message": f"Full inspection completed successfully"})
+        except Exception as e:
+            error_message = str(e)
+            # Check if the error is related to checkpointctl parsing issues
+            if any(keyword in error_message.lower() for keyword in ['invalid environment variable', 'failed to build json', 'failed to get process tree']):
+                await send_progress(username, {"progress": 60, "task_name": "Inspecting Checkpoint", "message": f"Detected checkpointctl parsing error. Using dynamic fallback inspection method"})
+                logger.warning(f"SnapAPI: Checkpointctl parsing error detected, using dynamic fallback method: {error_message}")
+                
+                # Use dynamic fallback method
+                inspect_output = await run_checkpointctl_fallback(checkpoint_file_path, username, error_message)
+            else:
+                # Re-raise if it's a different error
+                raise e
 
         # Save the output in the same folder as the checkpoint file with _inspect suffix for analysis results
         output_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json")
