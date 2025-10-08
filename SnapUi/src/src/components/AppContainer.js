@@ -30,7 +30,7 @@ import { clusterApi } from '../api/clusterApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
-import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, MenuBook as DocumentationIcon } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
 
@@ -376,7 +376,6 @@ export default function AppContainer({ children }) {
       { text: "Users", path: "/users", Icon: UsersIcon },
       { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
       { text: "SnapHook", path: "/snaphook", Icon: SnapHookIcon },
-      { text: "Documentation", path: "/documentation", Icon: DocumentationIcon },
     ]
 
     const showNavigation = kubeAuthenticated && selectedCluster

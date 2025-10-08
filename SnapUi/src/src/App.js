@@ -30,7 +30,6 @@ const App = () => {
             <Route path='/users' element={<ProtectedRoute element={<UserScreen />} />} />
             <Route path='/snapwatcher' element={<ProtectedRoute element={<SnapWatcherScreen />} />} />
             <Route path='/snaphook' element={<ProtectedRoute element={<SnapHookScreen />} />} />
-            <Route path='/documentation' element={<ProtectedRoute element={<DocumentationScreen />} />} />
           </Routes>
         </AppContainer>
       </Router>
