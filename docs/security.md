@@ -16,10 +16,48 @@ curl -X POST http://localhost:8000/config/user/login \
 ```
 
 ### RBAC Configuration
-- **Admin Role**: Full system access
-- **Operator Role**: Checkpoint operations
-- **Viewer Role**: Read-only access
-- **Custom Roles**: Tailored permissions
+
+#### SnapAPI Service Account
+SnapAPI uses a dedicated service account with specific cluster-wide permissions:
+
+```bash
+# Automated RBAC setup
+cd SnapApi
+./setup-snapapi-rbac.sh
+```
+
+#### Required Permissions
+- **Nodes**: Access to node information and checkpoint API
+- **Pods**: List, get, delete pods (including debug pods)
+- **Webhooks**: Manage mutating and validating webhook configurations
+- **SCC**: Use privileged Security Context Constraints for debug operations
+- **ReplicaSets**: Extract template hashes for container identification
+
+#### Permission Details
+```yaml
+# Core Kubernetes API Group
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "pods", "pods/log", "pods/exec", "namespaces"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+
+# Apps API Group
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list"]
+
+# OpenShift Security Context Constraints
+- apiGroups: ["security.openshift.io"]
+  resources: ["securitycontextconstraints"]
+  verbs: ["use"]
+  resourceNames: ["privileged"]
+
+# Admission Webhook Configuration
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+```
+
+**For detailed RBAC setup instructions, see [RBAC Setup Guide](rbac-setup.md)**
 
 ## Network Security
 

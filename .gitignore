@@ -1,4 +1,5 @@
 /SnapApi/src/config/** 
 /SnapApi/src/checkpoints/** 
+/SnapApi/snapapi-config.json
 /Demo/** 
 /CRC-Cluster-Setup/** 

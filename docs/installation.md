@@ -126,10 +126,32 @@ helm install snap snap/snap -f values.yaml
 ### 2. Initial Setup
 1. **Change default password**
 2. **Configure registry connection**
-3. **Add your first cluster**
-4. **Deploy cluster monitor DaemonSet**
+3. **Set up RBAC permissions** (see RBAC Setup section below)
+4. **Add your first cluster**
+5. **Deploy cluster monitor DaemonSet**
 
-### 3. Deploy Cluster Monitor DaemonSet
+### 3. RBAC Setup (Required)
+```bash
+# Set up RBAC permissions for SnapAPI
+cd SnapApi
+./setup-snapapi-rbac.sh
+```
+
+This script creates:
+- Service account (`snapapi-serviceaccount`)
+- Cluster role with required permissions
+- Cluster role binding
+- Permanent service account token
+
+**Required Permissions:**
+- Nodes and nodes/proxy access for checkpoint operations
+- Pods, pods/log, pods/exec for debug operations
+- Webhook management permissions
+- Privileged SCC usage for OpenShift
+
+**For detailed RBAC setup instructions, see [RBAC Setup Guide](rbac-setup.md)**
+
+### 4. Deploy Cluster Monitor DaemonSet
 ```bash
 # Deploy to your Openshift/Kubernetes cluster
 kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml

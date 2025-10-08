@@ -49,24 +49,6 @@ spec:
               containerPort: 8000
               protocol: TCP
           env:
-            - name: CONTAINER_RUNTIME_ENDPOINT
-              value: unix:///run/crio/crio.sock
-            - name: CONTAINER_HOST
-              value: unix:///run/crio/crio.sock
-            - name: CONTAINER_RUNTIME
-              value: remote
-            - name: CHECKPOINT_PATH
-              value: {{ .Values.checkpointPath }}
-            - name: cluster_cache
-              value: {{ .Values.env.cluster_cache }}
-            - name: snap_registry
-              value: {{ .Values.env.snap_registry }}
-            - name: snap_repo
-              value: {{ .Values.env.snap_repo }}
-            - name: snap_registry_user
-              value: {{ .Values.env.snap_registry_user }}
-            - name: snap_registry_pass
-              value: {{ .Values.env.snap_registry_pass }}
             - name: SNAP_API_URL
               value: {{ .Values.env.SNAP_API_URL }}
 

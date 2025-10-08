@@ -29,7 +29,17 @@ Get SNAP up and running in minutes! This guide will walk you through the essenti
    ```
 4. **Test connection** and save
 
-## Step 3: Add Cluster
+## Step 3: Set Up RBAC (Required)
+
+```bash
+# Set up RBAC permissions for SnapAPI
+cd SnapApi
+./setup-snapapi-rbac.sh
+```
+
+This creates the necessary service account and permissions for SnapAPI operations.
+
+## Step 4: Add Cluster
 
 1. **Navigate** to **Configuration > Clusters**
 2. **Click** "Add New Cluster"
@@ -42,7 +52,7 @@ Get SNAP up and running in minutes! This guide will walk you through the essenti
    ```
 4. **Save configuration**
 
-## Step 4: Deploy Cluster Monitor
+## Step 5: Deploy Cluster Monitor
 
 ```bash
 # Deploy the cluster monitoring DaemonSet
@@ -52,14 +62,14 @@ kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml
 kubectl get daemonset -n snap
 ```
 
-## Step 5: Start SnapWatcher
+## Step 6: Start SnapWatcher
 
 1. **Navigate** to **Operator > Start SnapWatcher**
 2. **Select** your cluster
 3. **Click** "Start SnapWatcher"
 4. **Verify** operator is running
 
-## Step 6: Create SnapHook (Optional)
+## Step 7: Create SnapHook (Optional)
 
 1. **Navigate** to **SnapHook > Create SnapHook**
 2. **Configure**:
@@ -70,7 +80,7 @@ kubectl get daemonset -n snap
    ```
 3. **Create SnapHook**
 
-## Step 7: Test Checkpointing
+## Step 8: Test Checkpointing
 
 ### Deploy Test Application
 ```bash
@@ -106,7 +116,7 @@ curl -X POST "http://localhost:8000/checkpoint/kubelet/checkpoint" \
   }'
 ```
 
-## Step 8: Convert to Image
+## Step 9: Convert to Image
 
 1. **Navigate** to **Checkpoints**
 2. **Find** your created checkpoint
@@ -119,7 +129,7 @@ curl -X POST "http://localhost:8000/checkpoint/kubelet/checkpoint" \
    ```
 5. **Click** "Create and Push Image"
 
-## Step 9: Verify Results
+## Step 10: Verify Results
 
 ### Check Checkpoint Status
 ```bash
@@ -139,7 +149,7 @@ docker pull your-registry.com/test-app-checkpoint:latest
 kubectl get images | grep test-app-checkpoint
 ```
 
-## Step 10: Restore Checkpoint
+## Step 11: Restore Checkpoint
 
 ### Restore from Image
 ```bash
@@ -211,6 +221,11 @@ Now that you have SNAP running:
 - Check operator logs
 - Ensure DaemonSet is deployed
 
+#### RBAC Permission Errors
+- Run RBAC setup script: `cd SnapApi && ./setup-snapapi-rbac.sh`
+- Verify service account permissions: `oc auth can-i get pods --as=system:serviceaccount:snap:snapapi-serviceaccount`
+- Check token validity in cluster configuration
+
 ### Getting Help
 
 - **Documentation**: Check relevant guides
@@ -221,6 +236,7 @@ Now that you have SNAP running:
 
 Congratulations! You've successfully:
 - ✅ Installed and configured SNAP
+- ✅ Set up RBAC permissions
 - ✅ Connected to your Openshift cluster
 - ✅ Created your first checkpoint
 - ✅ Converted checkpoint to container image

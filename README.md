@@ -86,6 +86,7 @@ SNAP enables organizations to capture the complete runtime state of running cont
 4. **Configure your first cluster**
    - Navigate to **Configuration > Registry** and add your registry
    - Go to **Configuration > Clusters** and add your Openshift cluster
+   - **Set up RBAC permissions** using the provided script (see RBAC Setup below)
    - Deploy **Cluster Monitor DaemonSet** using the provided YAML file
    - Start **SnapWatcher** operator and **SnapHook** webhooks
 
@@ -95,18 +96,26 @@ SNAP enables organizations to capture the complete runtime state of running cont
    - Add registry details (URL, credentials)
    - Test connectivity
 
-2. **Cluster Configuration**
+2. **RBAC Setup (Required)**
+   ```bash
+   # Set up RBAC permissions for SnapAPI
+   cd SnapApi
+   ./setup-snapapi-rbac.sh
+   ```
+   This creates the necessary service account, cluster role, and permissions for SnapAPI operations.
+
+3. **Cluster Configuration**
    - Add Openshift cluster details
    - Upload kubeconfig or enter authentication token
    - Select configured registry
 
-3. **Deploy Cluster Monitor DaemonSet**
+4. **Deploy Cluster Monitor DaemonSet**
    ```bash
    # Deploy the cluster monitoring DaemonSet to your cluster
    kubectl apply -f SnapApi/snap-cluster-monitor-daemonset.yaml
    ```
 
-4. **Start Components**
+5. **Start Components**
    - **SnapWatcher Operator**: Start the operator inside SnapAPI to monitor containers
    - **SnapHook**: Create webhook endpoints for automation
 
@@ -192,6 +201,25 @@ Access the interactive API documentation at `http://localhost:8000/docs`
 - **Encryption**: SSL/TLS for all communications
 - **Audit Logging**: Comprehensive logging and audit trails
 - **Compliance**: SOC 2, GDPR, and enterprise compliance features
+
+### RBAC Setup
+
+SnapAPI requires specific Kubernetes RBAC permissions to function properly. The setup is automated:
+
+```bash
+# Automated RBAC setup
+cd SnapApi
+./setup-snapapi-rbac.sh
+```
+
+**Required Permissions:**
+- **Nodes**: Access to node information and checkpoint API
+- **Pods**: List, get, delete pods (including debug pods)
+- **Webhooks**: Manage mutating and validating webhook configurations
+- **SCC**: Use privileged Security Context Constraints for debug operations
+- **ReplicaSets**: Extract template hashes for container identification
+
+**For detailed RBAC setup instructions, see [RBAC Setup Guide](docs/rbac-setup.md)**
 
 ## Development
 
