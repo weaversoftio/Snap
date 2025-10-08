@@ -7,19 +7,10 @@ from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
 
 def detect_service_account_token():
     """
-    Detect if running in a Kubernetes pod with a service account token.
-    Returns the token content if found, None otherwise.
+    In-cluster authentication detection disabled.
+    SnapAPI now always uses token-based authentication from cluster configuration files.
     """
-    token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-    try:
-        if os.path.exists(token_path):
-            with open(token_path, "r") as f:
-                token = f.read().strip()
-                if token:
-                    print("Service account token detected")
-                    return token
-    except Exception as e:
-        print(f"Error reading service account token: {e}")
+    print("In-cluster authentication detection disabled - using token-based authentication only")
     return None
 
 def get_kubernetes_api_url():
@@ -42,41 +33,11 @@ def get_kubernetes_api_url():
 
 def auto_create_local_cluster():
     """
-    Automatically create/update a local cluster configuration if service account token is present.
-    Always refreshes the token on each startup to handle token expiration.
+    In-cluster authentication auto-creation disabled.
+    SnapAPI now requires explicit cluster configuration files with token-based authentication.
     """
-    try:
-        local_cluster_path = "config/clusters/local.json"
-        
-        # Detect service account token
-        token = detect_service_account_token()
-        if not token:
-            print("No service account token found, skipping local cluster auto-creation")
-            return
-        
-        # Get Kubernetes API URL
-        api_url = get_kubernetes_api_url()
-        
-        # Always create/update the local cluster configuration with fresh token
-        cluster_config_dict = {
-            "cluster_config_details": {
-                "kube_api_url": api_url,
-                "token": token
-            },
-            "name": "local"
-        }
-        
-        # Save the configuration (overwrite if exists to refresh token)
-        with open(local_cluster_path, "w") as f:
-            json.dump(cluster_config_dict, f, indent=4)
-        
-        if os.path.exists(local_cluster_path):
-            print("Local cluster configuration updated successfully with fresh service account token")
-        else:
-            print("Local cluster configuration created successfully with service account token")
-        
-    except Exception as e:
-        print(f"Failed to auto-create/update local cluster configuration: {e}")
+    print("In-cluster authentication auto-creation disabled - using explicit cluster configuration files only")
+    return
 
 def snap_init():
     try:

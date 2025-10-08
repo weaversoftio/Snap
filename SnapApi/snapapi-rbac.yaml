@@ -1,0 +1,99 @@
+---
+# SnapAPI Service Account RBAC Configuration for OpenShift
+# This file defines ONLY the Kubernetes RBAC permissions that are actually used in SnapAPI
+# Based on comprehensive analysis of the SnapAPI codebase excluding charts, snap-daemonset.yaml, and pod migration
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: snapapi-serviceaccount
+  namespace: snap
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: snapapi-clusterrole
+rules:
+  # Core Kubernetes API Group - Only resources actually used by SnapAPI
+  - apiGroups: [""]
+    resources: 
+      - "nodes"
+      - "nodes/proxy"
+      - "pods"
+      - "namespaces"
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Pod-specific subresources for detailed pod operations
+  - apiGroups: [""]
+    resources: 
+      - "pods/log"
+      - "pods/status"
+    verbs: ["get", "list"]
+
+  # Kopf.dev API Group - Operator framework for SnapWatcher
+  - apiGroups: ["kopf.dev"]
+    resources: 
+      - "clusterkopfpeerings"
+      - "kopfpeerings"
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # OpenShift Security Context Constraints - Required for privileged operations
+  - apiGroups: ["security.openshift.io"]
+    resources: 
+      - "securitycontextconstraints"
+    verbs: ["use"]
+    resourceNames: ["privileged"]
+
+  # Admission Webhook Configuration - For SnapHook webhook management
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: 
+      - "mutatingwebhookconfigurations"
+      - "validatingwebhookconfigurations"
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# ClusterRoleBinding to bind the service account to the cluster role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: snapapi-clusterrolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: snapapi-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: snapapi-serviceaccount
+  namespace: snap
+
+---
+# Additional ClusterRole for kube-apiserver checkpoint access
+# This is required for the checkpoint API to work properly
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-apiserver-checkpoints
+rules:
+- apiGroups: [""]
+  resources: 
+    - "nodes/checkpoint"
+  verbs: ["get", "create"]
+
+---
+# ClusterRoleBinding for kube-apiserver checkpoint access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-apiserver-checkpoints
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-apiserver-checkpoints
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: kube-apiserver
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: system:kube-apiserver
