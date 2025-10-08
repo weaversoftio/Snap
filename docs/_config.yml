@@ -12,34 +12,58 @@ url: "https://weaversoftio.github.io"
 # Build settings
 markdown: kramdown
 highlighter: rouge
-theme: just-the-docs
+theme: minima
 
 # Plugins
 plugins:
   - jekyll-feed
   - jekyll-sitemap
   - jekyll-seo-tag
-  - jekyll-include-cache
 
-# Navigation (Sidebar)
-nav_external_links:
-  - title: GitHub Repository
-    url: https://github.com/weaversoftio/Snap
-
-# Sidebar navigation structure
-just_the_docs:
-  nav_fold: 1
-  nav_external_links:
-    - title: GitHub Repository
-      url: https://github.com/weaversoftio/Snap
-  search: true
-  search_tokenizer_separator: /[\s/]+/
-  heading_anchors: true
-  color_scheme: light
-  aux_links:
-    GitHub Repository:
-      - "//github.com/weaversoftio/Snap"
-  logo: "/assets/logo.png"
+# Navigation
+navigation:
+  - title: Getting Started
+    children:
+      - title: Quick Start Guide
+        url: /quick-start
+      - title: Installation Guide
+        url: /installation
+      - title: Configuration Guide
+        url: /configuration
+  - title: User Guides
+    children:
+      - title: Cluster Management
+        url: /cluster-management
+      - title: Checkpointing Guide
+        url: /checkpointing
+      - title: Registry Integration
+        url: /registry-integration
+      - title: Automation Guide
+        url: /automation
+  - title: API Reference
+    children:
+      - title: API Overview
+        url: /api-overview
+      - title: API Endpoints
+        url: /api-endpoints
+      - title: Authentication
+        url: /authentication
+  - title: Security & Operations
+    children:
+      - title: Security Guide
+        url: /security
+      - title: RBAC Setup Guide
+        url: /rbac-setup
+      - title: Troubleshooting Guide
+        url: /troubleshooting
+  - title: Additional Resources
+    children:
+      - title: FAQ
+        url: /faq
+      - title: Add Cluster Guide
+        url: /add-cluster-guide
+      - title: Migration Guide
+        url: /migration-guide
 
 # Collections
 collections:
@@ -80,7 +104,7 @@ seo:
   name: "SNAP Documentation"
   description: "Comprehensive documentation for SNAP container checkpointing platform"
   url: "https://weaversoftio.github.io/Snap"
-  image: "https://weaversoftio.github.io/Snap/assets/logo.png"
+  image: "https://weaversoftio.github.io/Snap/assets/snap-logo.png"
 
 # Social links
 social:

@@ -1,0 +1,261 @@
+/* Custom CSS for SNAP Documentation Sidebar Navigation */
+
+/* Import Google Fonts for better typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Root variables for consistent theming */
+:root {
+  --primary-color: #2c3e50;
+  --secondary-color: #3498db;
+  --accent-color: #e74c3c;
+  --text-color: #2c3e50;
+  --bg-color: #ffffff;
+  --sidebar-bg: #f8f9fa;
+  --border-color: #e9ecef;
+  --hover-color: #f1f3f4;
+}
+
+/* Global styles */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--bg-color);
+}
+
+/* Main layout container */
+.site-header {
+  background: var(--primary-color);
+  border-bottom: 3px solid var(--secondary-color);
+}
+
+.site-title {
+  font-weight: 700;
+  color: white !important;
+  font-size: 1.5rem;
+}
+
+.site-nav {
+  background: var(--primary-color);
+}
+
+.site-nav .page-link {
+  color: white !important;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.site-nav .page-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white !important;
+}
+
+/* Sidebar navigation styles */
+.sidebar-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 2rem 0;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-nav h3 {
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 1.5rem 1rem 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li {
+  margin: 0;
+}
+
+.sidebar-nav a {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  text-decoration: none;
+  font-weight: 400;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-nav a:hover {
+  background-color: var(--hover-color);
+  color: var(--secondary-color);
+  border-left-color: var(--secondary-color);
+  padding-left: 1.5rem;
+}
+
+.sidebar-nav a.active {
+  background-color: var(--secondary-color);
+  color: white;
+  border-left-color: var(--primary-color);
+}
+
+/* Adjust main content for sidebar */
+.wrapper {
+  margin-left: 280px;
+  max-width: none;
+}
+
+.site-header {
+  margin-left: 280px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .sidebar-nav {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar-nav.open {
+    transform: translateX(0);
+  }
+  
+  .wrapper {
+    margin-left: 0;
+  }
+  
+  .site-header {
+    margin-left: 0;
+  }
+  
+  /* Mobile menu button */
+  .mobile-menu-btn {
+    display: block;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1001;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-menu-btn {
+    display: none;
+  }
+}
+
+/* Content styling */
+.page-content {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.page-content h1 {
+  color: var(--primary-color);
+  border-bottom: 3px solid var(--secondary-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.page-content h2 {
+  color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.3rem;
+  margin-top: 2rem;
+}
+
+.page-content h3 {
+  color: var(--text-color);
+  margin-top: 1.5rem;
+}
+
+/* Code blocks */
+.highlight {
+  background: #f8f9fa;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+/* Links */
+a {
+  color: var(--secondary-color);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+th, td {
+  border: 1px solid var(--border-color);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+th {
+  background-color: var(--sidebar-bg);
+  font-weight: 600;
+}
+
+/* Lists */
+ul, ol {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+li {
+  margin: 0.5rem 0;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid var(--secondary-color);
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--sidebar-bg);
+  font-style: italic;
+}
+
+/* Footer */
+.site-footer {
+  margin-left: 280px;
+  background: var(--primary-color);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .site-footer {
+    margin-left: 0;
+  }
+}

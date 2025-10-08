@@ -2,18 +2,18 @@
 
 This directory contains the Jekyll-based documentation site for SNAP.
 
-## Theme: Just the Docs
+## Theme: Custom Minima with Sidebar
 
-The documentation now uses the **Just the Docs** Jekyll theme, which provides:
+The documentation now uses a **customized Minima theme** with a **left sidebar navigation**, which provides:
 - **Left sidebar navigation** instead of top navbar
-- **Collapsible navigation** with foldable sections
-- **Built-in search functionality**
-- **Mobile-responsive design**
-- **Clean, professional appearance**
+- **Organized navigation sections** with clear categorization
+- **Mobile-responsive design** with collapsible sidebar
+- **Custom SNAP branding** and styling
+- **Professional appearance** with modern typography
 
 ## Navigation Structure
 
-The sidebar navigation is defined in `_data/navigation.yml` and organized into logical sections:
+The sidebar navigation is defined in `_layouts/default.html` and organized into logical sections:
 
 - **Getting Started**: Quick Start, Installation, Configuration
 - **User Guides**: Cluster Management, Checkpointing, Registry, Automation
@@ -40,7 +40,7 @@ The site is automatically deployed to GitHub Pages when changes are pushed to th
 ## Configuration
 
 - `_config.yml`: Main Jekyll configuration
-- `_data/navigation.yml`: Sidebar navigation structure
-- `_layouts/`: Custom layout templates
+- `_layouts/default.html`: Custom layout with sidebar navigation
+- `assets/css/custom.css`: Custom CSS for sidebar and styling
 - `_includes/`: Custom includes and components
 - `assets/`: Static assets (images, CSS, JS)
