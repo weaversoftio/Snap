@@ -9,5 +9,6 @@ openai
 volatility3
 ansible
 pyyaml
+markdown
 kopf>=1.37.2
 kubernetes>=26.1.0

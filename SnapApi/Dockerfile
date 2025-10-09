@@ -43,6 +43,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY src/. .
 
+# Copy docs directory for documentation system
+COPY ../docs /app/docs
+
 # Expose the port
 EXPOSE 8000
 

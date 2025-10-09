@@ -30,9 +30,10 @@ import { clusterApi } from '../api/clusterApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
-import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
+import HelpDialog from './common/HelpDialog';
 
 const drawerWidth = 240;
 const selectedBackgroundColor = "rgba(36, 143, 231, 1)";
@@ -134,6 +135,7 @@ export default function AppContainer({ children }) {
   const [selectedRegistry, setSelectedRegistry] = useState("");
   const [registryRepo, setRegistryRepo] = useState("snap_images");
   const [availableRegistries, setAvailableRegistries] = useState([]);
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
 
   const [clusterOpen, setClusterOpen] = useState(false);
   const { list: clusterList = [], selectedCluster = "", kubeAuthenticated = false } = useSelector(state => state.cluster)
@@ -469,15 +471,25 @@ export default function AppContainer({ children }) {
               <Typography variant="h6" noWrap component="div">
                 Admin Panel
               </Typography>
-              <Box
-                component="img"
-                sx={{
-                  height: 45,
-                  filter: 'brightness(0) invert(1)',
-                }}
-                alt="SNAP logo."
-                src="/logo.png"
-              />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  color="inherit"
+                  onClick={() => setHelpDialogOpen(true)}
+                  startIcon={<HelpIcon />}
+                  sx={{ textTransform: "capitalize" }}
+                >
+                  Help
+                </Button>
+                <Box
+                  component="img"
+                  sx={{
+                    height: 45,
+                    filter: 'brightness(0) invert(1)',
+                  }}
+                  alt="SNAP logo."
+                  src="/logo.png"
+                />
+              </Stack>
             </Stack>
           </Toolbar>
         </AppBar>}
@@ -487,6 +499,10 @@ export default function AppContainer({ children }) {
           {children}
         </Box>
         {authenticated && <LogsSection />}
+        <HelpDialog 
+          open={helpDialogOpen} 
+          onClose={() => setHelpDialogOpen(false)} 
+        />
       </Box>
     </>
   );

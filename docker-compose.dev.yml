@@ -33,6 +33,8 @@ services:
     volumes:
       # Mount src folder for hot reload
       - ./SnapApi/src:/app:Z
+      # Mount docs folder for documentation
+      - ./docs:/app/docs:Z
       # Mount checkpoint storage
       - snapapi-checkpoints:/app/checkpoints
     networks:

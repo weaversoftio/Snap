@@ -36,6 +36,7 @@ from routes.operator import router as operator_router
 from routes.cluster_status import router as cluster_status_router
 from routes.webhooks import router as webhooks_router
 from routes.snaphook import router as snaphook_router
+from routes.docs import router as docs_router
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
@@ -147,5 +148,6 @@ app.include_router(imagetag_router, prefix="/imagetag", tags=["imagetag"])
 app.include_router(operator_router, prefix="/operator", tags=["operator"])
 app.include_router(webhooks_router, prefix="/webhooks", tags=["webhooks"])
 app.include_router(snaphook_router, tags=["snaphook"])
+app.include_router(docs_router, prefix="/docs", tags=["docs"])
 
 # SnapWatcher operator will be started via API request
