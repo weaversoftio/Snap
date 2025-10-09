@@ -1,0 +1,52 @@
+oc new-project snap --skip-config-write 2>/dev/null || true && oc apply -f - <<EOF
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: snapapi-serviceaccount
+  namespace: snap
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: snapapi-clusterrole
+rules:
+  - apiGroups: [""]
+    resources: 
+      - "nodes"
+      - "nodes/proxy"
+      - "pods"
+      - "pods/log"
+      - "pods/exec"
+      - "namespaces"
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: 
+      - "replicasets"
+    verbs: ["get", "list"]
+  - apiGroups: ["security.openshift.io"]
+    resources: 
+      - "securitycontextconstraints"
+    verbs: ["use"]
+    resourceNames: ["privileged"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: 
+      - "mutatingwebhookconfigurations"
+      - "validatingwebhookconfigurations"
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: snapapi-clusterrolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: snapapi-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: snapapi-serviceaccount
+  namespace: snap
+EOF
+sleep 2 && TOKEN=$(oc create token snapapi-serviceaccount -n snap --duration=8760h) && API_SERVER=$(oc cluster-info | grep "Kubernetes control plane" | awk '{print $7}') && echo "==========================================" && echo "SnapAPI Configuration" && echo "==========================================" && echo "" && echo "Cluster API URL:" && echo "$API_SERVER" && echo "" && echo "Service Account Token:" && echo "$TOKEN" && echo "" && echo "==========================================" && echo "Copy these values to your SnapUI cluster form" && echo "=========================================="

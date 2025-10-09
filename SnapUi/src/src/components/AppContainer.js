@@ -27,10 +27,11 @@ import { useSnackbar } from 'notistack';
 import Stack from '@mui/material/Stack';
 import { clusterActions } from '../features/cluster/clusterSlice';
 import { clusterApi } from '../api/clusterApi';
+import { rbacApi } from '../api/rbacApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
-import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
 import HelpDialog from './common/HelpDialog';
@@ -265,6 +266,198 @@ export default function AppContainer({ children }) {
     setRegistryRepo("snap_images")
   }
 
+  const handleCopyRBACCommand = async () => {
+    try {
+      // Fetch the RBAC command from SnapAPI
+      const response = await rbacApi.getRbacCommand();
+      
+      if (!response.success || !response.command) {
+        throw new Error('Failed to get RBAC command from server');
+      }
+
+      const rbacCommand = response.command;
+
+      // Check if modern clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(rbacCommand);
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+          return;
+        } catch (clipboardErr) {
+          console.warn("Modern clipboard API failed, trying fallback:", clipboardErr);
+        }
+      }
+
+      // Fallback for older browsers or if clipboard API fails
+      const textArea = document.createElement("textarea");
+      textArea.value = rbacCommand;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      textArea.style.opacity = "0";
+      textArea.style.pointerEvents = "none";
+      textArea.setAttribute("readonly", "");
+      document.body.appendChild(textArea);
+      
+      try {
+        // Try to focus and select the text
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // For mobile devices
+        
+        // Try the copy command
+        const successful = document.execCommand('copy');
+        
+        if (successful) {
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+        } else {
+          // If execCommand fails, show the command in a modal for manual copy
+          enqueueSnackbar("Auto-copy failed. Command will be displayed for manual copy.", { variant: "warning" });
+          
+          // Create a modal to show the command for manual copying
+          const modal = document.createElement("div");
+          modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+          `;
+          
+          const content = document.createElement("div");
+          content.style.cssText = `
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+          `;
+          
+          const closeBtn = document.createElement("button");
+          closeBtn.textContent = "Close";
+          closeBtn.style.cssText = `
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+          `;
+          closeBtn.onclick = () => {
+            document.body.removeChild(modal);
+          };
+          
+          const commandText = document.createElement("textarea");
+          commandText.value = rbacCommand;
+          commandText.style.cssText = `
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            resize: vertical;
+            user-select: all;
+            -webkit-user-select: all;
+            -moz-user-select: all;
+            -ms-user-select: all;
+          `;
+          
+          const instructions = document.createElement("p");
+          instructions.textContent = "Please manually copy the command above:";
+          instructions.style.cssText = "margin: 10px 0; font-weight: bold;";
+          
+          const copyButton = document.createElement("button");
+          copyButton.textContent = "Copy Command";
+          copyButton.style.cssText = `
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 14px;
+          `;
+          copyButton.onclick = () => {
+            commandText.focus();
+            commandText.select();
+            try {
+              const successful = document.execCommand('copy');
+              if (successful) {
+                enqueueSnackbar("Command copied to clipboard!", { variant: "success" });
+              } else {
+                enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
+              }
+            } catch (err) {
+              enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
+            }
+          };
+          
+          const selectAllButton = document.createElement("button");
+          selectAllButton.textContent = "Select All";
+          selectAllButton.style.cssText = `
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 14px;
+          `;
+          selectAllButton.onclick = () => {
+            commandText.focus();
+            commandText.select();
+          };
+          
+          const buttonContainer = document.createElement("div");
+          buttonContainer.style.cssText = "text-align: center; margin: 10px 0;";
+          buttonContainer.appendChild(selectAllButton);
+          buttonContainer.appendChild(copyButton);
+          
+          content.appendChild(closeBtn);
+          content.appendChild(instructions);
+          content.appendChild(commandText);
+          content.appendChild(buttonContainer);
+          modal.appendChild(content);
+          document.body.appendChild(modal);
+          
+          // Focus the textarea for easy selection
+          setTimeout(() => {
+            commandText.focus();
+            commandText.select();
+          }, 100);
+        }
+      } catch (execErr) {
+        console.error("execCommand failed:", execErr);
+        enqueueSnackbar("Copy failed. Please try again or check browser permissions.", { variant: "error" });
+      } finally {
+        // Always clean up the textarea
+        if (textArea && textArea.parentNode) {
+          textArea.parentNode.removeChild(textArea);
+        }
+      }
+      
+    } catch (err) {
+      console.error("Error copying RBAC command:", err);
+      enqueueSnackbar("Failed to copy command. Please try again.", { variant: "error" });
+    }
+  }
+
   const renderSwitchCluster = () => {
     return (
       <DialogComponent open={!!switchCluster} onClose={() => setSwitchCluster("")} paperProps={{ maxWidth: 500 }}>
@@ -357,6 +550,15 @@ export default function AppContainer({ children }) {
               helperText="Repository name for storing checkpoint images"
             />
           )}
+          
+          <Button 
+            variant="outlined" 
+            style={{ textTransform: "capitalize", marginBottom: "8px" }} 
+            startIcon={<ContentCopy />}
+            onClick={handleCopyRBACCommand}
+          >
+            Copy RBAC Setup Command
+          </Button>
           
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleAddCluster}>Submit</Button>
         </Box>
