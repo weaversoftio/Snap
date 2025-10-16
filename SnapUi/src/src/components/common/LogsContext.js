@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { getCookie } from "../../utils/cookies";
 
 const LogsContext = createContext();
 
@@ -9,129 +10,102 @@ export const LogsProvider = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [username, setUsername] = useState(null);
   const [loading, setLoading] = useState(false);
-  const pingTimeout = useRef(null);
-  const reconnectTimeout = useRef(null);
+  const pollingInterval = useRef(null);
   const recentLogHashes = useRef(new Set());
-  const socketRef = useRef(null);
+  const lastLogCount = useRef(0);
 
   const config = window.ENV;
-  const pingInterval = 10000;
+  const pollingIntervalMs = 2000; // Poll every 2 seconds
 
-  const connectWebSocket = useCallback(() => {
+  const fetchContainerLogs = useCallback(async () => {
     if (!username) return;
     
-    // Prevent multiple connections
-    if (socketRef.current && socketRef.current.readyState === WebSocket.CONNECTING) {
-      console.log("WebSocket already connecting, skipping...");
-      return;
-    }
-    
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      console.log("WebSocket already connected, skipping...");
-      return;
-    }
-    
-    const ws = new WebSocket(`${config.wsUrl}/ws/progress/${username}`);
-    console.log("Connecting to WebSocket for logs...", username);
-
-    ws.onopen = () => {
-      console.log("Connected to WebSocket for logs");
-      startPing(ws);
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "pong") {
-        console.log("Received pong from server");
+    try {
+      const response = await fetch(`${config.apiUrl}/logs/container`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${getCookie('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch container logs:', response.statusText);
         return;
       }
-
-      if (data.type === "progress") {
-        // Convert progress data to log format
-        const logType = data.progress === "failed" ? "error" : 
-                       data.progress === 100 ? "success" : "info";
-        
-        // Use the timestamp from the data structure, or fallback to current time
-        const logMessage = data.message || `${data.task_name || "Task"} - Progress: ${data.progress}%`;
-        const timestamp = data.timestamp || new Date().toLocaleString();
-        const newLog = {
-          id: `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp,
-          message: logMessage,
-          type: logType,
-          taskName: data.task_name,
-          progress: data.progress,
-          cluster: data.cluster || 'default',
-          initiator: data.initiator || 'SnapApi'
-        };
+      
+      const data = await response.json();
+      
+      if (data.logs && Array.isArray(data.logs)) {
+        // Convert container logs to our log format
+        const newLogs = data.logs.map(log => ({
+          id: `container-${log.timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: log.timestamp,
+          message: log.message,
+          type: log.level || 'info',
+          initiator: log.initiator || 'SnapApi',
+          cluster: 'default',
+          rawLine: log.raw_line || log.message
+        }));
         
         setLogs(prev => {
-          // Create a hash for duplicate detection
-          const logHash = `${logMessage}-${logType}-${data.task_name}`;
-          
-          // Check if this exact log was recently added
-          if (recentLogHashes.current.has(logHash)) {
-            console.log("Duplicate log prevented:", logMessage);
+          // Only add new logs (avoid duplicates)
+          const currentLogCount = newLogs.length;
+          if (currentLogCount <= lastLogCount.current) {
             return prev;
           }
           
-          // Add to recent hashes and clean old ones
-          recentLogHashes.current.add(logHash);
+          // Get only the new logs
+          const newLogsToAdd = newLogs.slice(lastLogCount.current);
+          lastLogCount.current = currentLogCount;
           
-          // Keep only last 20 hashes to prevent memory leak
-          if (recentLogHashes.current.size > 20) {
-            const hashesArray = Array.from(recentLogHashes.current);
-            recentLogHashes.current.clear();
-            hashesArray.slice(-10).forEach(hash => recentLogHashes.current.add(hash));
-          }
+          // Add new logs to existing ones
+          const updatedLogs = [...prev, ...newLogsToAdd];
           
-          return [...prev, newLog];
+          // Keep only the last 100 logs to prevent memory issues
+          return updatedLogs.slice(-100);
         });
       }
-    };
+    } catch (error) {
+      console.error('Error fetching container logs:', error);
+    }
+  }, [username, config.apiUrl]);
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected. Attempting to reconnect...");
-      stopPing();
-      // Use a longer delay to prevent rapid reconnection loops
-      reconnectTimeout.current = setTimeout(() => {
-        if (username) { // Only reconnect if username still exists
-          connectWebSocket();
-        }
-      }, 10000); // Increased delay to 10 seconds
-    };
+  const startPolling = useCallback(() => {
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+    }
+    
+    // Initial fetch
+    fetchContainerLogs();
+    
+    // Set up polling
+    pollingInterval.current = setInterval(() => {
+      fetchContainerLogs();
+    }, pollingIntervalMs);
+    
+    setLoading(true);
+  }, [fetchContainerLogs]);
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      ws.close();
-    };
-
-    socketRef.current = ws;
-  }, [username, config.wsUrl]);
-
-  const startPing = (ws) => {
-    pingTimeout.current = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "ping" }));
-        console.log("Sent ping to server"); 
-      }
-    }, pingInterval);
-  };
-
-  const stopPing = () => {
-    if (pingTimeout.current) clearInterval(pingTimeout.current);
-  };
+  const stopPolling = useCallback(() => {
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    if (!username) return;
+    if (!username) {
+      stopPolling();
+      return;
+    }
 
-    connectWebSocket();
+    startPolling();
     return () => {
-      if (socketRef.current) socketRef.current.close();
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      stopPing();
+      stopPolling();
     };
-  }, [username, connectWebSocket]);
+  }, [username, startPolling, stopPolling]);
 
   const addLog = (log, cluster = 'default', initiator = 'User') => {
     const timestamp = new Date().toLocaleTimeString();
@@ -211,9 +185,23 @@ export const LogsProvider = ({ children }) => {
     });
   };
 
-  const clearLogs = () => {
+  const clearLogs = async () => {
     setLogs([]);
     recentLogHashes.current.clear();
+    lastLogCount.current = 0;
+    
+    // Also clear logs on the server side
+    try {
+      await fetch(`${config.apiUrl}/logs/clear`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${getCookie('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (error) {
+      console.error('Error clearing server logs:', error);
+    }
   };
 
   const toggleLogs = () => {

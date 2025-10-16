@@ -153,4 +153,8 @@ app.include_router(snaphook_router, tags=["snaphook"])
 app.include_router(docs_router, prefix="/docs", tags=["docs"])
 app.include_router(rbac_router, prefix="/rbac", tags=["rbac"])
 
+# Import and include logs router
+from routes.logs import router as logs_router
+app.include_router(logs_router, prefix="/logs", tags=["logs"])
+
 # SnapWatcher operator will be started via API request
