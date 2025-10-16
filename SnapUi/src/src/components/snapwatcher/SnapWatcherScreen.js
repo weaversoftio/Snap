@@ -35,6 +35,7 @@ const SnapWatcherScreen = ({ classes }) => {
   const [watcherTrigger, setWatcherTrigger] = useState("startupProbe")
   const [watcherNamespace, setWatcherNamespace] = useState("")
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [loadingWatchers, setLoadingWatchers] = useState(new Set())
   const [searchTerm, setSearchTerm] = useState("")
   const [errors, setErrors] = useState({})
   const [watchers, setWatchers] = useState([])
@@ -43,6 +44,17 @@ const SnapWatcherScreen = ({ classes }) => {
 
   useEffect(() => {
     handleGetWatcherList();
+  }, [selectedCluster])
+
+  // Periodic refresh to ensure UI stays in sync with JSON file content
+  useEffect(() => {
+    if (!selectedCluster) return;
+    
+    const interval = setInterval(() => {
+      handleGetWatcherList();
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(interval);
   }, [selectedCluster])
 
   const handleGetWatcherList = async () => {
@@ -82,20 +94,22 @@ const SnapWatcherScreen = ({ classes }) => {
     try {
       setIsActionLoading(true)
       await snapWatcherApi.deleteSnapWatcher(currentRowItem.name)
-      handleGetWatcherList()
       enqueueSnackbar(`Watcher: ${currentRowItem.name} successfully deleted`, { variant: "success" })
     } catch (error) {
       console.error("Watcher delete error", error.toString())
       enqueueSnackbar(`Watcher: ${currentRowItem.name} deletion failed`, { variant: "error" })
+    } finally {
+      // Always refresh the watcher list to ensure it reflects JSON file content
+      handleGetWatcherList()
+      handleClearDialog()
     }
-    handleClearDialog()
   }
 
   const handleStartWatcher = async (watcher) => {
     console.log("Starting watcher:", watcher)
     console.log("Watcher name:", watcher.name)
     try {
-      setIsActionLoading(true)
+      setLoadingWatchers(prev => new Set(prev).add(watcher.name))
       await snapWatcherApi.startSnapWatcher(watcher.name)
       setWatchers(prev => 
         prev.map(w => 
@@ -105,18 +119,38 @@ const SnapWatcherScreen = ({ classes }) => {
         )
       )
       enqueueSnackbar(`Watcher: ${watcher.name} started successfully`, { variant: "success" })
+      // Refresh the watcher list to ensure it reflects JSON file content
+      handleGetWatcherList()
     } catch (error) {
       console.error("Watcher start error", error.toString())
       enqueueSnackbar(`Watcher: ${watcher.name} start failed`, { variant: "error" })
+      // Refresh the watcher list even on error to ensure consistency
+      handleGetWatcherList()
     } finally {
-      setIsActionLoading(false)
+      setLoadingWatchers(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(watcher.name)
+        return newSet
+      })
     }
   }
 
   const handleStopWatcher = async (watcher) => {
     try {
-      setIsActionLoading(true)
+      setLoadingWatchers(prev => new Set(prev).add(watcher.name))
+      
+      // Update UI to show stopping state immediately
+      setWatchers(prev => 
+        prev.map(w => 
+          w.name === watcher.name 
+            ? { ...w, status: 'stopping' }
+            : w
+        )
+      )
+      
       await snapWatcherApi.stopSnapWatcher(watcher.name)
+      
+      // Update to stopped state after successful stop
       setWatchers(prev => 
         prev.map(w => 
           w.name === watcher.name 
@@ -125,11 +159,27 @@ const SnapWatcherScreen = ({ classes }) => {
         )
       )
       enqueueSnackbar(`Watcher: ${watcher.name} stopped successfully`, { variant: "success" })
+      // Refresh the watcher list to ensure it reflects JSON file content
+      handleGetWatcherList()
     } catch (error) {
       console.error("Watcher stop error", error.toString())
+      // Revert to running state if stop failed
+      setWatchers(prev => 
+        prev.map(w => 
+          w.name === watcher.name 
+            ? { ...w, status: 'running' }
+            : w
+        )
+      )
       enqueueSnackbar(`Watcher: ${watcher.name} stop failed`, { variant: "error" })
+      // Refresh the watcher list even on error to ensure consistency
+      handleGetWatcherList()
     } finally {
-      setIsActionLoading(false)
+      setLoadingWatchers(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(watcher.name)
+        return newSet
+      })
     }
   }
 
@@ -194,6 +244,7 @@ const SnapWatcherScreen = ({ classes }) => {
         enqueueSnackbar(`Watcher: ${watcherName} creation failed: ${error.response?.data?.detail || error.message}`, { variant: "error" })
       }
     }
+    // Always refresh the watcher list to ensure it reflects JSON file content
     handleGetWatcherList()
     handleClearDialog()
   }
@@ -225,6 +276,7 @@ const SnapWatcherScreen = ({ classes }) => {
     setIsEdit(false)
     setCurrentRowItem(null)
     setPage(0)
+    setLoadingWatchers(new Set())
   }
 
   const handleViewStatus = (watcher) => {
@@ -315,6 +367,7 @@ const SnapWatcherScreen = ({ classes }) => {
     switch (status) {
       case 'running': return 'success';
       case 'stopped': return 'default';
+      case 'stopping': return 'warning';
       case 'error': return 'error';
       default: return 'default';
     }
@@ -352,20 +405,41 @@ const SnapWatcherScreen = ({ classes }) => {
           <>
             {
               <Stack direction="row" spacing={1}>
-                {currentRowItem && currentRowItem?.name === data?.name && isActionLoading ? <CircularProgress />
+                {loadingWatchers.has(data.name) ? 
+                  <CircularProgress size={20} />
                   :
                   <>
-                    <Tooltip title={data.status === 'running' ? "Stop Watcher" : "Start Watcher"}>
+                    <Tooltip title={
+                      data.status === 'running' ? "Stop Watcher" : 
+                      data.status === 'stopping' ? "Stopping Watcher..." : 
+                      "Start Watcher"
+                    }>
                       <IconButton 
-                        aria-label={data.status === 'running' ? "stop watcher" : "start watcher"} 
+                        aria-label={
+                          data.status === 'running' ? "stop watcher" : 
+                          data.status === 'stopping' ? "stopping watcher" : 
+                          "start watcher"
+                        } 
                         onClick={() => {
                           console.log("Button clicked, data:", data)
-                          data.status === 'running' ? handleStopWatcher(data) : handleStartWatcher(data)
+                          if (data.status === 'running') {
+                            handleStopWatcher(data)
+                          } else if (data.status === 'stopped') {
+                            handleStartWatcher(data)
+                          }
+                          // Do nothing if status is 'stopping'
                         }} 
                         size="small"
-                        color={data.status === 'running' ? "warning" : "success"}
+                        color={
+                          data.status === 'running' ? "warning" : 
+                          data.status === 'stopping' ? "default" : 
+                          "success"
+                        }
+                        disabled={loadingWatchers.has(data.name) || data.status === 'stopping'}
                       >
-                        {data.status === 'running' ? <StopIcon fontSize="small" /> : <StartIcon fontSize="small" />}
+                        {data.status === 'running' ? <StopIcon fontSize="small" /> : 
+                         data.status === 'stopping' ? <StopIcon fontSize="small" /> : 
+                         <StartIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="View Status">

@@ -52,8 +52,9 @@ async def lifespan(app: FastAPI):
     
     # Load SnapWatcher configurations and auto-start them
     try:
-        from routes.operator import load_watcher_configs_on_startup
-        await load_watcher_configs_on_startup()
+        from routes.operator import watcher_instances
+        from flows.config.watcher.load_snapwatchers_on_startup import load_snapwatchers_on_startup
+        await load_snapwatchers_on_startup(watcher_instances)
         log_success(logger, 'SnapApi', 'Configuration Loading', f'SnapWatcher configurations loaded and auto-started successfully')
     except Exception as e:
         log_error(logger, 'SnapApi', 'Error Handling', f'Failed to load and start SnapWatcher configurations: {e}')

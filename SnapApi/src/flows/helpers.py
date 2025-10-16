@@ -27,7 +27,7 @@ async def _skopeo_extract_digest(image_ref: str) -> str:
     image_ref example: docker://docker.io/nginxinc/nginx-unprivileged:stable
     returns full digest like 'sha256:4833e2f3...'
     """
-    cmd = ["skopeo", "inspect", image_ref]
+    cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false", image_ref]
     out = await run(cmd)
     data = json.loads(out.stdout)
     return data.get("Digest", "")
@@ -182,6 +182,7 @@ async def resolve_digest_with_skopeo(image_url: str) -> str:
     cmd = ["skopeo", "inspect"]
     if creds:
         cmd += ["--creds", creds]
+    cmd += ["--insecure-policy", "--tls-verify=false"]
     cmd += ["docker://" + image_url]
 
     try:
@@ -318,7 +319,11 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
         cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false"]
         if creds:
             cmd += ["--creds", creds]
-        cmd += ["docker://" + full_image_ref]
+        # Use http:// instead of docker:// for HTTP registries
+        if registry_host.startswith("http://"):
+            cmd += ["http://" + full_image_ref]
+        else:
+            cmd += ["docker://" + full_image_ref]
         
         # Execute skopeo inspect
         result = await run(cmd)

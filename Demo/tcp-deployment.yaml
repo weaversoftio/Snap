@@ -28,7 +28,7 @@ spec:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("", 9000))
             s.listen(5)
-            print("Lis tenin g tegdfg stgdfgdfgdfg se gfdgdfgrv eron port 9000", flush=True)
+            print("Listening on port - 9000", flush=True)
             while True:
                 conn, addr = s.accept()
                 print("Connection from test server", addr, flush=True)

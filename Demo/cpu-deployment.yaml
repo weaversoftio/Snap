@@ -19,8 +19,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            echo "Starting CPU stress tester..."
-            
+            echo "Starting CPU stress    XXXXX tester..."
+            3
             # Run CPU stress for 10 seconds with monitoring
             echo "Running CPU stress for 10 seconds..."
             timeout 10s sh -c 'for i in $(seq 1 4); do while true; do :; done & done; wait' &

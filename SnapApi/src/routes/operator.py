@@ -4,12 +4,11 @@ Provides endpoints to start, stop, and manage the Kubernetes operator.
 """
 
 import os
-import threading
 import logging
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-from classes.operator_watcher import SnapWatcherOperator, set_global_operator
+from classes.operator_watcher import SnapWatcherOperator
 from classes.clusterconfig import ClusterConfig
 from classes.websocket_log_handler import log_info, log_error, log_warning, log_success
 from flows.config.watcher.watcher_config import (
@@ -21,29 +20,30 @@ from flows.config.watcher.watcher_config import (
 logger = logging.getLogger("automation_api")
 router = APIRouter()
 
-# Global operator instance and thread
-operator_instance: Optional[SnapWatcherOperator] = None
-operator_thread: Optional[threading.Thread] = None
-operator_running = False
-
-# Dictionary to manage multiple watcher instances
-active_watchers: Dict[str, Dict[str, Any]] = {}
+# Global watcher instances dictionary - similar to snaphook_instances
+watcher_instances: Dict[str, SnapWatcherOperator] = {}
 
 
-class OperatorStartRequest(BaseModel):
-    """Request model for starting the operator."""
-    cluster_name: str
-    cluster_config: ClusterConfig
-    scope: str = "cluster"
-    namespace: Optional[str] = None
-    auto_delete_pod: bool = True
+def _create_watcher_instance(config: WatcherConfig) -> SnapWatcherOperator:
+    """
+    Helper function to create a SnapWatcherOperator instance from a WatcherConfig.
+    
+    Args:
+        config: WatcherConfig object
+        
+    Returns:
+        SnapWatcherOperator: Created operator instance
+    """
+    return SnapWatcherOperator(
+        cluster_name=config.cluster_name,
+        cluster_config=ClusterConfig(**config.cluster_config),
+        scope=config.scope,
+        namespace=config.namespace,
+        auto_delete_pod=config.auto_delete_pod,
+        trigger=config.trigger
+    )
 
 
-class OperatorStatusResponse(BaseModel):
-    """Response model for operator status."""
-    running: bool
-    cluster_name: Optional[str] = None
-    error: Optional[str] = None
 
 
 class SnapWatcherCreateRequest(BaseModel):
@@ -86,152 +86,10 @@ class SnapWatcherListResponse(BaseModel):
     message: Optional[str] = None
 
 
-def run_operator(namespace=None):
-    """Run the operator in a separate thread."""
-    global operator_running, operator_instance
-    try:
-        log_info(logger, 'SnapApi', 'Operator Start', f'Starting SnapWatcher operator...')
-        
-        # Temporarily disable Kopf operator due to authentication issues
-        # SnapHook functionality is working perfectly with token-based authentication
-        log_warning(logger, 'SnapApi', 'Operator Start', 'Kopf operator temporarily disabled due to authentication issues')
-        log_warning(logger, 'SnapApi', 'Operator Start', 'SnapHook functionality is working correctly with token-based authentication')
-        log_warning(logger, 'SnapApi', 'Operator Start', 'Manual checkpointing via API endpoints is fully functional')
-        
-        # Keep the operator "running" but don't actually start Kopf
-        # This allows the API to report the operator as running while avoiding authentication issues
-        import time
-        while operator_running:
-            time.sleep(10)  # Sleep for 10 seconds and check if still running
-            
-    except Exception as e:
-        log_error(logger, 'SnapApi', 'Error Handling', f'Operator thread error: {e}')
-        operator_running = False
 
 
-@router.post("/start", response_model=OperatorStatusResponse)
-async def start_operator(request: OperatorStartRequest, background_tasks: BackgroundTasks):
-    """
-    Start the SnapWatcher operator with the provided cluster configuration.
-    
-    Args:
-        request: Operator start request containing cluster name and config
-        background_tasks: FastAPI background tasks
-        
-    Returns:
-        OperatorStatusResponse: Status of the operator
-    """
-    global operator_instance, operator_thread, operator_running
-    
-    if operator_running:
-        raise HTTPException(
-            status_code=400, 
-            detail="Operator is already running. Stop it first before starting a new one."
-        )
-    
-    try:
-        # Create operator instance with cluster config
-        operator_instance = SnapWatcherOperator(
-            cluster_name=request.cluster_name,
-            cluster_config=request.cluster_config,
-            scope=request.scope,
-            namespace=request.namespace,
-            auto_delete_pod=request.auto_delete_pod
-        )
-        
-        # Set the global operator instance for kopf event handlers
-        set_global_operator(operator_instance)
-        
-        if not operator_instance.is_ready():
-            raise HTTPException(
-                status_code=400,
-                detail="Operator is not ready. Check cluster configuration."
-            )
-        
-        # Start operator in background thread
-        namespace_param = request.namespace if request.scope == "namespace" else None
-        operator_thread = threading.Thread(target=run_operator, args=(namespace_param,), daemon=True)
-        operator_thread.start()
-        operator_running = True
-        
-        log_success(logger, 'SnapApi', 'Operator Start', f'SnapWatcher operator started successfully for cluster: {request.cluster_name}')
-        
-        return OperatorStatusResponse(
-            running=True,
-            cluster_name=request.cluster_name
-        )
-        
-    except Exception as e:
-        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start operator: {e}')
-        operator_running = False
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to start operator: {str(e)}"
-        )
 
 
-@router.post("/stop", response_model=OperatorStatusResponse)
-async def stop_operator():
-    """
-    Stop the SnapWatcher operator.
-    
-    Returns:
-        OperatorStatusResponse: Status of the operator
-    """
-    global operator_instance, operator_thread, operator_running
-    
-    if not operator_running:
-        return OperatorStatusResponse(
-            running=False,
-            error="Operator is not running"
-        )
-    
-    try:
-        # Note: kopf.run() doesn't have a direct stop method
-        # The thread will be daemon=True so it will stop when the main process stops
-        # For now, we'll just mark it as stopped
-        operator_running = False
-        operator_instance = None
-        operator_thread = None
-        
-        # Clear the global operator instance
-        set_global_operator(None)
-        
-        log_success(logger, 'SnapApi', 'Operator Stop', f'SnapWatcher operator stopped')
-        
-        return OperatorStatusResponse(
-            running=False,
-            cluster_name=None
-        )
-        
-    except Exception as e:
-        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to stop operator: {e}')
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to stop operator: {str(e)}"
-        )
-
-
-@router.get("/status", response_model=OperatorStatusResponse)
-async def get_operator_status():
-    """
-    Get the current status of the SnapWatcher operator.
-    
-    Returns:
-        OperatorStatusResponse: Current status of the operator
-    """
-    global operator_instance, operator_running
-    
-    if not operator_running or operator_instance is None:
-        return OperatorStatusResponse(
-            running=False,
-            cluster_name=None
-        )
-    
-    return OperatorStatusResponse(
-        running=True,
-        cluster_name=operator_instance.cluster_name
-    )
 
 
 @router.get("/watchers/status")
@@ -245,18 +103,20 @@ async def get_all_watchers_status():
     try:
         watcher_statuses = {}
         
-        for watcher_name, watcher_info in active_watchers.items():
+        for watcher_name, watcher_instance in watcher_instances.items():
             watcher_statuses[watcher_name] = {
-                "running": watcher_info["running"],
-                "cluster_name": watcher_info["config"].cluster_name,
-                "scope": watcher_info["config"].scope,
-                "namespace": watcher_info["config"].namespace,
-                "thread_alive": watcher_info["thread"].is_alive() if watcher_info["thread"] else False
+                "running": watcher_instance.is_running,
+                "cluster_name": watcher_instance.cluster_name,
+                "scope": watcher_instance.scope,
+                "namespace": watcher_instance.namespace,
+                "auto_delete_pod": watcher_instance.auto_delete_pod,
+                "is_ready": watcher_instance.is_ready(),
+                "status": watcher_instance.get_status()
             }
         
         return {
             "success": True,
-            "active_watchers": len(active_watchers),
+            "active_watchers": len(watcher_instances),
             "watchers": watcher_statuses
         }
         
@@ -311,39 +171,29 @@ async def create_snapwatcher(request: SnapWatcherCreateRequest):
         
         # Automatically start the watcher after creation
         try:
-            # Check if there's already a running operator
-            if operator_running:
-                log_warning(logger, 'SnapApi', 'Operator Management', f'Operator is already running. Stopping current operator to start new watcher: {request.name}')
-                await stop_operator()
+            # Create watcher instance
+            watcher_instance = _create_watcher_instance(watcher_config)
             
-            # Start the operator with this watcher's configuration
-            start_request = OperatorStartRequest(
-                cluster_name=request.cluster_name,
-                cluster_config=request.cluster_config,
-                scope=request.scope,
-                namespace=request.namespace,
-                auto_delete_pod=request.auto_delete_pod
-            )
-            
-            # Start the operator
-            await start_operator(start_request, BackgroundTasks())
-            
-            # Add watcher to active_watchers dictionary for status tracking
-            active_watchers[request.name] = {
-                "instance": operator_instance,
-                "thread": operator_thread,
-                "config": watcher_config,
-                "running": True
-            }
-            
-            # Update watcher status to running
-            update_watcher_status(request.name, "running")
-            
-            # Reload config to get updated status
-            watcher_config = load_watcher_config(request.name)
-            
-            log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher created and started: {request.name}')
-            
+            if not watcher_instance.is_ready():
+                log_warning(logger, 'SnapApi', 'SnapWatcher Management', f'Watcher {request.name} is not ready, will not auto-start')
+            else:
+                # Start the watcher
+                success = watcher_instance.start()
+                if success:
+                    # Store instance
+                    watcher_instances[request.name] = watcher_instance
+                    
+                    # Update watcher status to running
+                    update_watcher_status(request.name, "running")
+                    
+                    # Reload config to get updated status
+                    watcher_config = load_watcher_config(request.name)
+                    
+                    log_success(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher created and started: {request.name}')
+                else:
+                    log_error(logger, 'SnapApi', 'SnapWatcher Management', f'Failed to start SnapWatcher {request.name}')
+                    # Don't fail the creation if start fails, just log the error
+                    log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher created but not started: {request.name}')
         except Exception as start_error:
             log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start SnapWatcher {request.name}: {start_error}')
             # Don't fail the creation if start fails, just log the error
@@ -376,13 +226,30 @@ async def get_snapwatchers(cluster_name: str):
         all_configs = list_watcher_configs()
         cluster_configs = [config for config in all_configs if config.cluster_name == cluster_name]
         
+        # Clean up orphaned watcher instances (running but no JSON file)
+        config_names = {config.name for config in cluster_configs}
+        orphaned_watchers = []
+        for watcher_name, watcher_instance in list(watcher_instances.items()):
+            if watcher_name not in config_names:
+                logger.warning(f"Found orphaned watcher instance '{watcher_name}' - stopping and removing")
+                try:
+                    watcher_instance.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping orphaned watcher '{watcher_name}': {e}")
+                finally:
+                    del watcher_instances[watcher_name]
+                    orphaned_watchers.append(watcher_name)
+        
+        if orphaned_watchers:
+            logger.info(f"Cleaned up {len(orphaned_watchers)} orphaned watcher instances: {orphaned_watchers}")
+        
         watchers = []
         for config in cluster_configs:
-            # Check if this watcher is actually running in active_watchers
+            # Check if this watcher is actually running in watcher_instances
             actual_status = "stopped"
-            if config.name in active_watchers:
-                watcher_info = active_watchers[config.name]
-                if watcher_info["running"] and watcher_info["thread"].is_alive():
+            if config.name in watcher_instances:
+                watcher_instance = watcher_instances[config.name]
+                if watcher_instance.is_running:
                     actual_status = "running"
                 else:
                     actual_status = "stopped"
@@ -520,6 +387,10 @@ async def delete_snapwatcher(watcher_name: str):
         if config.status == "running":
             await stop_snapwatcher(watcher_name)
         
+        # Remove from watcher_instances if it exists
+        if watcher_name in watcher_instances:
+            del watcher_instances[watcher_name]
+        
         # Delete configuration
         if not delete_watcher_config(watcher_name):
             raise HTTPException(
@@ -566,24 +437,20 @@ async def start_snapwatcher(watcher_name: str):
                 detail=f"SnapWatcher '{watcher_name}' is already running"
             )
         
-        # Start the operator with this watcher's configuration
-        start_request = OperatorStartRequest(
-            cluster_name=config.cluster_name,
-            cluster_config=ClusterConfig(**config.cluster_config),
-            scope=config.scope,
-            namespace=config.namespace
-        )
+        # Create watcher instance if it doesn't exist
+        if watcher_name not in watcher_instances:
+            watcher_instance = _create_watcher_instance(config)
+            watcher_instances[watcher_name] = watcher_instance
+        else:
+            watcher_instance = watcher_instances[watcher_name]
         
-        # Use the existing start_operator logic
-        await start_operator(start_request, BackgroundTasks())
-        
-        # Add watcher to active_watchers dictionary for status tracking
-        active_watchers[watcher_name] = {
-            "instance": operator_instance,
-            "thread": operator_thread,
-            "config": config,
-            "running": True
-        }
+        # Start the watcher
+        success = watcher_instance.start()
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to start SnapWatcher '{watcher_name}'"
+            )
         
         # Update watcher status
         update_watcher_status(watcher_name, "running")
@@ -630,12 +497,19 @@ async def stop_snapwatcher(watcher_name: str):
                 detail=f"SnapWatcher '{watcher_name}' is not running"
             )
         
-        # Stop the operator
-        await stop_operator()
-        
-        # Remove watcher from active_watchers dictionary
-        if watcher_name in active_watchers:
-            del active_watchers[watcher_name]
+        # Stop the watcher instance
+        if watcher_name in watcher_instances:
+            watcher_instance = watcher_instances[watcher_name]
+            success = watcher_instance.stop()
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to stop SnapWatcher '{watcher_name}'"
+                )
+            # Remove from instances
+            del watcher_instances[watcher_name]
+        else:
+            log_warning(logger, 'SnapApi', 'SnapWatcher Management', f'Watcher instance not found for {watcher_name}')
         
         # Update watcher status
         update_watcher_status(watcher_name, "stopped")
@@ -676,11 +550,11 @@ async def get_snapwatcher_status(watcher_name: str):
                 detail=f"SnapWatcher '{watcher_name}' not found"
             )
         
-        # Check if this watcher is actually running in active_watchers
+        # Check if this watcher is actually running in watcher_instances
         actual_status = "stopped"
-        if watcher_name in active_watchers:
-            watcher_info = active_watchers[watcher_name]
-            if watcher_info["running"] and watcher_info["thread"].is_alive():
+        if watcher_name in watcher_instances:
+            watcher_instance = watcher_instances[watcher_name]
+            if watcher_instance.is_running:
                 actual_status = "running"
             else:
                 actual_status = "stopped"
@@ -706,62 +580,6 @@ async def get_snapwatcher_status(watcher_name: str):
         )
 
 
-def start_individual_watcher(config: WatcherConfig) -> bool:
-    """
-    Start an individual SnapWatcher.
-    
-    Args:
-        config: WatcherConfig instance to start
-        
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    try:
-        log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Starting individual SnapWatcher: {config.name}')
-        
-        # Create operator instance for this watcher
-        watcher_instance = SnapWatcherOperator(
-            cluster_name=config.cluster_name,
-            cluster_config=ClusterConfig(**config.cluster_config),
-            scope=config.scope,
-            namespace=config.namespace,
-            auto_delete_pod=config.auto_delete_pod
-        )
-        
-        if not watcher_instance.is_ready():
-            log_error(logger, 'SnapApi', 'Error Handling', f'SnapWatcher {config.name} is not ready. Check cluster configuration.')
-            return False
-        
-        # Start operator in background thread
-        namespace_param = config.namespace if config.scope == "namespace" else None
-        watcher_thread = threading.Thread(
-            target=run_operator, 
-            args=(namespace_param,), 
-            daemon=True,
-            name=f"SnapWatcher-{config.name}"
-        )
-        watcher_thread.start()
-        
-        # Store watcher info in active_watchers
-        active_watchers[config.name] = {
-            "instance": watcher_instance,
-            "thread": watcher_thread,
-            "config": config,
-            "running": True
-        }
-        
-        # Update watcher status
-        update_watcher_status(config.name, "running")
-        
-        log_success(logger, 'SnapApi', 'SnapWatcher Management', f'Successfully started SnapWatcher: {config.name}')
-        return True
-        
-    except Exception as e:
-        log_error(logger, 'SnapApi', 'Error Handling', f'Failed to start SnapWatcher {config.name}: {e}')
-        update_watcher_status(config.name, "error")
-        return False
-
-
 # Startup function to load watcher configs and auto-start them
 async def load_watcher_configs_on_startup():
     """Load all watcher configurations on startup and auto-start them."""
@@ -770,14 +588,9 @@ async def load_watcher_configs_on_startup():
         configs = load_configs()
         log_info(logger, 'SnapApi', 'Configuration Loading', f'SnapAPI: Loaded {len(configs)} watcher configurations on startup')
         
-        # Don't clear running statuses - we want to restore them
-        log_info(logger, 'SnapApi', 'Configuration Loading', f'Found {len([c for c in configs if c.status == "running"])} SnapWatchers with running status to restore')
-        
-        # Always auto-start SnapWatchers that were running before restart
-        
-        # Auto-start all existing Snapwatchers
+        # Auto-start SnapWatchers that were running before restart
         if configs:
-            log_info(logger, 'SnapApi', 'Configuration Loading', f'Auto-starting all existing Snapwatchers...')
+            log_info(logger, 'SnapApi', 'Configuration Loading', f'Auto-starting SnapWatchers that were running before restart...')
             started_count = 0
             failed_count = 0
             
@@ -786,13 +599,23 @@ async def load_watcher_configs_on_startup():
                     if config.status == "running":
                         log_info(logger, 'SnapApi', 'SnapWatcher Management', f'Restoring SnapWatcher: {config.name} (was running before restart)')
                         
-                        # Start the individual watcher to restore its running state
-                        if start_individual_watcher(config):
-                            started_count += 1
-                            log_success(logger, 'SnapApi', 'SnapWatcher Management', f'Successfully restored SnapWatcher: {config.name}')
+                        # Create watcher instance
+                        watcher_instance = _create_watcher_instance(config)
+                        
+                        if watcher_instance.is_ready():
+                            # Start the watcher
+                            success = watcher_instance.start()
+                            if success:
+                                # Store instance
+                                watcher_instances[config.name] = watcher_instance
+                                started_count += 1
+                                log_success(logger, 'SnapApi', 'SnapWatcher Management', f'Successfully restored SnapWatcher: {config.name}')
+                            else:
+                                failed_count += 1
+                                log_error(logger, 'SnapApi', 'SnapWatcher Management', f'Failed to restore SnapWatcher: {config.name}')
                         else:
                             failed_count += 1
-                            log_error(logger, 'SnapApi', 'SnapWatcher Management', f'Failed to restore SnapWatcher: {config.name}')
+                            log_error(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher {config.name} is not ready, cannot restore')
                     else:
                         log_info(logger, 'SnapApi', 'SnapWatcher Management', f'SnapWatcher {config.name} was stopped, not auto-starting')
                         

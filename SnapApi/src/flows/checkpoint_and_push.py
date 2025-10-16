@@ -27,7 +27,7 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
 
         pod_name = metadata.get("name")
         namespace = metadata.get("namespace")
-        node_name = spec.get("nodeName")
+        node_name = spec.get("node_name") or spec.get("nodeName")  # Try snake_case first, then camelCase
         
         # If pod_name is None or empty, try to use generateName
         if not pod_name:
