@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -21,7 +21,9 @@ import {
 import { useLogs } from "./LogsContext";
 
 const LogsSection = () => {
-  const { logs, isOpen, clearLogs, toggleLogs, loading } = useLogs();
+  const { logs, isOpen, clearLogs, toggleLogs, loading, shouldAutoScroll, setShouldAutoScroll } = useLogs();
+  const logsContainerRef = useRef(null);
+  const isUserScrolling = useRef(false);
 
   const getLogColor = (type) => {
     switch (type) {
@@ -44,8 +46,54 @@ const LogsSection = () => {
     // Color code based on log level
     const color = getLogColor(log.type);
     
-    return { timestamp, message, color };
+    // Get component color
+    const componentColor = getComponentColor(log.initiator);
+    
+    return { timestamp, message, color, componentColor, initiator: log.initiator };
   };
+
+  const getComponentColor = (initiator) => {
+    switch (initiator) {
+      case 'SnapApi':
+        return '#2196f3'; // Blue
+      case 'SnapWatcher':
+        return '#4caf50'; // Green
+      case 'SnapHook':
+        return '#ff9800'; // Orange
+      default:
+        return '#666666'; // Gray
+    }
+  };
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (shouldAutoScroll && logsContainerRef.current && !isUserScrolling.current) {
+      const container = logsContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [logs, shouldAutoScroll]);
+
+  // Handle scroll events to detect user scrolling
+  const handleScroll = (e) => {
+    const container = e.target;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
+    
+    if (isAtBottom) {
+      setShouldAutoScroll(true);
+      isUserScrolling.current = false;
+    } else {
+      setShouldAutoScroll(false);
+      isUserScrolling.current = true;
+    }
+  };
+
+  // Reset user scrolling flag when logs section is opened/closed
+  useEffect(() => {
+    if (isOpen) {
+      isUserScrolling.current = false;
+      setShouldAutoScroll(true);
+    }
+  }, [isOpen, setShouldAutoScroll]);
 
   return (
     <Paper
@@ -99,6 +147,14 @@ const LogsSection = () => {
               variant="outlined"
             />
           )}
+          {!shouldAutoScroll && (
+            <Chip 
+              label="Manual Scroll" 
+              size="small" 
+              color="warning" 
+              variant="outlined"
+            />
+          )}
         </Box>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -115,6 +171,22 @@ const LogsSection = () => {
               Clear
             </Button>
           )}
+          {isOpen && !shouldAutoScroll && (
+            <Button
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShouldAutoScroll(true);
+                isUserScrolling.current = false;
+                if (logsContainerRef.current) {
+                  logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
+                }
+              }}
+              sx={{ textTransform: 'none' }}
+            >
+              Scroll to Bottom
+            </Button>
+          )}
           <IconButton size="small">
             {isOpen ? <ExpandMore /> : <ExpandLess />}
           </IconButton>
@@ -124,6 +196,8 @@ const LogsSection = () => {
       {/* Logs Content */}
       <Collapse in={isOpen} timeout="auto" unmountOnExit>
         <Box
+          ref={logsContainerRef}
+          onScroll={handleScroll}
           sx={{
             maxHeight: '240px',
             overflowY: 'auto',
@@ -131,13 +205,14 @@ const LogsSection = () => {
             color: '#ffffff',
             fontFamily: 'monospace',
             fontSize: '0.8rem',
-            p: 1
+            p: 1,
+            scrollBehavior: 'smooth'
           }}
         >
           {logs.length > 0 ? (
             <Box sx={{ whiteSpace: 'pre-wrap' }}>
               {logs.slice(-100).map((log, index) => {
-                const { timestamp, message, color } = formatLogLine(log);
+                const { timestamp, message, color, componentColor, initiator } = formatLogLine(log);
                 return (
                   <Box
                     key={log.id || index}
@@ -159,6 +234,17 @@ const LogsSection = () => {
                       }}
                     >
                       {timestamp}
+                    </Box>
+                    <Box
+                      sx={{
+                        color: componentColor,
+                        minWidth: '100px',
+                        mr: 1,
+                        flexShrink: 0,
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {initiator}:
                     </Box>
                     <Box
                       sx={{

@@ -52,7 +52,8 @@ async def send_progress(username: str, data: dict):
             active_connections.pop(username, None)  # Remove disconnected users
             return {"status": "error", "message": f"Failed to send to {username}: {str(e)}"}
     
-    print(f"Websocket {username} not found")
+    # User not found - silently return without logging
+    return {"status": "error", "message": f"User {username} not connected"}
 
 async def broadcast_progress(data: dict):
     """Send a message to all connected users."""

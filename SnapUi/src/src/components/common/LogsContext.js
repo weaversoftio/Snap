@@ -12,10 +12,67 @@ export const LogsProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const pollingInterval = useRef(null);
   const recentLogHashes = useRef(new Set());
-  const lastLogCount = useRef(0);
+  const lastLogTimestamp = useRef(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const eventSourceRef = useRef(null);
+  const [seenLogIds, setSeenLogIds] = useState(new Set());
 
   const config = window.ENV;
-  const pollingIntervalMs = 2000; // Poll every 2 seconds
+  const pollingIntervalMs = 1000; // Poll every 1 second for more live updates
+
+  const connectSSE = useCallback(() => {
+    if (!username || eventSourceRef.current) return;
+    
+    const token = getCookie('token');
+    if (!token) return;
+    
+    const eventSource = new EventSource(`${config.apiUrl}/logs/stream?token=${token}`);
+    eventSourceRef.current = eventSource;
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const logData = JSON.parse(event.data);
+        
+        // Skip keepalive messages
+        if (logData.type === 'keepalive') return;
+        
+        // Check if we've already seen this log ID
+        if (seenLogIds.has(logData.id)) return;
+        
+        // Add to seen IDs
+        setSeenLogIds(prev => new Set([...prev, logData.id]));
+        
+        // Add new log
+        setLogs(prev => {
+          const updatedLogs = [...prev, logData];
+          return updatedLogs.slice(-200); // Keep last 200 logs
+        });
+        
+      } catch (error) {
+        console.error('Error parsing SSE log data:', error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+          connectSSE();
+        }
+      }, 5000);
+    };
+    
+  }, [username, config.apiUrl, seenLogIds]);
+
+  const disconnectSSE = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
 
   const fetchContainerLogs = useCallback(async () => {
     if (!username) return;
@@ -49,21 +106,43 @@ export const LogsProvider = ({ children }) => {
         }));
         
         setLogs(prev => {
-          // Only add new logs (avoid duplicates)
-          const currentLogCount = newLogs.length;
-          if (currentLogCount <= lastLogCount.current) {
-            return prev;
+          // Find new logs by comparing timestamps
+          let newLogsToAdd = [];
+          
+          if (lastLogTimestamp.current === null) {
+            // First time - add all logs
+            newLogsToAdd = newLogs;
+            if (newLogs.length > 0) {
+              lastLogTimestamp.current = newLogs[newLogs.length - 1].timestamp;
+            }
+          } else {
+            // Find logs newer than our last timestamp
+            const lastTimestampIndex = newLogs.findIndex(log => 
+              log.timestamp === lastLogTimestamp.current
+            );
+            
+            if (lastTimestampIndex !== -1) {
+              // Add logs after the last known timestamp
+              newLogsToAdd = newLogs.slice(lastTimestampIndex + 1);
+            } else {
+              // If we can't find the exact timestamp, add the last few logs
+              newLogsToAdd = newLogs.slice(-5);
+            }
+            
+            if (newLogsToAdd.length > 0) {
+              lastLogTimestamp.current = newLogsToAdd[newLogsToAdd.length - 1].timestamp;
+            }
           }
           
-          // Get only the new logs
-          const newLogsToAdd = newLogs.slice(lastLogCount.current);
-          lastLogCount.current = currentLogCount;
+          if (newLogsToAdd.length > 0) {
+            // Add new logs to existing ones
+            const updatedLogs = [...prev, ...newLogsToAdd];
+            
+            // Keep only the last 200 logs to prevent memory issues
+            return updatedLogs.slice(-200);
+          }
           
-          // Add new logs to existing ones
-          const updatedLogs = [...prev, ...newLogsToAdd];
-          
-          // Keep only the last 100 logs to prevent memory issues
-          return updatedLogs.slice(-100);
+          return prev;
         });
       }
     } catch (error) {
@@ -72,28 +151,21 @@ export const LogsProvider = ({ children }) => {
   }, [username, config.apiUrl]);
 
   const startPolling = useCallback(() => {
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current);
-    }
-    
-    // Initial fetch
+    // Initial fetch to get existing logs
     fetchContainerLogs();
     
-    // Set up polling
-    pollingInterval.current = setInterval(() => {
-      fetchContainerLogs();
-    }, pollingIntervalMs);
+    // Start SSE connection for real-time updates
+    connectSSE();
     
     setLoading(true);
-  }, [fetchContainerLogs]);
+  }, [fetchContainerLogs, connectSSE]);
 
   const stopPolling = useCallback(() => {
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current);
-      pollingInterval.current = null;
-    }
+    // Stop SSE connection
+    disconnectSSE();
+    
     setLoading(false);
-  }, []);
+  }, [disconnectSSE]);
 
   useEffect(() => {
     if (!username) {
@@ -188,7 +260,9 @@ export const LogsProvider = ({ children }) => {
   const clearLogs = async () => {
     setLogs([]);
     recentLogHashes.current.clear();
-    lastLogCount.current = 0;
+    lastLogTimestamp.current = null;
+    setShouldAutoScroll(true);
+    setSeenLogIds(new Set()); // Reset seen log IDs
     
     // Also clear logs on the server side
     try {
@@ -225,6 +299,8 @@ export const LogsProvider = ({ children }) => {
       logs, 
       isOpen, 
       loading,
+      shouldAutoScroll,
+      setShouldAutoScroll,
       addLog, 
       addErrorLog, 
       addSuccessLog, 
