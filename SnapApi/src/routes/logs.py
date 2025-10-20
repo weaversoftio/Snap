@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 import threading
 
 from middleware.verify_token import verify_token
@@ -20,6 +21,22 @@ from utils.centralized_logger import centralized_logger
 
 router = APIRouter()
 logger = logging.getLogger("automation_api")
+
+# Pydantic models for notifications
+class NotificationRequest(BaseModel):
+    """Model for sending notifications to the web UI."""
+    message: str
+    level: str = "info"  # info, success, warning, error, debug
+    initiator: str = "SnapApi"
+    show_in_ui: bool = True
+    title: Optional[str] = None  # Optional notification title
+    category: Optional[str] = None  # Optional category for grouping notifications
+
+class NotificationResponse(BaseModel):
+    """Response model for notification requests."""
+    status: str
+    message: str
+    notification_id: str
 
 # Store recent logs in memory (circular buffer)
 MAX_LOG_ENTRIES = 1000
@@ -121,8 +138,16 @@ async def get_container_logs(username: str = Depends(verify_token)):
 async def stream_logs(username: str = Depends(verify_token)):
     """Stream logs using Server-Sent Events (SSE)."""
     async def event_generator():
-        last_log_count = 0
+        # Send existing logs first when connection is established
+        with log_buffer_lock:
+            existing_logs = recent_logs[-50:]  # Send last 50 existing logs
+            last_log_count = len(recent_logs)
         
+        # Send existing logs
+        for log in existing_logs:
+            yield f"data: {json.dumps(log)}\n\n"
+        
+        # Then stream new logs
         while True:
             with log_buffer_lock:
                 current_log_count = len(recent_logs)
@@ -255,3 +280,76 @@ def add_application_log(level: str, message: str, initiator: str = "SnapApi"):
         "initiator": initiator
     }
     add_log_to_buffer(log_entry)
+
+@router.post("/notify", response_model=NotificationResponse)
+async def send_notification(
+    request: NotificationRequest, 
+    username: str = Depends(verify_token)
+):
+    """
+    Send a notification to the web UI.
+    
+    This endpoint allows sending notifications that will appear in the web UI
+    and be logged to the centralized logging system.
+    
+    Args:
+        request: Notification details including message, level, and metadata
+        username: Authenticated username (from token verification)
+    
+    Returns:
+        NotificationResponse with status and notification ID
+    """
+    try:
+        # Validate level
+        valid_levels = ["info", "success", "warning", "error", "debug"]
+        if request.level not in valid_levels:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid level '{request.level}'. Must be one of: {', '.join(valid_levels)}"
+            )
+        
+        # Generate notification ID
+        notification_id = str(uuid.uuid4())
+        
+        # Create the notification message
+        notification_message = request.message
+        if request.title:
+            notification_message = f"{request.title}: {request.message}"
+        
+        # Add category if provided
+        if request.category:
+            notification_message = f"[{request.category}] {notification_message}"
+        
+        # Send to centralized logging system
+        if request.level == "info":
+            centralized_logger.log_info(notification_message, request.initiator, request.show_in_ui)
+        elif request.level == "success":
+            centralized_logger.log_success(notification_message, request.initiator, request.show_in_ui)
+        elif request.level == "warning":
+            centralized_logger.log_warning(notification_message, request.initiator, request.show_in_ui)
+        elif request.level == "error":
+            centralized_logger.log_error(notification_message, request.initiator, request.show_in_ui)
+        elif request.level == "debug":
+            centralized_logger.log_debug(notification_message, request.initiator, request.show_in_ui)
+        
+        # Log the notification request for audit purposes
+        centralized_logger.log_info(
+            f"Notification sent by user '{username}': {request.message}", 
+            "SnapApi", 
+            show_in_ui=False
+        )
+        
+        return NotificationResponse(
+            status="success",
+            message="Notification sent successfully",
+            notification_id=notification_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        centralized_logger.log_error(f"Failed to send notification: {e}", "SnapApi")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send notification: {str(e)}"
+        )

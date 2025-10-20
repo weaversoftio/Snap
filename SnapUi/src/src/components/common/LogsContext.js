@@ -151,14 +151,12 @@ export const LogsProvider = ({ children }) => {
   }, [username, config.apiUrl]);
 
   const startPolling = useCallback(() => {
-    // Initial fetch to get existing logs
-    fetchContainerLogs();
-    
-    // Start SSE connection for real-time updates
+    // Only use SSE for all log updates (existing + new)
+    // This eliminates duplicates caused by using both polling and SSE
     connectSSE();
     
     setLoading(true);
-  }, [fetchContainerLogs, connectSSE]);
+  }, [connectSSE]);
 
   const stopPolling = useCallback(() => {
     // Stop SSE connection
