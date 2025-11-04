@@ -127,6 +127,18 @@ logging.getLogger("multipart.multipart").setLevel(logging.ERROR)  # Full path to
 logging.getLogger("multipart.multipart.parse").setLevel(logging.ERROR)  # Parser specific logger
 logging.getLogger("uvicorn").setLevel(logging.ERROR)
 
+# Filter out /logs/stream access logs
+class FilterLogsStream(logging.Filter):
+    """Filter to suppress /logs/stream access logs."""
+    def filter(self, record):
+        # Check if the log message contains /logs/stream
+        message = record.getMessage()
+        return "/logs/stream" not in message
+
+# Apply filter to uvicorn.access logger
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.addFilter(FilterLogsStream())
+
 # Setup WebSocket logging handler
 from classes.websocket_log_handler import setup_websocket_logging, log_info, log_error, log_warning, log_success
 from routes.websocket import broadcast_progress

@@ -64,6 +64,9 @@ const remove = async (name) => new Promise(async (resolve, reject) => {
 
 const login = async (cluster_config_name) => new Promise(async (resolve, reject) => {
     try {
+        if (!cluster_config_name) {
+            return reject(new Error("cluster_config_name is required"))
+        }
         const response = await api.post(`/kubectl/login`, { cluster_config_name })
         if (!response.data) return reject()
         resolve(response.data)

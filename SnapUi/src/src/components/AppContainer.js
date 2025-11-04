@@ -190,16 +190,23 @@ export default function AppContainer({ children }) {
   }, [dispatch, navigate]);
 
   const handleConfirmSelectCluster = useCallback(async (name) => {
-    if (!authenticated || !name || !clusterList?.length || clusterAction) {
+    if (!authenticated || !name || !clusterList?.length) {
+      return
+    }
+    // If there's an ongoing cluster action, wait for it to complete
+    if (clusterAction) {
       setClusterAction("")
+      return
+    }
+    const cluster = clusterList.find(item => item.name === name)
+    if (!cluster) {
+      console.error(`Cluster ${name} not found in cluster list`)
       return
     }
     // Only navigate to cluster page if explicitly switching clusters
     if (switchCluster) {
       navigate("/")
     }
-    const cluster = clusterList.find(item => item.name === name)
-
     dispatch(clusterActions.setSelectedCluster(cluster))
     dispatch(clusterActions.login(cluster))
     setCookie("selectedCluster", name)
@@ -220,6 +227,16 @@ export default function AppContainer({ children }) {
   }, [authenticated, user, setUsername, handleGetClusterList])
 
   const handleSelectCluster = (name) => {
+    // If selecting the same cluster that's already selected, do nothing
+    if (selectedCluster?.name === name) {
+      return
+    }
+    // If no cluster is currently selected, auto-login immediately
+    if (!selectedCluster) {
+      handleConfirmSelectCluster(name)
+      return
+    }
+    // Otherwise, show the switch dialog
     setSwitchCluster(name)
   }
 

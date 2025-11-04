@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Ensure yarn is available (install with --force to overwrite if it already exists)
+RUN npm install -g yarn --force
+
 # Set working directory
 WORKDIR /app
 

@@ -18,7 +18,11 @@ const getList = createAsyncThunk(
 const login = createAsyncThunk(
   `cluster/login`,
   async (data, thunkApi) => {
-    return await clusterApi.login(data?.name)
+    const clusterName = data?.name || data
+    if (!clusterName) {
+      return thunkApi.rejectWithValue("Cluster name is required");
+    }
+    return await clusterApi.login(clusterName)
       .then(response => {
         return { cluster: data, ...response };
       })

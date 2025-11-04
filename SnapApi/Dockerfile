@@ -8,6 +8,14 @@ RUN git clone https://github.com/checkpoint-restore/checkpointctl.git && \
 # Final stage: Main application
 FROM registry.access.redhat.com/ubi9/python-39
 
+LABEL name="snap_snapapi" \
+      vendor="WeaverSoft.io" \
+      maintainer="support@weaversoft.io" \
+      summary="Snap API service for container checkpointing" \
+      description="Handles API layer of Snap platform. Red Hat certification compliant."
+
+
+
 USER root
 
 # Install system dependencies
@@ -43,8 +51,25 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY src/. .
 
+
+RUN mkdir -p /licenses 
+
+COPY LICENSE /licenses/
+
 # Copy docs directory for documentation system
 COPY docs /app/docs
+
+# Ensure non-root user exists (for reference, but container runs as root for buildah)
+# UBI images typically have a default user with UID 1001
+RUN if ! id 1001 >/dev/null 2>&1; then \
+        useradd -r -u 1001 -g 0 -m -d /app -s /bin/bash snapapi; \
+    fi && \
+    chown -R root:root /app /licenses && \
+    chmod -R 755 /app /licenses
+
+# Run as root to allow buildah to work without rootless mode restrictions
+# Buildah will run with root privileges, avoiding subuid/subgid requirements
+USER root
 
 # Expose the port
 EXPOSE 8000

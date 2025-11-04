@@ -3,6 +3,7 @@ services:
     build:
       context: ./SnapApi
       dockerfile: Dockerfile
+    image: localhost:5000/snapapi:v1.0.0
     container_name: snapapi-dev
     stop_grace_period: 2s
     privileged: true
@@ -56,6 +57,7 @@ services:
     build:
       context: ./SnapUi
       dockerfile: Dockerfile.dev
+    image: localhost:5000/snapui:v1.0.0
     container_name: snapui-dev
     ports:
       - "0.0.0.0:3000:3000"

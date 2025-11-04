@@ -9,4 +9,4 @@ src/config/**/**/*.css
 src/config/**/**/*.js
 src/config/**/**/*.jsx
 src/config/**/**/*.ts
-
+src/config/snap_init_done

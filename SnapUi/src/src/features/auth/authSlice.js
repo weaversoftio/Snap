@@ -7,7 +7,11 @@ import { userApi } from '../../api/userApi';
 const kubeLogin = createAsyncThunk(
   `kubectl/login`,
   async (data, thunkApi) => {
-    return await kubectlApi.login({cluster_config_name: data?.name})
+    const clusterName = data?.name || data
+    if (!clusterName) {
+      return thunkApi.rejectWithValue("Cluster name is required");
+    }
+    return await kubectlApi.login({cluster_config_name: clusterName})
       .then(response => {
         return { cluster: data, ...response };
       })

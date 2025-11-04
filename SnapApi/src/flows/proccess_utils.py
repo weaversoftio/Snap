@@ -13,6 +13,7 @@ async def run(command, check=True, capture_output=True, text=True):
     try:
         # Explicitly pass environment to ensure oc/kubectl can find kubeconfig
         # This is especially important for oc commands that need authentication
+        print(f"SnapAPI: DEBUG - Creating subprocess for command: {cmd_str}")
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE if capture_output else None,
@@ -20,17 +21,29 @@ async def run(command, check=True, capture_output=True, text=True):
             env=os.environ.copy()  # Explicitly pass environment variables
         )
         
+        print(f"SnapAPI: DEBUG - Subprocess created with PID: {process.pid}")
+        print(f"SnapAPI: DEBUG - Waiting for process to complete...")
+        
         stdout, stderr = await process.communicate()
         
+        print(f"SnapAPI: DEBUG - Process completed with returncode: {process.returncode}")
+        if stdout:
+            print(f"SnapAPI: DEBUG - Process stdout length: {len(stdout)} bytes")
+        if stderr:
+            print(f"SnapAPI: DEBUG - Process stderr length: {len(stderr)} bytes")
+        
         if check and process.returncode != 0:
+            error_msg = stderr.decode() if stderr else ''
+            print(f"SnapAPI: DEBUG - Command failed with returncode {process.returncode}, error: {error_msg[:500]}")
             raise RuntimeError(
-                f"Command '{' '.join(command)}' failed with error: {stderr.decode() if stderr else ''}"
+                f"Command '{' '.join(command)}' failed with error: {error_msg}"
             )
             
         if text and capture_output:
             stdout = stdout.decode() if stdout else ''
             stderr = stderr.decode() if stderr else ''
-            
+        
+        print(f"SnapAPI: DEBUG - Command executed successfully")
         return AsyncProcessResult(
             process.returncode,
             stdout,
@@ -38,7 +51,11 @@ async def run(command, check=True, capture_output=True, text=True):
             cmd_str
         )
         
+    except RuntimeError:
+        # Re-raise RuntimeError as-is (it already has the error message)
+        raise
     except Exception as e:
+        print(f"SnapAPI: DEBUG - Exception during command execution: {type(e).__name__}: {str(e)}")
         raise RuntimeError(f"Command '{' '.join(command)}' failed with error: {str(e)}")
 
 class AsyncProcessResult:

@@ -348,7 +348,10 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
 
 
         # Create scratch container, add checkpoint bits, annotate, commit, push
+        print(f"SnapAPI: DEBUG - Creating scratch container...")
         newcontainer = (await run(["buildah", "from", "scratch"])).stdout.strip()
+        print(f"SnapAPI: DEBUG - Created container: {newcontainer}")
+        
         try:
             # Use the processed filename instead of container name
             processed_filename = checkpoint_filename.replace('-', '_').replace(':', '_').replace('+', '_')
@@ -358,18 +361,42 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             checkpoint_file_in_pod = f"/app/checkpoints/{pod_name}/{processed_filename}"
             print(f"SnapAPI: Looking for checkpoint file at: {checkpoint_file_in_pod}")
             
+            # Check if file exists before trying to add it
+            if not os.path.exists(checkpoint_file_in_pod):
+                raise RuntimeError(f"Checkpoint file does not exist at: {checkpoint_file_in_pod}")
+            file_size = os.path.getsize(checkpoint_file_in_pod)
+            print(f"SnapAPI: DEBUG - Checkpoint file exists, size: {file_size} bytes")
+            
+            print(f"SnapAPI: DEBUG - Adding checkpoint file to container...")
             await run(["buildah", "add", newcontainer, checkpoint_file_in_pod, "/"])
+            print(f"SnapAPI: DEBUG - Checkpoint file added successfully")
+            
+            print(f"SnapAPI: DEBUG - Configuring container annotations...")
             await run([
                 "buildah", "config",
                 f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={container_name}",
                 newcontainer
             ])
-            await run(["buildah", "commit", newcontainer, buildah_image_tag])
+            print(f"SnapAPI: DEBUG - Container configured successfully")
+            
+            print(f"SnapAPI: DEBUG - Committing container to image: {buildah_image_tag}")
+            commit_output = await run(["buildah", "commit", newcontainer, buildah_image_tag])
+            print(f"SnapAPI: DEBUG - Container committed successfully")
+            print(f"SnapAPI: DEBUG - Commit output: {commit_output.stdout[:200] if commit_output.stdout else 'None'}")
+        except RuntimeError as e:
+            print(f"SnapAPI: DEBUG - Build step failed with RuntimeError: {str(e)}")
+            raise
+        except Exception as e:
+            print(f"SnapAPI: DEBUG - Build step failed with unexpected error: {type(e).__name__}: {str(e)}")
+            raise
         finally:
             # Ensure container is removed even if commit fails
+            print(f"SnapAPI: DEBUG - Cleaning up container: {newcontainer}")
             try:
                 await run(["buildah", "rm", newcontainer], capture_output=False, check=False)
-            except Exception:
+                print(f"SnapAPI: DEBUG - Container removed successfully")
+            except Exception as e:
+                print(f"SnapAPI: DEBUG - Warning: Failed to remove container: {str(e)}")
                 pass
 
         await broadcast_progress({
@@ -379,7 +406,22 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         })
 
         # Push
-        await run(["buildah", "push", "--tls-verify=false", buildah_image_tag], capture_output=True, text=True, check=True)
+        print(f"SnapAPI: DEBUG - About to push image: {buildah_image_tag}")
+        print(f"SnapAPI: DEBUG - Full image tag: {full_image_tag}")
+        print(f"SnapAPI: DEBUG - Registry: {cache_registry}")
+        print(f"SnapAPI: DEBUG - Registry host (buildah): {registry_host}")
+        print(f"SnapAPI: DEBUG - Starting buildah push command...")
+        try:
+            push_output = await run(["buildah", "push", "--tls-verify=false", buildah_image_tag], capture_output=True, text=True, check=True)
+            print(f"SnapAPI: DEBUG - Buildah push completed successfully")
+            print(f"SnapAPI: DEBUG - Push stdout: {push_output.stdout[:500] if push_output.stdout else 'None'}")
+            print(f"SnapAPI: DEBUG - Push stderr: {push_output.stderr[:500] if push_output.stderr else 'None'}")
+        except RuntimeError as e:
+            print(f"SnapAPI: DEBUG - Buildah push failed with RuntimeError: {str(e)}")
+            raise
+        except Exception as e:
+            print(f"SnapAPI: DEBUG - Buildah push failed with unexpected error: {type(e).__name__}: {str(e)}")
+            raise
 
         push_result = {"message": "Checkpoint image successfully committed and pushed", "image_tag": full_image_tag}
 
