@@ -283,16 +283,21 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
     Check if image exists using skopeo inspect command.
     This replaces the previous curl-based registry-specific implementations.
     """
+    # Normalize registry_host by removing http:// or https:// prefix before constructing image reference
+    # This prevents double protocol prefix in the final URL
+    # Skopeo uses docker:// transport for all registries, with --tls-verify=false for HTTP
+    normalized_registry_host = registry_host.replace("http://", "").replace("https://", "")
+    
     # Construct image path and tag (convert to lowercase for Docker registry compatibility)
     # This must match the logic in imagetag.py generate_tag() method
     image_path = f"{cluster}-{namespace}-{app}".lower()
     tag = f"{digest}-{pod_hash}".lower()
     
-    # Construct full image reference
+    # Construct full image reference using normalized registry_host (without protocol prefix)
     if repo:
-        full_image_ref = f"{registry_host}/{repo}/{image_path}:{tag}"
+        full_image_ref = f"{normalized_registry_host}/{repo}/{image_path}:{tag}"
     else:
-        full_image_ref = f"{registry_host}/{image_path}:{tag}"
+        full_image_ref = f"{normalized_registry_host}/{image_path}:{tag}"
     
     print(f"Checking image: {full_image_ref}")
     
@@ -319,11 +324,9 @@ async def check_image_exists_multi_registry(registry_host: str, repo: str, clust
         cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false"]
         if creds:
             cmd += ["--creds", creds]
-        # Use http:// instead of docker:// for HTTP registries
-        if registry_host.startswith("http://"):
-            cmd += ["http://" + full_image_ref]
-        else:
-            cmd += ["docker://" + full_image_ref]
+        # Skopeo uses docker:// transport for all Docker registries (HTTP or HTTPS)
+        # The --tls-verify=false flag allows connections to HTTP registries
+        cmd += ["docker://" + full_image_ref]
         
         # Execute skopeo inspect
         result = await run(cmd)

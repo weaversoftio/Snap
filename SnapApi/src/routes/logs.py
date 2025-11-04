@@ -11,7 +11,7 @@ import io
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import threading
@@ -135,8 +135,32 @@ async def get_container_logs(username: str = Depends(verify_token)):
         )
 
 @router.get("/stream")
-async def stream_logs(username: str = Depends(verify_token)):
+async def stream_logs(request: Request):
     """Stream logs using Server-Sent Events (SSE)."""
+    # Try to get token from cookie first (preferred method)
+    token = request.cookies.get("token")
+    
+    # Fallback to query parameter for backward compatibility
+    # (in case frontend hasn't reloaded yet)
+    if not token:
+        token = request.query_params.get("token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication token")
+    
+    # Check if this is a Kubernetes service account token
+    from middleware.verify_token import _is_kubernetes_service_account_token
+    if _is_kubernetes_service_account_token(token):
+        print("[auth] Detected Kubernetes service account token, allowing access")
+        username = "system:serviceaccount"
+    else:
+        # Handle regular JWT tokens for users
+        from flows.config.user.verify_user_config import verify_user_config
+        result = verify_user_config(token)
+        if result.get("success") == False:
+            raise HTTPException(status_code=401, detail="Invalid or Expired token")
+        username = result["user"]["username"]
+    
     async def event_generator():
         # Send existing logs first when connection is established
         with log_buffer_lock:

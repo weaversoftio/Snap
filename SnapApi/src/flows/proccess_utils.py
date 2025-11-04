@@ -1,5 +1,6 @@
 import asyncio
 import shlex
+import os
 
 async def run(command, check=True, capture_output=True, text=True):
     print("--------------------------------")
@@ -10,10 +11,13 @@ async def run(command, check=True, capture_output=True, text=True):
     print("--------------------------------")
     
     try:
+        # Explicitly pass environment to ensure oc/kubectl can find kubeconfig
+        # This is especially important for oc commands that need authentication
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE if capture_output else None,
-            stderr=asyncio.subprocess.PIPE if capture_output else None
+            stderr=asyncio.subprocess.PIPE if capture_output else None,
+            env=os.environ.copy()  # Explicitly pass environment variables
         )
         
         stdout, stderr = await process.communicate()

@@ -1,0 +1,12 @@
+src/checkpoints/
+src/config/**
+src/config/**/**/*.yaml
+src/config/**/**/*.yml
+src/config/**/**/*.txt
+src/config/**/**/*.md
+src/config/**/**/*.html
+src/config/**/**/*.css
+src/config/**/**/*.js
+src/config/**/**/*.jsx
+src/config/**/**/*.ts
+

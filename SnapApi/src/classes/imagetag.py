@@ -44,10 +44,14 @@ class ImageTagParser(BaseModel):
             # Validate components
             components_dict = components.dict()
             
+            # Normalize registry by removing http:// or https:// prefix
+            # Kubernetes/Docker image references should not include protocol prefixes
+            normalized_registry = components.registry.replace("http://", "").replace("https://", "")
+            
             # Build the tag according to the specified format
             # Convert repository portion to lowercase for Docker registry compatibility
             repo_path = f"{components.cluster}-{components.namespace}-{components.app}".lower()
-            image_part = f"{components.registry}/{components.repo}/{repo_path}"
+            image_part = f"{normalized_registry}/{components.repo}/{repo_path}"
             tag_part = f"{components.origImageShortDigest}-{components.PodTemplateHash}"
             
             return f"{image_part}:{tag_part}"

@@ -333,7 +333,14 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
 
         # Normalize cluster casing to avoid CRC vs crc mismatches
         cluster_norm = cluster.lower()
-        image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
+        # Strip protocol prefix from cache_registry for buildah operations
+        # buildah commit/push don't accept URLs with http:// or https://
+        registry_host = cache_registry.replace("http://", "").replace("https://", "")
+        buildah_image_tag = f"{registry_host}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
+        # Keep full URL version for API response
+        full_image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
 
         # Registry login (optional)
         if cache_registry_user and cache_registry_pass:
@@ -357,7 +364,7 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
                 f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={container_name}",
                 newcontainer
             ])
-            await run(["buildah", "commit", newcontainer, image_tag])
+            await run(["buildah", "commit", newcontainer, buildah_image_tag])
         finally:
             # Ensure container is removed even if commit fails
             try:
@@ -372,9 +379,9 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
         })
 
         # Push
-        await run(["buildah", "push", "--tls-verify=false", image_tag], capture_output=True, text=True, check=True)
+        await run(["buildah", "push", "--tls-verify=false", buildah_image_tag], capture_output=True, text=True, check=True)
 
-        push_result = {"message": "Checkpoint image successfully committed and pushed", "image_tag": image_tag}
+        push_result = {"message": "Checkpoint image successfully committed and pushed", "image_tag": full_image_tag}
 
         return {
             "success": True,

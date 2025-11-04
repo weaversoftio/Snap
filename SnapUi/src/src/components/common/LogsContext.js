@@ -26,7 +26,8 @@ export const LogsProvider = ({ children }) => {
     const token = getCookie('token');
     if (!token) return;
     
-    const eventSource = new EventSource(`${config.apiUrl}/logs/stream?token=${token}`);
+    // Remove token from URL - EventSource will send cookies automatically
+    const eventSource = new EventSource(`${config.apiUrl}/logs/stream`);
     eventSourceRef.current = eventSource;
     
     eventSource.onmessage = (event) => {
