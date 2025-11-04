@@ -7,8 +7,9 @@ import DialogComponent from "../common/Dialog";
 import { useSnackbar } from "notistack";
 import { clusterApi } from "../../api/clusterApi";
 import { clusterCacheApi } from "../../api/clusterCacheApi";
+import { rbacApi } from "../../api/rbacApi";
 import { useNavigate } from "react-router-dom";
-import { Delete, SystemUpdateAlt as InstallIcon, SafetyCheck as VerifyIcon, Add as AddIcon, Cloud as CloudIcon, Storage as StorageIcon, Security as SecurityIcon, CloudUpload, Edit } from "@mui/icons-material";
+import { Delete, SystemUpdateAlt as InstallIcon, SafetyCheck as VerifyIcon, Add as AddIcon, Cloud as CloudIcon, Storage as StorageIcon, Security as SecurityIcon, CloudUpload, Edit, ContentCopy, Close } from "@mui/icons-material";
 import { removeCookie } from "../../utils/cookies";
 import PolylineIcon from '@mui/icons-material/Polyline';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
@@ -47,6 +48,12 @@ const ClusterScreen = () => {
   const [stats, setStats] = useState({ total_pods: 0, total_checkpoints: 0 });
   const [playbookConfigs, setPlaybookConfigs] = useState([])
   const [availableRegistries, setAvailableRegistries] = useState([])
+  
+  // New form state variables
+  const [selectedRegistry, setSelectedRegistry] = useState("");
+  const [registryRepo, setRegistryRepo] = useState("snap_images");
+  const [rbacCommand, setRbacCommand] = useState("");
+  const [rbacCommandLoading, setRbacCommandLoading] = useState(false);
   
   // Cluster cache management state
   const [clusterCacheDialogOpen, setClusterCacheDialogOpen] = useState(false)
@@ -89,6 +96,21 @@ const ClusterScreen = () => {
     fetchRegistries();
   }, []);
 
+  // Auto-close form when leaving the page
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (dialogType === "clusterForm") {
+        handleClearDialog();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [dialogType]);
+
   const handleSubmitCluster = async () => {
     // Clear previous errors
     setClusterFormErrors({})
@@ -107,7 +129,9 @@ const ClusterScreen = () => {
     const clusterData = {
       name: clusterName,
       kube_api_url: clusterUrl,
-      token: clusterToken
+      token: clusterToken,
+      registry: selectedRegistry || null,
+      repo: registryRepo
     }
     
     try {
@@ -222,6 +246,109 @@ const ClusterScreen = () => {
     setSshkey(null)
     setClusterFormErrors(null)
     setClusterEditing(false)
+    setSelectedRegistry("")
+    setRegistryRepo("snap_images")
+    setRbacCommand("")
+  }
+
+  const handleCopyRBACCommand = async () => {
+    try {
+      setRbacCommandLoading(true);
+      
+      // Fetch the RBAC command from SnapAPI
+      const response = await rbacApi.getRbacCommand();
+      
+      if (!response.success || !response.command) {
+        throw new Error('Failed to get RBAC command from server');
+      }
+
+      const command = response.command;
+      setRbacCommand(command);
+      
+      // Check if modern clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(command);
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+        } catch (clipboardErr) {
+          console.warn("Modern clipboard API failed:", clipboardErr);
+          enqueueSnackbar("Command loaded. Use the copy button to copy to clipboard.", { variant: "info" });
+        }
+      } else {
+        enqueueSnackbar("Command loaded. Use the copy button to copy to clipboard.", { variant: "info" });
+      }
+      
+    } catch (err) {
+      console.error("Error fetching RBAC command:", err);
+      enqueueSnackbar("Failed to fetch RBAC command. Please try again.", { variant: "error" });
+    } finally {
+      setRbacCommandLoading(false);
+    }
+  }
+
+  const handleCopyToClipboard = async (event) => {
+    if (!rbacCommand) return;
+    
+    try {
+      // Method 1: Try modern Clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(rbacCommand);
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+          return;
+        } catch (clipboardErr) {
+          console.warn("Clipboard API failed:", clipboardErr);
+          // Fall through to fallback method
+        }
+      }
+
+      // Method 2: Fallback using execCommand
+      const textArea = document.createElement("textarea");
+      textArea.value = rbacCommand;
+      
+      // Make the textarea visible but off-screen for better compatibility
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      textArea.style.width = "2em";
+      textArea.style.height = "2em";
+      textArea.style.padding = "0";
+      textArea.style.border = "none";
+      textArea.style.outline = "none";
+      textArea.style.boxShadow = "none";
+      textArea.style.background = "transparent";
+      textArea.style.opacity = "0";
+      textArea.style.zIndex = "-1";
+      
+      // Add to DOM
+      document.body.appendChild(textArea);
+      
+      try {
+        // Focus and select the text
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, rbacCommand.length);
+        
+        // Wait a moment for selection to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Try to copy using execCommand
+        const successful = document.execCommand('copy');
+        
+        if (successful) {
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+        } else {
+          throw new Error('execCommand copy failed');
+        }
+      } finally {
+        // Clean up
+        document.body.removeChild(textArea);
+      }
+      
+    } catch (err) {
+      console.error("Copy failed:", err);
+      enqueueSnackbar("Failed to copy to clipboard. Please manually select and copy the command.", { variant: "error" });
+    }
   }
 
   const handleShowClusterCacheConfig = async () => {
@@ -326,16 +453,28 @@ const ClusterScreen = () => {
     return (
       <DialogComponent
         open
-        onClose={handleClearDialog}
+        onClose={() => {}} // Disable click-outside-to-close
+        disableEscapeKeyDown={true} // Disable ESC key to close
         paperProps={{
           maxWidth: 500,
           sx: { borderRadius: 2 }
         }}
       >
-        <Box sx={{ p: 1 }}>
+        <Box sx={{ p: 1, position: 'relative' }}>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-            Cluster Configuration
+            Add Cluster
           </Typography>
+          <IconButton
+            onClick={handleClearDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: 'text.secondary'
+            }}
+          >
+            <Close />
+          </IconButton>
         </Box>
         <Box gap={2} display={"flex"} flexDirection={"column"}>
           <TextField
@@ -354,7 +493,88 @@ const ClusterScreen = () => {
             error={!!clusterFormErrors?.url}
           />
 
+          {/* RBAC Setup Command - moved before Token */}
+          <Button 
+            variant="outlined" 
+            style={{ textTransform: "capitalize", marginBottom: "8px" }} 
+            startIcon={<ContentCopy />}
+            onClick={handleCopyRBACCommand}
+            disabled={rbacCommandLoading}
+          >
+            {rbacCommandLoading ? "Loading..." : "Get RBAC Setup Command"}
+          </Button>
+          
+          {rbacCommand && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                RBAC Setup Command:
+              </Typography>
+              <TextField
+                multiline
+                rows={6}
+                value={rbacCommand}
+                variant="outlined"
+                fullWidth
+                InputProps={{
+                  readOnly: true,
+                  style: { 
+                    fontFamily: 'monospace', 
+                    fontSize: '12px',
+                    backgroundColor: '#f5f5f5',
+                    cursor: 'text',
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text'
+                  }
+                }}
+                sx={{ 
+                  mb: 1,
+                  '& .MuiInputBase-input': {
+                    cursor: 'text',
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text'
+                  }
+                }}
+                onClick={(e) => {
+                  // Select all text when clicked
+                  e.target.select();
+                }}
+              />
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button 
+                  variant="contained" 
+                  size="small"
+                  startIcon={<ContentCopy />}
+                  onClick={(event) => handleCopyToClipboard(event)}
+                  sx={{ textTransform: "capitalize" }}
+                >
+                  Copy to Clipboard
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  onClick={() => {
+                    const textArea = document.querySelector('textarea[readonly]');
+                    if (textArea) {
+                      textArea.focus();
+                      textArea.select();
+                      enqueueSnackbar("Text selected. Press Ctrl+C (Cmd+C on Mac) to copy.", { variant: "info" });
+                    }
+                  }}
+                  sx={{ textTransform: "capitalize" }}
+                >
+                  Select All
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* Token input - moved after RBAC command */}
           {renderAuthenticationDetails()}
+          
           <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
             Upload SSH Key
             <input
@@ -365,6 +585,32 @@ const ClusterScreen = () => {
             />
           </Button>
           {sshKey && <Typography variant="body2">{sshKey.name}</Typography>}
+          
+          {/* Registry Selection */}
+          <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+            <InputLabel>Registry (Optional)</InputLabel>
+            <Select
+              value={selectedRegistry}
+              onChange={(e) => setSelectedRegistry(e.target.value)}
+              label="Registry (Optional)"
+            >
+              <MenuItem value="">None (No cluster cache will be created)</MenuItem>
+              {availableRegistries.map((registry) => (
+                <MenuItem key={registry.name} value={registry.name}>
+                  {registry.name} ({registry.registry_config_details.registry})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {selectedRegistry && (
+            <TextField
+              label="Repository Name"
+              onChange={(e) => setRegistryRepo(e.target.value)}
+              value={registryRepo}
+              helperText="Repository name for storing checkpoint images"
+            />
+          )}
           
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleSubmitCluster}>Submit</Button>
         </Box>

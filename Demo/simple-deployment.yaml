@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: snap-test3
+  name: demo-deployment-test
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "snap-test3"
+      app: "demo-deployment-test"
   template:
     metadata:
       labels:
-        app: "snap-test3"
+        app: "demo-deployment-test"
         snap.weaversoft.io/snap: "true"
     spec:
       containers:
@@ -19,6 +19,6 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            while true; do date; sleep 60; done
+            while true; do date; sleep 10; done
         imagePullSecrets:
         - name: nexus-registry-secret 

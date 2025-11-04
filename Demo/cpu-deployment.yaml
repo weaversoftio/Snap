@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cpu-stress-test
+  name: hotstart-demo-application
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "cpu-stress-test"
+      app: "hotstart-demo-application"
   template:
     metadata:
       labels:
-        app: "cpu-stress-test"
+        app: "hotstart-demo-application"
         snap.weaversoft.io/snap: "true"
     spec:
       containers:
-      - name: cpu-stress
+      - name: hotstart-demo-application
         image: busybox:stable
         command: ["/bin/sh", "-c"]
         args:
           - |
-            echo "Starting CPU stress    XXXXX tester..."
+            echo "Starting hotstart demo application..."
             3
             # Run CPU stress for 10 seconds with monitoring
             echo "Running CPU stress for 10 seconds..."

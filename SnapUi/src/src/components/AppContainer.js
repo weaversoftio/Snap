@@ -21,7 +21,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { getCookie, setCookie } from '../utils/cookies';
 import { authActions } from '../features/auth/authSlice';
-import { Button, FormControl, MenuItem, Select, TextField, InputLabel } from '@mui/material';
+import { Button, FormControl, MenuItem, Select, TextField, InputLabel, IconButton } from '@mui/material';
 import DialogComponent from './common/Dialog';
 import { useSnackbar } from 'notistack';
 import Stack from '@mui/material/Stack';
@@ -31,7 +31,7 @@ import { rbacApi } from '../api/rbacApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
-import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy, Close } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
 import HelpDialog from './common/HelpDialog';
@@ -137,6 +137,8 @@ export default function AppContainer({ children }) {
   const [registryRepo, setRegistryRepo] = useState("snap_images");
   const [availableRegistries, setAvailableRegistries] = useState([]);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [rbacCommand, setRbacCommand] = useState("");
+  const [rbacCommandLoading, setRbacCommandLoading] = useState(false);
 
   const [clusterOpen, setClusterOpen] = useState(false);
   const { list: clusterList = [], selectedCluster = "", kubeAuthenticated = false } = useSelector(state => state.cluster)
@@ -159,6 +161,21 @@ export default function AppContainer({ children }) {
 
     fetchRegistries();
   }, []);
+
+  // Auto-close form when leaving the page
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (clusterOpen) {
+        handleClearClusterForm();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [clusterOpen]);
   const token = getCookie("token")
 
   const handleGetClusterList = useCallback(async () => {
@@ -264,10 +281,13 @@ export default function AppContainer({ children }) {
     setSshkey(null)
     setSelectedRegistry("")
     setRegistryRepo("snap_images")
+    setRbacCommand("")
   }
 
   const handleCopyRBACCommand = async () => {
     try {
+      setRbacCommandLoading(true);
+      
       // Fetch the RBAC command from SnapAPI
       const response = await rbacApi.getRbacCommand();
       
@@ -275,8 +295,34 @@ export default function AppContainer({ children }) {
         throw new Error('Failed to get RBAC command from server');
       }
 
-      const rbacCommand = response.command;
+      const command = response.command;
+      setRbacCommand(command);
+      
+      // Check if modern clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(command);
+          enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
+        } catch (clipboardErr) {
+          console.warn("Modern clipboard API failed:", clipboardErr);
+          enqueueSnackbar("Command loaded. Use the copy button to copy to clipboard.", { variant: "info" });
+        }
+      } else {
+        enqueueSnackbar("Command loaded. Use the copy button to copy to clipboard.", { variant: "info" });
+      }
+      
+    } catch (err) {
+      console.error("Error fetching RBAC command:", err);
+      enqueueSnackbar("Failed to fetch RBAC command. Please try again.", { variant: "error" });
+    } finally {
+      setRbacCommandLoading(false);
+    }
+  }
 
+  const handleCopyToClipboard = async (event) => {
+    if (!rbacCommand) return;
+    
+    try {
       // Check if modern clipboard API is available
       if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
@@ -284,11 +330,11 @@ export default function AppContainer({ children }) {
           enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
           return;
         } catch (clipboardErr) {
-          console.warn("Modern clipboard API failed, trying fallback:", clipboardErr);
+          console.warn("Clipboard API failed:", clipboardErr);
         }
       }
 
-      // Fallback for older browsers or if clipboard API fails
+      // Fallback for older browsers
       const textArea = document.createElement("textarea");
       textArea.value = rbacCommand;
       textArea.style.position = "fixed";
@@ -300,161 +346,28 @@ export default function AppContainer({ children }) {
       document.body.appendChild(textArea);
       
       try {
-        // Try to focus and select the text
         textArea.focus();
         textArea.select();
-        textArea.setSelectionRange(0, 99999); // For mobile devices
+        textArea.setSelectionRange(0, 99999);
         
-        // Try the copy command
         const successful = document.execCommand('copy');
-        
         if (successful) {
           enqueueSnackbar("RBAC setup command copied to clipboard!", { variant: "success" });
         } else {
-          // If execCommand fails, show the command in a modal for manual copy
-          enqueueSnackbar("Auto-copy failed. Command will be displayed for manual copy.", { variant: "warning" });
-          
-          // Create a modal to show the command for manual copying
-          const modal = document.createElement("div");
-          modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            box-sizing: border-box;
-          `;
-          
-          const content = document.createElement("div");
-          content.style.cssText = `
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 90%;
-            max-height: 90%;
-            overflow: auto;
-            position: relative;
-          `;
-          
-          const closeBtn = document.createElement("button");
-          closeBtn.textContent = "Close";
-          closeBtn.style.cssText = `
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-          `;
-          closeBtn.onclick = () => {
-            document.body.removeChild(modal);
-          };
-          
-          const commandText = document.createElement("textarea");
-          commandText.value = rbacCommand;
-          commandText.style.cssText = `
-            width: 100%;
-            height: 300px;
-            font-family: monospace;
-            font-size: 12px;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px 0;
-            resize: vertical;
-            user-select: all;
-            -webkit-user-select: all;
-            -moz-user-select: all;
-            -ms-user-select: all;
-          `;
-          
-          const instructions = document.createElement("p");
-          instructions.textContent = "Please manually copy the command above:";
-          instructions.style.cssText = "margin: 10px 0; font-weight: bold;";
-          
-          const copyButton = document.createElement("button");
-          copyButton.textContent = "Copy Command";
-          copyButton.style.cssText = `
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 5px;
-            font-size: 14px;
-          `;
-          copyButton.onclick = () => {
-            commandText.focus();
-            commandText.select();
-            try {
-              const successful = document.execCommand('copy');
-              if (successful) {
-                enqueueSnackbar("Command copied to clipboard!", { variant: "success" });
-              } else {
-                enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
-              }
-            } catch (err) {
-              enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
-            }
-          };
-          
-          const selectAllButton = document.createElement("button");
-          selectAllButton.textContent = "Select All";
-          selectAllButton.style.cssText = `
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 5px;
-            font-size: 14px;
-          `;
-          selectAllButton.onclick = () => {
-            commandText.focus();
-            commandText.select();
-          };
-          
-          const buttonContainer = document.createElement("div");
-          buttonContainer.style.cssText = "text-align: center; margin: 10px 0;";
-          buttonContainer.appendChild(selectAllButton);
-          buttonContainer.appendChild(copyButton);
-          
-          content.appendChild(closeBtn);
-          content.appendChild(instructions);
-          content.appendChild(commandText);
-          content.appendChild(buttonContainer);
-          modal.appendChild(content);
-          document.body.appendChild(modal);
-          
-          // Focus the textarea for easy selection
-          setTimeout(() => {
-            commandText.focus();
-            commandText.select();
-          }, 100);
+          enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
         }
       } catch (execErr) {
         console.error("execCommand failed:", execErr);
-        enqueueSnackbar("Copy failed. Please try again or check browser permissions.", { variant: "error" });
+        enqueueSnackbar("Please manually select and copy the text (Ctrl+C)", { variant: "info" });
       } finally {
-        // Always clean up the textarea
         if (textArea && textArea.parentNode) {
           textArea.parentNode.removeChild(textArea);
         }
       }
       
     } catch (err) {
-      console.error("Error copying RBAC command:", err);
-      enqueueSnackbar("Failed to copy command. Please try again.", { variant: "error" });
+      console.error("Error copying to clipboard:", err);
+      enqueueSnackbar("Copy failed. Please try again or check browser permissions.", { variant: "error" });
     }
   }
 
@@ -491,11 +404,27 @@ export default function AppContainer({ children }) {
 
   const renderClusterForm = () => {
     return (
-      <DialogComponent open={clusterOpen} onClose={handleClearClusterForm} paperProps={{ maxWidth: 500 }}>
-        <Box sx={{ p: 1 }}>
+      <DialogComponent 
+        open={clusterOpen} 
+        onClose={() => {}} // Disable click-outside-to-close
+        disableEscapeKeyDown={true} // Disable ESC key to close
+        paperProps={{ maxWidth: 500 }}
+      >
+        <Box sx={{ p: 1, position: 'relative' }}>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
           Add Cluster
           </Typography>
+          <IconButton
+            onClick={handleClearClusterForm}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              color: 'text.secondary'
+            }}
+          >
+            <Close />
+          </IconButton>
         </Box>
         <Box gap={2} display={"flex"} flexDirection={"column"}>
           <TextField
@@ -513,7 +442,88 @@ export default function AppContainer({ children }) {
             error={!!clusterFormErrors?.url}
           />
 
+          {/* RBAC Setup Command - moved before Token */}
+          <Button 
+            variant="outlined" 
+            style={{ textTransform: "capitalize", marginBottom: "8px" }} 
+            startIcon={<ContentCopy />}
+            onClick={handleCopyRBACCommand}
+            disabled={rbacCommandLoading}
+          >
+            {rbacCommandLoading ? "Loading..." : "Get RBAC Setup Command"}
+          </Button>
+          
+          {rbacCommand && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium' }}>
+                RBAC Setup Command:
+              </Typography>
+              <TextField
+                multiline
+                rows={6}
+                value={rbacCommand}
+                variant="outlined"
+                fullWidth
+                InputProps={{
+                  readOnly: true,
+                  style: { 
+                    fontFamily: 'monospace', 
+                    fontSize: '12px',
+                    backgroundColor: '#f5f5f5',
+                    cursor: 'text',
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text'
+                  }
+                }}
+                sx={{ 
+                  mb: 1,
+                  '& .MuiInputBase-input': {
+                    cursor: 'text',
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text'
+                  }
+                }}
+                onClick={(e) => {
+                  // Select all text when clicked
+                  e.target.select();
+                }}
+              />
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button 
+                  variant="contained" 
+                  size="small"
+                  startIcon={<ContentCopy />}
+                  onClick={(event) => handleCopyToClipboard(event)}
+                  sx={{ textTransform: "capitalize" }}
+                >
+                  Copy to Clipboard
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  onClick={() => {
+                    const textArea = document.querySelector('textarea[readonly]');
+                    if (textArea) {
+                      textArea.focus();
+                      textArea.select();
+                      enqueueSnackbar("Text selected. Press Ctrl+C (Cmd+C on Mac) to copy.", { variant: "info" });
+                    }
+                  }}
+                  sx={{ textTransform: "capitalize" }}
+                >
+                  Select All
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* Token input - moved after RBAC command */}
           {renderAuthenticationDetails()}
+          
           <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
             Upload SSH Key
             <input
@@ -550,15 +560,6 @@ export default function AppContainer({ children }) {
               helperText="Repository name for storing checkpoint images"
             />
           )}
-          
-          <Button 
-            variant="outlined" 
-            style={{ textTransform: "capitalize", marginBottom: "8px" }} 
-            startIcon={<ContentCopy />}
-            onClick={handleCopyRBACCommand}
-          >
-            Copy RBAC Setup Command
-          </Button>
           
           <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleAddCluster}>Submit</Button>
         </Box>

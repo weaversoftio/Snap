@@ -62,6 +62,17 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
         if not checkpoint_config:
             await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": f"Checkpoint config {checkpoint_config_name} not found"})
             return {"success": False, "message": "Checkpoint config not found"}
+        
+        # Verify registry connectivity
+        await send_progress(loggeduser, {"progress": 15,"task_name": "Create and Push Checkpoint Container", "message": f"Verifying registry connectivity"})
+        try:
+            # Test registry connectivity
+            registry_test_result = await run(["curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}", f"{cache_registry}/v2/"], capture_output=True, text=True, check=False)
+            print(f"SnapAPI: Registry connectivity test result: {registry_test_result.stdout}")
+            if registry_test_result.stdout.strip() not in ["200", "401"]:  # 401 is OK for unauthenticated access
+                print(f"SnapAPI: Warning - Registry may not be accessible: HTTP {registry_test_result.stdout}")
+        except Exception as e:
+            print(f"SnapAPI: Warning - Could not test registry connectivity: {str(e)}")
 
         # Create new container from scratch
         await send_progress(loggeduser, {"progress": 25,"task_name": "Create and Push Checkpoint Container", "message": f"Creating new container from scratch"})
@@ -81,8 +92,15 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
             newcontainer
         ])
 
-        # Generate image tag using new format: {cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}
-        image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        # Generate local image tag for buildah commit (without registry URL)
+        local_image_tag = f"{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
+        # Generate registry image tag for buildah operations (without http:// prefix)
+        registry_host = cache_registry.replace("http://", "").replace("https://", "")
+        buildah_registry_tag = f"{registry_host}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
+        
+        # Generate full registry image tag for API response
+        full_registry_image_tag = f"{cache_registry}/{cache_repo}/{cluster_norm}-{namespace}-{app}:{orig_image_short_digest}-{pod_template_hash}"
         
         print(f"*************\n")
         print(f"SnapAPI: Using new image tag format:")
@@ -93,23 +111,62 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
         print(f"  app: {app}")
         print(f"  orig_image_short_digest: {orig_image_short_digest}")
         print(f"  pod_template_hash: {pod_template_hash}")
-        print(f"  Final image_tag: {image_tag}")
+        print(f"  Local image_tag: {local_image_tag}")
+        print(f"  Buildah registry_tag: {buildah_registry_tag}")
+        print(f"  Full registry image_tag: {full_registry_image_tag}")
         print(f"\n*************\n")
 
 
+        # Check container status and disk space before commit
+        await send_progress(loggeduser, {"progress": 60,"task_name": "Create and Push Checkpoint Container", "message": f"Checking container status and disk space"})
+        try:
+            # Check if container exists and is valid
+            containers_result = await run(["buildah", "containers"], capture_output=True, text=True, check=False)
+            print(f"SnapAPI: Available containers: {containers_result.stdout}")
+            
+            # Check disk space
+            disk_result = await run(["df", "-h", "/"], capture_output=True, text=True, check=False)
+            print(f"SnapAPI: Disk space: {disk_result.stdout}")
+            
+            # Check buildah images
+            images_result = await run(["buildah", "images"], capture_output=True, text=True, check=False)
+            print(f"SnapAPI: Available images: {images_result.stdout}")
+            
+        except Exception as e:
+            print(f"SnapAPI: Warning - Could not check system status: {str(e)}")
+
         await send_progress(loggeduser, {"progress": 62.5,"task_name": "Create and Push Checkpoint Container", "message": f"Committing the container image"})
-        await run(["buildah", "commit", newcontainer, image_tag])
+        try:
+            commit_result = await run(["buildah", "commit", newcontainer, local_image_tag], capture_output=True, text=True, check=True)
+            print(f"SnapAPI: Buildah commit successful: {commit_result.stdout}")
+        except RuntimeError as e:
+            print(f"SnapAPI: Buildah commit failed: {str(e)}")
+            raise
 
         # Clean up the temporary container
         await send_progress(loggeduser, {"progress": 75,"task_name": "Create and Push Checkpoint Container", "message": f"Cleaning up the temporary container"})
         await run(["buildah", "rm", newcontainer], capture_output=False)
 
+        # Tag the local image with the registry tag
+        await send_progress(loggeduser, {"progress": 80,"task_name": "Create and Push Checkpoint Container", "message": f"Tagging image for registry"})
+        try:
+            tag_result = await run(["buildah", "tag", local_image_tag, buildah_registry_tag], capture_output=True, text=True, check=True)
+            print(f"SnapAPI: Buildah tag successful: {tag_result.stdout}")
+        except RuntimeError as e:
+            print(f"SnapAPI: Buildah tag failed: {str(e)}")
+            raise
+
         # Push the image to the registry
         await send_progress(loggeduser, {"progress": 87.5,"task_name": "Create and Push Checkpoint Container", "message": f"Pushing the image to the registry"})
-        await run(["buildah", "push", "--tls-verify=false", image_tag], capture_output=True, text=True, check=True)
+        try:
+            push_result = await run(["buildah", "push", "--tls-verify=false", buildah_registry_tag], capture_output=True, text=True, check=True)
+            print(f"SnapAPI: Buildah push successful: {push_result.stdout}")
+        except RuntimeError as e:
+            print(f"SnapAPI: Buildah push failed: {str(e)}")
+            raise
 
         await send_progress(loggeduser, {"progress": 100,"task_name": "Create and Push Checkpoint Container", "message": f"Checkpoint image successfully committed and pushed"})
-        return {"message": "Checkpoint image successfully committed and pushed", "image_tag": image_tag}
+        return {"message": "Checkpoint image successfully committed and pushed", "image_tag": full_registry_image_tag}
 
     except RuntimeError as e:
         await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": f"Failed with error {str(e)}"})
