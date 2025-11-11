@@ -32,10 +32,10 @@ services:
       - FLASK_DEBUG=1
       - PYTHONPATH=/app
     volumes:
-      # Mount src folder for hot reload
+      # Mount source code for live reload (development mode)
       - ./SnapApi/src:/app:Z
-      # Mount docs folder for documentation
-      - ./docs:/app/docs:Z
+      # Mount config folder for persistence
+      - snapapi-config:/app/config
       # Mount checkpoint storage
       - snapapi-checkpoints:/app/checkpoints
     networks:
@@ -60,41 +60,54 @@ services:
     image: localhost:5000/snapui:v1.0.0
     container_name: snapui-dev
     ports:
-      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:8080:8080"
     environment:
       # API configuration
+      - API_URL=${API_URL:-http://192.168.33.209:8000}
+      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
+      # React environment variables
       - REACT_APP_API_URL=${API_URL:-http://192.168.33.209:8000}
       - REACT_APP_WS_URL=${WS_URL:-ws://192.168.33.209:8000}
-      
-      # React app configuration
-      - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}
-      - REACT_APP_PASSWORD=${REACT_APP_PASSWORD:-admin}
-      
-      # Development settings
+      # Development settings for live reload
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
+      - PORT=8080
       - HOST=0.0.0.0
     volumes:
-      # Mount src folder for hot reload
-      - ./SnapUi/src:/app:Z
-      # Mount node_modules to avoid conflicts
+      # Mount source code for live reload (development mode)
+      - ./SnapUi/src/src:/app/src:Z
+      - ./SnapUi/src/public:/app/public:Z
+      # Mount node_modules to avoid conflicts (preserves installed dependencies)
       - /app/node_modules
     networks:
       - snap-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     command: >
       sh -c "
-        # Start React dev server bound to all interfaces
-        HOST=0.0.0.0 yarn start
+        export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$$PATH
+        cd /app
+        # Replace placeholders in index.html for development
+        sed -i \"s|%REACT_APP_API_URL%|$${API_URL:-http://192.168.33.209:8000}|g\" /app/public/index.html
+        sed -i \"s|%REACT_APP_WS_URL%|$${WS_URL:-ws://192.168.33.209:8000}|g\" /app/public/index.html
+        # Start the dev server
+        if [ -f /usr/local/bin/yarn ]; then
+          PORT=8080 HOST=0.0.0.0 /usr/local/bin/yarn start
+        elif [ -f /usr/bin/yarn ]; then
+          PORT=8080 HOST=0.0.0.0 /usr/bin/yarn start
+        else
+          PORT=8080 HOST=0.0.0.0 /usr/local/bin/npm start
+        fi
       "
 
 volumes:
+  snapapi-config:
+    driver: local
   snapapi-checkpoints:
     driver: local
 

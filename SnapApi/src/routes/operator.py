@@ -105,7 +105,7 @@ async def get_all_watchers_status():
         
         for watcher_name, watcher_instance in watcher_instances.items():
             watcher_statuses[watcher_name] = {
-                "running": watcher_instance.is_running,
+                "running": watcher_instance.is_actually_running(),
                 "cluster_name": watcher_instance.cluster_name,
                 "scope": watcher_instance.scope,
                 "namespace": watcher_instance.namespace,
@@ -249,7 +249,8 @@ async def get_snapwatchers(cluster_name: str):
             actual_status = "stopped"
             if config.name in watcher_instances:
                 watcher_instance = watcher_instances[config.name]
-                if watcher_instance.is_running:
+                # Use is_actually_running() which checks both flag and thread status
+                if watcher_instance.is_actually_running():
                     actual_status = "running"
                 else:
                     actual_status = "stopped"
@@ -431,11 +432,18 @@ async def start_snapwatcher(watcher_name: str):
                 detail=f"SnapWatcher '{watcher_name}' not found"
             )
         
-        if config.status == "running":
-            raise HTTPException(
-                status_code=400,
-                detail=f"SnapWatcher '{watcher_name}' is already running"
-            )
+        # Check if actually running (not just the flag)
+        if watcher_name in watcher_instances:
+            watcher_instance = watcher_instances[watcher_name]
+            if watcher_instance.is_actually_running():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"SnapWatcher '{watcher_name}' is already running"
+                )
+        elif config.status == "running":
+            # Status says running but no instance - update status
+            update_watcher_status(watcher_name, "stopped")
+            config.status = "stopped"
         
         # Create watcher instance if it doesn't exist
         if watcher_name not in watcher_instances:
@@ -491,15 +499,18 @@ async def stop_snapwatcher(watcher_name: str):
                 detail=f"SnapWatcher '{watcher_name}' not found"
             )
         
-        if config.status != "running":
-            raise HTTPException(
-                status_code=400,
-                detail=f"SnapWatcher '{watcher_name}' is not running"
-            )
-        
-        # Stop the watcher instance
+        # Check if actually running (not just the flag)
         if watcher_name in watcher_instances:
             watcher_instance = watcher_instances[watcher_name]
+            if not watcher_instance.is_actually_running():
+                # Not actually running, update status and return
+                update_watcher_status(watcher_name, "stopped")
+                updated_config = load_watcher_config(watcher_name)
+                config_dict = updated_config.to_dict()
+                config_dict['cluster_config'] = updated_config.cluster_config
+                return SnapWatcherResponse(**config_dict)
+            
+            # Actually running, stop it
             success = watcher_instance.stop()
             if not success:
                 raise HTTPException(
@@ -509,7 +520,14 @@ async def stop_snapwatcher(watcher_name: str):
             # Remove from instances
             del watcher_instances[watcher_name]
         else:
-            log_warning(logger, 'SnapApi', 'SnapWatcher Management', f'Watcher instance not found for {watcher_name}')
+            # No instance but status says running - update status
+            if config.status == "running":
+                log_warning(logger, 'SnapApi', 'SnapWatcher Management', f'Watcher instance not found for {watcher_name}, updating status to stopped')
+                update_watcher_status(watcher_name, "stopped")
+                updated_config = load_watcher_config(watcher_name)
+                config_dict = updated_config.to_dict()
+                config_dict['cluster_config'] = updated_config.cluster_config
+                return SnapWatcherResponse(**config_dict)
         
         # Update watcher status
         update_watcher_status(watcher_name, "stopped")
@@ -554,7 +572,8 @@ async def get_snapwatcher_status(watcher_name: str):
         actual_status = "stopped"
         if watcher_name in watcher_instances:
             watcher_instance = watcher_instances[watcher_name]
-            if watcher_instance.is_running:
+            # Use is_actually_running() which checks both flag and thread status
+            if watcher_instance.is_actually_running():
                 actual_status = "running"
             else:
                 actual_status = "stopped"

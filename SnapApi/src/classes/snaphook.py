@@ -808,46 +808,67 @@ subjectAltName = @alt_names
                 # Step 4: Deploy webhook configuration to Kubernetes
                 admission_v1 = client.AdmissionregistrationV1Api(self.kube_client)
                 
-                # First, try to delete any existing webhook configuration with the same name
+                # Check if webhook already exists in cluster
+                webhook_exists = False
                 try:
-                    admission_v1.delete_mutating_webhook_configuration(name=webhook_name)
-                    log_info(f'Deleted existing webhook configuration \'{webhook_name}\'', 'SnapHook')
-                    # Wait a moment for the deletion to complete
-                    import time
-                    time.sleep(1)
+                    existing_config = admission_v1.read_mutating_webhook_configuration(name=webhook_name)
+                    webhook_exists = True
+                    log_info(f'Webhook configuration \'{webhook_name}\' already exists in cluster, updating...', 'SnapHook')
                 except ApiException as e:
-                    if e.status != 404:
-                        log_warning(f'Error deleting existing webhook: {e}', 'SnapHook')
-                    # Continue with creation even if deletion fails
+                    if e.status == 404:
+                        # Webhook doesn't exist, will create new one
+                        webhook_exists = False
+                        log_info(f'Webhook configuration \'{webhook_name}\' does not exist, creating new...', 'SnapHook')
+                    else:
+                        log_error(f'Error checking for existing webhook: {e}', 'SnapHook')
+                        raise
                 
-                # Now create the new webhook configuration
-                try:
-                    log_info(f'Creating webhook configuration \'{webhook_name}\'...', 'SnapHook')
-                    admission_v1.create_mutating_webhook_configuration(body=webhook_config)
-                    log_success(f'Webhook configuration created successfully', 'SnapHook')
-                except ApiException as e:
-                    if e.status == 409:  # Conflict - webhook already exists
-                        log_info(f'Webhook already exists, updating...', 'SnapHook')
-                        # Get existing config and update it
-                        existing_config = admission_v1.read_mutating_webhook_configuration(
-                            name=webhook_name
-                        )
-                        # Update the existing config with new data while preserving resourceVersion
-                        existing_config.webhooks = webhook_config.webhooks
-                        existing_config.metadata.labels = webhook_config.metadata.labels
-                        # Update the CA bundle and URL in the webhook
-                        if existing_config.webhooks:
-                            existing_config.webhooks[0].client_config.ca_bundle = webhook_config.webhooks[0].client_config.ca_bundle
-                            existing_config.webhooks[0].client_config.url = webhook_config.webhooks[0].client_config.url
-                        
+                if webhook_exists:
+                    # Update existing webhook configuration
+                    # Preserve resourceVersion and other metadata
+                    existing_config.webhooks = webhook_config.webhooks
+                    existing_config.metadata.labels = webhook_config.metadata.labels
+                    # Update the CA bundle and URL in the webhook
+                    if existing_config.webhooks:
+                        existing_config.webhooks[0].client_config.ca_bundle = webhook_config.webhooks[0].client_config.ca_bundle
+                        existing_config.webhooks[0].client_config.url = webhook_config.webhooks[0].client_config.url
+                    
+                    try:
                         admission_v1.replace_mutating_webhook_configuration(
                             name=webhook_name,
                             body=existing_config
                         )
                         log_success(f'Webhook configuration updated successfully', 'SnapHook')
-                    else:
-                        log_error(f'Failed to create/update webhook configuration: {e}', 'SnapHook')
+                    except ApiException as e:
+                        log_error(f'Failed to update webhook configuration: {e}', 'SnapHook')
                         raise
+                else:
+                    # Create new webhook configuration
+                    try:
+                        log_info(f'Creating webhook configuration \'{webhook_name}\'...', 'SnapHook')
+                        admission_v1.create_mutating_webhook_configuration(body=webhook_config)
+                        log_success(f'Webhook configuration created successfully', 'SnapHook')
+                    except ApiException as e:
+                        if e.status == 409:  # Conflict - webhook was created between check and create
+                            log_info(f'Webhook was created by another process, updating...', 'SnapHook')
+                            # Get existing config and update it
+                            existing_config = admission_v1.read_mutating_webhook_configuration(
+                                name=webhook_name
+                            )
+                            existing_config.webhooks = webhook_config.webhooks
+                            existing_config.metadata.labels = webhook_config.metadata.labels
+                            if existing_config.webhooks:
+                                existing_config.webhooks[0].client_config.ca_bundle = webhook_config.webhooks[0].client_config.ca_bundle
+                                existing_config.webhooks[0].client_config.url = webhook_config.webhooks[0].client_config.url
+                            
+                            admission_v1.replace_mutating_webhook_configuration(
+                                name=webhook_name,
+                                body=existing_config
+                            )
+                            log_success(f'Webhook configuration updated successfully', 'SnapHook')
+                        else:
+                            log_error(f'Failed to create webhook configuration: {e}', 'SnapHook')
+                            raise
                 
                 # Step 5: Register this hook with the shared server
                 shared_https_server.register_hook_handler(self.name, self._create_webhook_handler())
