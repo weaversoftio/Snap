@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from classes.snaphook import SnapHook
 from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
-from flows.config.hook.save_snaphook_config import save_snaphook_config, update_snaphook_config_start_time, delete_snaphook_config, list_snaphook_configs
+from flows.config.hook.discover_snaphooks_from_cluster import discover_snaphooks_from_clusters
 
 logger = logging.getLogger("automation_api")
 router = APIRouter()
@@ -67,6 +67,14 @@ async def create_snaphook(request: SnapHookCreateRequest):
                 detail=f"SnapHook with name '{request.name}' already exists"
             )
         
+        # Check if cluster already has a SnapHook (only one per cluster allowed)
+        for existing_name, existing_hook in snaphook_instances.items():
+            if existing_hook.cluster_name == request.cluster_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cluster '{request.cluster_name}' already has a SnapHook: '{existing_name}'. Only one SnapHook per cluster is allowed."
+                )
+        
         # Create ClusterConfig object from dictionary
         cluster_config = ClusterConfig(
             cluster_config_details=ClusterConfigDetails(**request.cluster_config["cluster_config_details"]),
@@ -86,25 +94,8 @@ async def create_snaphook(request: SnapHookCreateRequest):
         # Store instance
         snaphook_instances[request.name] = snaphook
         
-        # Save configuration to file
-        config_response = await save_snaphook_config(
-            name=request.name,
-            cluster_name=request.cluster_name,
-            cluster_config=request.cluster_config,
-            webhook_url=request.webhook_url,
-            namespace=request.namespace,
-            cert_expiry_days=request.cert_expiry_days
-        )
-        
-        if not config_response.success:
-            # If config save fails, remove the instance and raise error
-            del snaphook_instances[request.name]
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to save SnapHook configuration: {config_response.message}"
-            )
-        
-        logger.info(f"SnapHook created: {request.name}")
+        # Configuration persistence is now in the cluster itself, not on disk
+        logger.info(f"SnapHook created: {request.name} (configuration will be persisted in cluster)")
         
         return SnapHookResponse(
             name=request.name,
@@ -230,11 +221,8 @@ async def delete_snaphook(hook_name: str):
         # Remove instance
         del snaphook_instances[hook_name]
         
-        # Delete configuration file
-        config_response = await delete_snaphook_config(hook_name, snaphook.cluster_name)
-        if not config_response.success:
-            logger.warning(f"Failed to delete SnapHook config file: {config_response.message}")
-        
+        # Configuration is persisted in cluster, not on disk
+        # The MutatingWebhookConfiguration deletion is handled by snaphook.stop()
         logger.info(f"SnapHook deleted: {hook_name}")
         
         return {"success": True, "message": f"SnapHook '{hook_name}' deleted successfully"}
@@ -281,8 +269,7 @@ async def start_snaphook(hook_name: str):
         success = snaphook.start()
         
         if success:
-            # Update last_started_at timestamp in config
-            await update_snaphook_config_start_time(hook_name, snaphook.cluster_name)
+            # Configuration is persisted in cluster, not on disk
             logger.info(f"SnapHook started: {hook_name}")
         else:
             raise HTTPException(
@@ -458,14 +445,21 @@ async def test_snaphook_connectivity(hook_name: str):
 @router.get("/snaphook-configs")
 async def get_snaphook_configs():
     """
-    Get all saved SnapHook configurations.
+    Get all SnapHook configurations from clusters (not from disk).
+    Configuration persistence is now in the cluster itself.
     
     Returns:
-        dict: List of saved SnapHook configurations
+        dict: List of SnapHook configurations discovered from clusters
     """
     try:
-        configs_response = await list_snaphook_configs()
-        return configs_response
+        # Discover webhooks from clusters
+        discovered_hooks = await discover_snaphooks_from_clusters()
+        
+        return {
+            "success": True,
+            "snaphook_configs": discovered_hooks,
+            "message": f"Found {len(discovered_hooks)} SnapHook configurations in clusters"
+        }
         
     except Exception as e:
         logger.error(f"Failed to get SnapHook configs: {e}")
