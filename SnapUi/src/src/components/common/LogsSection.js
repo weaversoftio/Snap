@@ -16,9 +16,11 @@ import {
   ClearAll,
   BugReport,
   Wifi,
-  Terminal
+  Terminal,
+  Download
 } from "@mui/icons-material";
 import { useLogs } from "./LogsContext";
+import consoleLogger from "../../utils/consoleLogger";
 
 const LogsSection = () => {
   const { logs, isOpen, clearLogs, toggleLogs, loading, shouldAutoScroll, setShouldAutoScroll } = useLogs();
@@ -95,6 +97,63 @@ const LogsSection = () => {
     }
   }, [isOpen, setShouldAutoScroll]);
 
+  // Download logs function
+  const handleDownloadLogs = (e) => {
+    e.stopPropagation();
+    
+    try {
+      // Get last 10 browser console logs
+      const browserLogs = consoleLogger.getLastLogs(10);
+      
+      // Get last 10 SnapApi logs (filter by initiator === 'SnapApi')
+      const snapApiLogs = logs
+        .filter(log => log.initiator === 'SnapApi')
+        .slice(-10);
+      
+      // Format logs for text file
+      let logContent = '=== SNAP LOGS EXPORT ===\n';
+      logContent += `Generated: ${new Date().toISOString()}\n\n`;
+      
+      // Browser Console Logs Section
+      logContent += '=== BROWSER CONSOLE LOGS (Last 10) ===\n';
+      if (browserLogs.length > 0) {
+        browserLogs.forEach(log => {
+          logContent += `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}\n`;
+        });
+      } else {
+        logContent += 'No browser console logs available.\n';
+      }
+      
+      logContent += '\n';
+      
+      // SnapApi Logs Section
+      logContent += '=== SNAPAPI LOGS (Last 10) ===\n';
+      if (snapApiLogs.length > 0) {
+        snapApiLogs.forEach(log => {
+          const timestamp = log.timestamp || new Date().toLocaleString();
+          const type = log.type || 'info';
+          const message = log.message || '';
+          logContent += `[${timestamp}] [${type.toUpperCase()}] [${log.initiator || 'SnapApi'}] ${message}\n`;
+        });
+      } else {
+        logContent += 'No SnapApi logs available.\n';
+      }
+      
+      // Create blob and download
+      const blob = new Blob([logContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `snap-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading logs:', error);
+    }
+  };
+
   return (
     <Paper
       elevation={3}
@@ -158,6 +217,15 @@ const LogsSection = () => {
         </Box>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button
+            size="small"
+            startIcon={<Download />}
+            onClick={handleDownloadLogs}
+            sx={{ textTransform: 'none' }}
+            title="Download last 10 browser console logs and 10 SnapApi logs"
+          >
+            Download Logs
+          </Button>
           {isOpen && logs.length > 0 && (
             <Button
               size="small"

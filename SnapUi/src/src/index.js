@@ -6,6 +6,7 @@ import reportWebVitals from './reportWebVitals';
 import { Provider } from "react-redux"
 import store from './store';
 import { LogsProvider } from './components/common/LogsContext';
+import consoleLogger from './utils/consoleLogger'; // Initialize console logger
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
