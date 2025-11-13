@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional
 import threading
 from queue import Queue, Empty
+import uuid
 
 
 class WebSocketLogHandler(logging.Handler):
@@ -25,6 +26,7 @@ class WebSocketLogHandler(logging.Handler):
         self.log_queue = Queue()
         self.thread = None
         self.running = False
+        self._add_log_to_buffer_func = None  # Lazy-loaded function reference
         
         # Start the background thread to process logs
         self.start_processing()
@@ -51,6 +53,9 @@ class WebSocketLogHandler(logging.Handler):
             # Only process info, error, and warning levels
             if record.levelno not in [logging.INFO, logging.ERROR, logging.WARNING]:
                 return
+            
+            # Debug output removed to reduce noise - uncomment if needed for debugging
+            # print(f"[WebSocketLogHandler] Received log: {record.levelname} - {record.name} - {record.getMessage()[:100]}")
             
             # Format the log message (just the message part, not the full formatted log)
             log_message = record.getMessage()
@@ -84,6 +89,45 @@ class WebSocketLogHandler(logging.Handler):
             
             # Add to queue for processing
             self.log_queue.put(log_data)
+            
+            # Also add to the SSE buffer so it appears in the UI logs section
+            # Use lazy loading to avoid circular imports (fallback if not set explicitly)
+            try:
+                # Lazy load the function on first use if not already set
+                if self._add_log_to_buffer_func is None:
+                    try:
+                        from routes.logs import add_log_to_buffer
+                        self._add_log_to_buffer_func = add_log_to_buffer
+                    except (ImportError, AttributeError) as e:
+                        # If import fails, mark as unavailable and skip this log
+                        self._add_log_to_buffer_func = False
+                        # Only print once to avoid spam
+                        print(f"Warning: Could not import add_log_to_buffer: {e}")
+                
+                # If function is available, use it
+                if self._add_log_to_buffer_func and self._add_log_to_buffer_func is not False:
+                    # Create log entry in the format expected by the frontend
+                    log_entry = {
+                        'id': str(uuid.uuid4()),
+                        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        'message': message,
+                        'type': log_type,  # Frontend expects 'type'
+                        'level': log_type,  # Also include 'level' for compatibility
+                        'initiator': initiator
+                    }
+                    try:
+                        self._add_log_to_buffer_func(log_entry)
+                        # Debug output removed - uncomment if needed
+                        # print(f"[WebSocketLogHandler] Successfully added log to buffer: id={log_entry['id']}, type={log_type}, initiator={initiator}")
+                    except Exception as buffer_error:
+                        print(f"[WebSocketLogHandler] Error calling add_log_to_buffer: {buffer_error}")
+                        import traceback
+                        traceback.print_exc()
+            except Exception as e:
+                # Silently handle any errors to avoid infinite recursion
+                # Only print if it's not an import error (already handled above)
+                if "add_log_to_buffer" not in str(e) and "ImportError" not in str(type(e).__name__):
+                    print(f"Error adding log to buffer: {e}")
             
         except Exception as e:
             # Avoid infinite recursion by not logging errors from the handler
@@ -120,6 +164,10 @@ class WebSocketLogHandler(logging.Handler):
     def set_send_progress_func(self, send_progress_func):
         """Set the function to use for sending progress messages."""
         self.send_progress_func = send_progress_func
+    
+    def set_add_log_to_buffer_func(self, add_log_to_buffer_func):
+        """Set the function to use for adding logs to the buffer."""
+        self._add_log_to_buffer_func = add_log_to_buffer_func
     
     def _extract_log_components(self, record, log_message):
         """
@@ -292,10 +340,16 @@ def setup_websocket_logging(send_progress_func=None):
     # Add handler to the automation_api logger (main SnapApi logger)
     automation_logger = logging.getLogger("automation_api")
     
+    # Ensure propagation is enabled (default, but make it explicit)
+    automation_logger.propagate = True
+    
     # Check if handler already exists to avoid duplicates
     handler_exists = any(isinstance(h, WebSocketLogHandler) for h in automation_logger.handlers)
     if not handler_exists:
         automation_logger.addHandler(websocket_log_handler)
+        print(f"[WebSocketLogHandler] Handler attached to 'automation_api' logger. Handlers: {len(automation_logger.handlers)}")
+    else:
+        print(f"[WebSocketLogHandler] Handler already exists on 'automation_api' logger")
     
     return websocket_log_handler
 

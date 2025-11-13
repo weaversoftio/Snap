@@ -19,7 +19,6 @@ import json
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 import urllib3
-from utils.centralized_logger import log_info, log_error, log_warning, log_success
 
 # Suppress urllib3 InsecureRequestWarning for Kubernetes client
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -106,7 +105,7 @@ class SnapHook:
         # Use port 8443 for webhook (SnapHook HTTPS server port)
         webhook_url = f"https://{host}:8443/mutate"
         
-        log_info(f'Auto-generated webhook URL: {webhook_url}', 'SnapHook')
+        logger.info(f'[SnapHook] Auto-generated webhook URL: {webhook_url}')
         return webhook_url
     
     def _setup_kubernetes_config(self) -> None:
@@ -128,14 +127,14 @@ class SnapHook:
                 kube_config.ssl_ca_cert = None
                 kube_config.cert_file = None
                 kube_config.key_file = None
-                log_info(f'SSL verification disabled for cluster {self.cluster_name}', 'SnapHook')
+                logger.info(f'[SnapHook] SSL verification disabled for cluster {self.cluster_name}')
             else:
-                log_info(f'SSL verification enabled for cluster {self.cluster_name}', 'SnapHook')
+                logger.info(f'[SnapHook] SSL verification enabled for cluster {self.cluster_name}')
             
             self.kube_client = client.ApiClient(kube_config)
-            log_info(f'Configured Kubernetes client for cluster {self.cluster_name}', 'SnapHook')
+            logger.info(f'[SnapHook] Configured Kubernetes client for cluster {self.cluster_name}')
         except Exception as e:
-            log_error(f'Could not setup Kubernetes configuration: {e}', 'SnapHook')
+            logger.error(f'[SnapHook] Could not setup Kubernetes configuration: {e}')
             raise
     
     def _generate_self_signed_certificates(self) -> Dict[str, str]:
@@ -146,7 +145,7 @@ class SnapHook:
             Dict containing certificate data
         """
         try:
-            log_info(f'Generating self-signed certificates...', 'SnapHook')
+            logger.info(f'[SnapHook] Generating self-signed certificates...')
             
             # Create temporary directory for certificate files
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -183,7 +182,7 @@ class SnapHook:
                 cert_b64 = base64.b64encode(cert_data).decode('utf-8')
                 key_b64 = base64.b64encode(key_data).decode('utf-8')
                 
-                log_success(f'Successfully generated self-signed certificates', 'SnapHook')
+                logger.info(f'[SnapHook] Successfully generated self-signed certificates')
                 
                 return {
                     "cert": cert_b64,
@@ -195,10 +194,10 @@ class SnapHook:
                 }
                 
         except subprocess.CalledProcessError as e:
-            log_error(f'OpenSSL command failed: {e.stderr}', 'SnapHook')
+            logger.error(f'[SnapHook] OpenSSL command failed: {e.stderr}')
             raise
         except Exception as e:
-            log_error(f'Certificate generation failed: {e}', 'SnapHook')
+            logger.error(f'[SnapHook] Certificate generation failed: {e}')
             raise
     
     def _create_csr_config(self) -> str:
@@ -249,13 +248,13 @@ class SnapHook:
                     try:
                         ip = socket.gethostbyname(host)
                         ip_addresses.append(ip)
-                        log_info(f'Resolved {host} to {ip}', 'SnapHook')
+                        logger.info(f'[SnapHook] Resolved {host} to {ip}')
                     except socket.gaierror:
                         # If host is already an IP address, add it directly
                         try:
                             socket.inet_aton(host)
                             ip_addresses.append(host)
-                            log_info(f'Using IP address directly: {host}', 'SnapHook')
+                            logger.info(f'[SnapHook] Using IP address directly: {host}')
                         except socket.error:
                             pass
             
@@ -267,10 +266,10 @@ class SnapHook:
             # Remove duplicates while preserving order
             ip_addresses = list(dict.fromkeys(ip_addresses))
             
-            log_info(f'Generated IP addresses for certificate: {ip_addresses}', 'SnapHook')
+            logger.info(f'[SnapHook] Generated IP addresses for certificate: {ip_addresses}')
             
         except Exception as e:
-            log_warning(f'Could not extract IP addresses: {e}', 'SnapHook')
+            logger.warning(f'[SnapHook] Could not extract IP addresses: {e}')
             # Fallback to common IPs
             ip_addresses = ["127.0.0.1"]
         
@@ -366,7 +365,7 @@ subjectAltName = @alt_names
                 # Process the webhook request using the existing logic
                 return self._process_webhook_request(body)
             except Exception as e:
-                log_error(f"Error processing webhook request: {e}", 'SnapHook')
+                logger.error(f"[SnapHook] Error processing webhook request: {e}")
                 return {
                     "apiVersion": "admission.k8s.io/v1",
                     "kind": "AdmissionReview",
@@ -397,7 +396,7 @@ subjectAltName = @alt_names
             
             namespace = admission_review.get("namespace", "default")
             
-            log_info(f"SnapHook '{self.name}': Got request for pod {pod_name}", 'SnapHook')
+            logger.info(f"[SnapHook] SnapHook '{self.name}': Got request for pod {pod_name}")
             
             # Check if pod needs SnapHook modification
             patches = []
@@ -426,7 +425,7 @@ subjectAltName = @alt_names
                             registry = snap_config["cache_registry"]
                             repo = snap_config["cache_repo"]
                         except Exception as e:
-                            log_error(f"Failed to load cluster cache config: {e}", 'SnapHook')
+                            logger.error(f"[SnapHook] Failed to load cluster cache config: {e}")
                             # Fallback to default values
                             registry = "Need.Registry.Here:8081"  # Default registry
                             repo = "Repo.Name.Here"  # Default repo
@@ -442,18 +441,18 @@ subjectAltName = @alt_names
                             PodTemplateHash=pod_template_hash
                         )
                         
-                        log_info(f"Generated image tag: {generated_image_tag}", 'SnapHook')
+                        logger.info(f"[SnapHook] Generated image tag: {generated_image_tag}")
                         
                         if generated_image_tag:
                             # Check if image exists in registry using skopeo
-                            log_info(f"Checking if image exists: {generated_image_tag}", 'SnapHook')
+                            logger.info(f"[SnapHook] Checking if image exists: {generated_image_tag}")
                             image_exists = self._check_image_exists_multi_registry(
                                 registry, repo, self.cluster_name, namespace, app_name, 
                                 orig_image_short_digest, pod_template_hash
                             )
                             
                             if image_exists:
-                                log_info(f"Image exists, will patch pod", 'SnapHook')
+                                logger.info(f"[SnapHook] Image exists, will patch pod")
                                 # Create patch for image
                                 patch = {
                                     "op": "replace",
@@ -471,7 +470,7 @@ subjectAltName = @alt_names
                                 patches.append(mutation_patch)
                                 should_patch_image = True
                             else:
-                                log_info(f"Image does not exist, skipping patch", 'SnapHook')
+                                logger.info(f"[SnapHook] Image does not exist, skipping patch")
                         else:
                             print(f"SnapHook: Failed to generate image tag, skipping patch")
                 
@@ -565,7 +564,7 @@ subjectAltName = @alt_names
                     # Parse JSON request
                     request_data = json.loads(post_data.decode('utf-8'))
                     
-                    log_info(f'Received webhook request for pod mutation', 'SnapHook')
+                    logger.info(f'[SnapHook] Received webhook request for pod mutation')
                     
                     # Extract admission review from request
                     admission_review = request_data.get("request", {})
@@ -573,7 +572,7 @@ subjectAltName = @alt_names
                     pod_name = pod_spec.get("metadata", {}).get("name", "unknown")
                     namespace = admission_review.get("namespace", "default")
                     
-                    log_info(f'Processing pod {pod_name} in namespace {namespace}', 'SnapHook')
+                    logger.info(f'[SnapHook] Processing pod {pod_name} in namespace {namespace}')
                     
                     # Check if pod needs SnapHook modification
                     patches = []
@@ -618,7 +617,7 @@ subjectAltName = @alt_names
                                 cache_registry = snap_config["cache_registry"]
                                 cache_repo = snap_config["cache_repo"]
                             except Exception as e:
-                                log_error(f"Failed to load cluster cache config: {e}", 'SnapHook')
+                                logger.error(f"[SnapHook] Failed to load cluster cache config: {e}")
                                 # Fallback to environment variables
                                 cache_registry = os.getenv("snap_registry", "docker.io")
                                 cache_repo = os.getenv("snap_repo", "snap")
@@ -638,7 +637,7 @@ subjectAltName = @alt_names
                                 print(f"SnapHook: Failed to generate image tag: {tag_error}")
                                 generated_image_tag = None
                             
-                            log_info(f"Generated image tag: {generated_image_tag}", 'SnapHook')
+                            logger.info(f"[SnapHook] Generated image tag: {generated_image_tag}")
                             
                             if generated_image_tag:
                                 # Check if image exists in registry
@@ -691,10 +690,10 @@ subjectAltName = @alt_names
                     
                     # Send response
                     self._send_json_response(200, response)
-                    log_success(f'Webhook response sent for pod {pod_name}', 'SnapHook')
+                    logger.info(f'[SnapHook] Webhook response sent for pod {pod_name}')
                     
                 except Exception as e:
-                    log_error(f'Webhook error: {e}', 'SnapHook')
+                    logger.error(f'[SnapHook] Webhook error: {e}')
                     
                     # Return error response
                     error_response = {
@@ -729,7 +728,7 @@ subjectAltName = @alt_names
             
             def log_message(self, format, *args):
                 """Override to use our logger."""
-                log_info(f"SnapHook HTTPS Server: {format % args}", 'SnapHook')
+                logger.info(f"[SnapHook] SnapHook HTTPS Server: {format % args}")
         
         return WebhookHandler
     
@@ -756,7 +755,7 @@ subjectAltName = @alt_names
                 self.https_server = HTTPServer(('0.0.0.0', 8443), handler)
                 self.https_server.socket = ssl_context.wrap_socket(self.https_server.socket, server_side=True)
                 
-                log_info(f'Starting HTTPS server on port 8443', 'SnapHook')
+                logger.info(f'[SnapHook] Starting HTTPS server on port 8443')
                 self.is_running = True
                 self.https_server.serve_forever()
                 
@@ -766,7 +765,7 @@ subjectAltName = @alt_names
                 os.unlink(key_file)
                 
         except Exception as e:
-            log_error(f'Failed to start HTTPS server: {e}', 'SnapHook')
+            logger.error(f'[SnapHook] Failed to start HTTPS server: {e}')
             self.is_running = False
     
     def start(self) -> bool:
@@ -779,20 +778,20 @@ subjectAltName = @alt_names
         with self._operation_lock:  # Prevent concurrent operations
             try:
                 if shared_https_server is None:
-                    log_error(f'Shared HTTPS server not available', 'SnapHook')
+                    logger.error(f'[SnapHook] Shared HTTPS server not available')
                     return False
                 
                 # Prevent duplicate start operations
                 if self.is_running:
-                    log_info(f'SnapHook \'{self.name}\' is already running', 'SnapHook')
+                    logger.info(f'[SnapHook] SnapHook \'{self.name}\' is already running')
                     return True
                 
-                log_info(f'Starting SnapHook \'{self.name}\' for cluster {self.cluster_name}', 'SnapHook')
+                logger.info(f'[SnapHook] Starting SnapHook \'{self.name}\' for cluster {self.cluster_name}')
             
                 # Step 1: Ensure shared HTTPS server is running
                 if not shared_https_server.is_running:
                     if not shared_https_server.start_shared_server():
-                        log_error(f'Failed to start shared HTTPS server', 'SnapHook')
+                        logger.error(f'[SnapHook] Failed to start shared HTTPS server')
                         return False
                 
                 # Step 2: Get shared certificate data
@@ -813,14 +812,14 @@ subjectAltName = @alt_names
                 try:
                     existing_config = admission_v1.read_mutating_webhook_configuration(name=webhook_name)
                     webhook_exists = True
-                    log_info(f'Webhook configuration \'{webhook_name}\' already exists in cluster, updating...', 'SnapHook')
+                    logger.info(f'[SnapHook] Webhook configuration \'{webhook_name}\' already exists in cluster, updating...')
                 except ApiException as e:
                     if e.status == 404:
                         # Webhook doesn't exist, will create new one
                         webhook_exists = False
-                        log_info(f'Webhook configuration \'{webhook_name}\' does not exist, creating new...', 'SnapHook')
+                        logger.info(f'[SnapHook] Webhook configuration \'{webhook_name}\' does not exist, creating new...')
                     else:
-                        log_error(f'Error checking for existing webhook: {e}', 'SnapHook')
+                        logger.error(f'[SnapHook] Error checking for existing webhook: {e}')
                         raise
                 
                 if webhook_exists:
@@ -838,19 +837,19 @@ subjectAltName = @alt_names
                             name=webhook_name,
                             body=existing_config
                         )
-                        log_success(f'Webhook configuration updated successfully', 'SnapHook')
+                        logger.info(f'[SnapHook] Webhook configuration updated successfully')
                     except ApiException as e:
-                        log_error(f'Failed to update webhook configuration: {e}', 'SnapHook')
+                        logger.error(f'[SnapHook] Failed to update webhook configuration: {e}')
                         raise
                 else:
                     # Create new webhook configuration
                     try:
-                        log_info(f'Creating webhook configuration \'{webhook_name}\'...', 'SnapHook')
+                        logger.info(f'[SnapHook] Creating webhook configuration \'{webhook_name}\'...')
                         admission_v1.create_mutating_webhook_configuration(body=webhook_config)
-                        log_success(f'Webhook configuration created successfully', 'SnapHook')
+                        logger.info(f'[SnapHook] Webhook configuration created successfully')
                     except ApiException as e:
                         if e.status == 409:  # Conflict - webhook was created between check and create
-                            log_info(f'Webhook was created by another process, updating...', 'SnapHook')
+                            logger.info(f'[SnapHook] Webhook was created by another process, updating...')
                             # Get existing config and update it
                             existing_config = admission_v1.read_mutating_webhook_configuration(
                                 name=webhook_name
@@ -865,24 +864,24 @@ subjectAltName = @alt_names
                                 name=webhook_name,
                                 body=existing_config
                             )
-                            log_success(f'Webhook configuration updated successfully', 'SnapHook')
+                            logger.info(f'[SnapHook] Webhook configuration updated successfully')
                         else:
-                            log_error(f'Failed to create webhook configuration: {e}', 'SnapHook')
+                            logger.error(f'[SnapHook] Failed to create webhook configuration: {e}')
                             raise
                 
                 # Step 5: Register this hook with the shared server
                 shared_https_server.register_hook_handler(self.name, self._create_webhook_handler())
                 
                 self.is_running = True
-                log_success(f'Successfully started \'{self.name}\' for cluster {self.cluster_name}', 'SnapHook')
-                log_info(f'Webhook URL: {self.webhook_url}', 'SnapHook')
-                log_info(f'Using shared HTTPS server on port 8443', 'SnapHook')
+                logger.info(f'[SnapHook] Successfully started \'{self.name}\' for cluster {self.cluster_name}')
+                logger.info(f'[SnapHook] Webhook URL: {self.webhook_url}')
+                logger.info(f'[SnapHook] Using shared HTTPS server on port 8443')
                 return True
                     
             except Exception as e:
-                log_error(f'Failed to start: {e}', 'SnapHook')
+                logger.error(f'[SnapHook] Failed to start: {e}')
                 import traceback
-                log_error(f'Traceback: {traceback.format_exc()}', 'SnapHook')
+                logger.error(f'[SnapHook] Traceback: {traceback.format_exc()}')
                 return False
     
     def _extract_app_name_from_pod(self, pod_name: str, labels: dict) -> str:
@@ -961,20 +960,20 @@ subjectAltName = @alt_names
         with self._operation_lock:  # Prevent concurrent operations
             try:
                 if shared_https_server is None:
-                    log_error(f'Shared HTTPS server not available', 'SnapHook')
+                    logger.error(f'[SnapHook] Shared HTTPS server not available')
                     return False
                 
                 # Prevent duplicate stop operations
                 if not self.is_running:
-                    log_info(f'SnapHook \'{self.name}\' is already stopped', 'SnapHook')
+                    logger.info(f'[SnapHook] SnapHook \'{self.name}\' is already stopped')
                     return True
                 
-                log_info(f'Stopping SnapHook \'{self.name}\' for cluster {self.cluster_name}', 'SnapHook')
+                logger.info(f'[SnapHook] Stopping SnapHook \'{self.name}\' for cluster {self.cluster_name}')
             
                 # Unregister from shared server
                 shared_https_server.unregister_hook_handler(self.name)
                 self.is_running = False
-                log_info(f'Unregistered from shared HTTPS server', 'SnapHook')
+                logger.info(f'[SnapHook] Unregistered from shared HTTPS server')
                 
                 # Delete webhook configuration
                 if self.kube_client:
@@ -982,18 +981,18 @@ subjectAltName = @alt_names
                     webhook_name = f"snaphook-{self.name}-{self.cluster_name}"
                     try:
                         admission_v1.delete_mutating_webhook_configuration(name=webhook_name)
-                        log_success(f'Webhook configuration \'{webhook_name}\' deleted', 'SnapHook')
+                        logger.info(f'[SnapHook] Webhook configuration \'{webhook_name}\' deleted')
                     except ApiException as e:
                         if e.status == 404:
-                            log_info(f'Webhook configuration not found, already cleaned up', 'SnapHook')
+                            logger.info(f'[SnapHook] Webhook configuration not found, already cleaned up')
                         else:
                             raise
                 
-                log_success(f'Successfully stopped \'{self.name}\' for cluster {self.cluster_name}', 'SnapHook')
+                logger.info(f'[SnapHook] Successfully stopped \'{self.name}\' for cluster {self.cluster_name}')
                 return True
                 
             except Exception as e:
-                log_error(f'Failed to stop: {e}', 'SnapHook')
+                logger.error(f'[SnapHook] Failed to stop: {e}')
                 return False
     
     def get_status(self) -> Dict[str, Any]:

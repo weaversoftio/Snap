@@ -146,6 +146,14 @@ from routes.websocket import broadcast_progress
 # Initialize WebSocket logging handler
 websocket_log_handler = setup_websocket_logging(broadcast_progress)
 
+# Set the buffer function for the handler after routes are loaded
+from routes.logs import add_log_to_buffer
+websocket_log_handler.set_add_log_to_buffer_func(add_log_to_buffer)
+
+# Verify handler is working - send a test log
+logger.info("SnapApi: WebSocket log handler initialized and ready")
+print("[SnapApi] WebSocket log handler setup complete. Buffer function:", "set" if websocket_log_handler._add_log_to_buffer_func else "NOT SET")
+
 # Include routers
 app.include_router(registry_router, prefix="/registry", tags=["registry"])
 app.include_router(cluster_router, prefix="/cluster", tags=["cluster"])

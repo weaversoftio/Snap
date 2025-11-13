@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from flows.config.clusters.list_cluster_config import list_cluster_config
-from utils.centralized_logger import log_info, log_error, log_warning
 
 logger = logging.getLogger("automation_api")
 
@@ -19,24 +18,24 @@ async def discover_snaphooks_from_clusters() -> List[Dict]:
     discovered_hooks = []
     
     try:
-        log_info("Starting SnapHook discovery from clusters...", "SnapHookDiscovery")
+        logger.info("[SnapHookDiscovery] Starting SnapHook discovery from clusters...")
         
         # Get all registered clusters
         cluster_configs_response = await list_cluster_config()
         
         if not cluster_configs_response.success:
-            log_warning("Failed to list cluster configs for webhook discovery", "SnapHookDiscovery")
+            logger.warning("[SnapHookDiscovery] Failed to list cluster configs for webhook discovery")
             return discovered_hooks
         
         if not cluster_configs_response.cluster_configs:
-            log_info("No clusters registered, no webhooks to discover", "SnapHookDiscovery")
+            logger.info("[SnapHookDiscovery] No clusters registered, no webhooks to discover")
             return discovered_hooks
         
         # Query each cluster for MutatingWebhookConfigurations
         for cluster_config in cluster_configs_response.cluster_configs:
             try:
                 cluster_name = cluster_config.name
-                log_info(f"Discovering SnapHooks in cluster: {cluster_name}", "SnapHookDiscovery")
+                logger.info(f"[SnapHookDiscovery] Discovering SnapHooks in cluster: {cluster_name}")
                 
                 # Setup Kubernetes client for this cluster
                 kube_config = client.Configuration()
@@ -98,25 +97,25 @@ async def discover_snaphooks_from_clusters() -> List[Dict]:
                                         "exists_in_cluster": True
                                     })
                                     
-                                    log_info(f"Discovered SnapHook: {hook_name} in cluster {cluster_name}", "SnapHookDiscovery")
+                                    logger.info(f"[SnapHookDiscovery] Discovered SnapHook: {hook_name} in cluster {cluster_name}")
                 
                 except ApiException as e:
                     if e.status == 403:
-                        log_warning(f"No permission to list webhooks in cluster {cluster_name}: {e}", "SnapHookDiscovery")
+                        logger.warning(f"[SnapHookDiscovery] No permission to list webhooks in cluster {cluster_name}: {e}")
                     elif e.status == 401:
-                        log_warning(f"Authentication failed for cluster {cluster_name}: {e}", "SnapHookDiscovery")
+                        logger.warning(f"[SnapHookDiscovery] Authentication failed for cluster {cluster_name}: {e}")
                     else:
-                        log_error(f"Error querying cluster {cluster_name}: {e}", "SnapHookDiscovery")
+                        logger.error(f"[SnapHookDiscovery] Error querying cluster {cluster_name}: {e}")
                     continue
                     
             except Exception as e:
-                log_error(f"Error discovering webhooks in cluster {cluster_config.name}: {e}", "SnapHookDiscovery")
+                logger.error(f"[SnapHookDiscovery] Error discovering webhooks in cluster {cluster_config.name}: {e}")
                 continue
         
-        log_info(f"Discovered {len(discovered_hooks)} SnapHook configurations from clusters", "SnapHookDiscovery")
+        logger.info(f"[SnapHookDiscovery] Discovered {len(discovered_hooks)} SnapHook configurations from clusters")
         return discovered_hooks
         
     except Exception as e:
-        log_error(f"Error during webhook discovery: {e}", "SnapHookDiscovery")
+        logger.error(f"[SnapHookDiscovery] Error during webhook discovery: {e}")
         return discovered_hooks
 

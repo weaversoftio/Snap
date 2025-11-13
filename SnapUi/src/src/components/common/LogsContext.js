@@ -16,63 +16,196 @@ export const LogsProvider = ({ children }) => {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const eventSourceRef = useRef(null);
   const [seenLogIds, setSeenLogIds] = useState(new Set());
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 10;
+  const reconnectTimeoutRef = useRef(null);
 
   const config = window.ENV;
   const pollingIntervalMs = 1000; // Poll every 1 second for more live updates
 
   const connectSSE = useCallback(() => {
-    if (!username || eventSourceRef.current) return;
+    if (!username) {
+      console.log('[LogsContext] Cannot connect SSE: username not set');
+      return;
+    }
     
-    const token = getCookie('token');
-    if (!token) return;
+    console.log('[LogsContext] Attempting to connect SSE for user:', username);
     
-    // Remove token from URL - EventSource will send cookies automatically
-    const eventSource = new EventSource(`${config.apiUrl}/logs/stream`);
-    eventSourceRef.current = eventSource;
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const logData = JSON.parse(event.data);
-        
-        // Skip keepalive messages
-        if (logData.type === 'keepalive') return;
-        
-        // Check if we've already seen this log ID
-        if (seenLogIds.has(logData.id)) return;
-        
-        // Add to seen IDs
-        setSeenLogIds(prev => new Set([...prev, logData.id]));
-        
-        // Add new log
-        setLogs(prev => {
-          const updatedLogs = [...prev, logData];
-          return updatedLogs.slice(-200); // Keep last 200 logs
-        });
-        
-      } catch (error) {
-        console.error('Error parsing SSE log data:', error);
-      }
-    };
-    
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      // Attempt to reconnect after a delay
-      setTimeout(() => {
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-          connectSSE();
-        }
-      }, 5000);
-    };
-    
-  }, [username, config.apiUrl, seenLogIds]);
-
-  const disconnectSSE = useCallback(() => {
+    // Don't create a new connection if one already exists and is open/connecting
     if (eventSourceRef.current) {
+      const readyState = eventSourceRef.current.readyState;
+      if (readyState === EventSource.CONNECTING || readyState === EventSource.OPEN) {
+        console.log('[LogsContext] SSE already connected/connecting, readyState:', readyState);
+        return; // Already connected or connecting
+      }
+      // Clean up closed/failed connection
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
+    
+    const token = getCookie('token');
+    if (!token) {
+      console.warn('[LogsContext] No token available for SSE connection');
+      return;
+    }
+    
+    try {
+      // Clear any pending reconnect timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      
+      // Reset reconnect attempts on successful connection
+      reconnectAttemptsRef.current = 0;
+      
+      // EventSource doesn't support custom headers, so we need to pass token as query param
+      // The backend will try cookies first, then fall back to query param
+      const sseUrl = `${config.apiUrl}/logs/stream?token=${encodeURIComponent(token)}`;
+      console.log('[LogsContext] Creating SSE connection to:', sseUrl.replace(token, 'TOKEN_HIDDEN'));
+      
+      const eventSource = new EventSource(sseUrl);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onopen = () => {
+        // Connection opened successfully
+        reconnectAttemptsRef.current = 0;
+        setLoading(true);
+        console.log('[LogsContext] SSE connection opened successfully');
+      };
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const logData = JSON.parse(event.data);
+          
+          // Skip keepalive messages
+          if (logData.type === 'keepalive') {
+            // console.log('[LogsContext] Received keepalive');
+            return;
+          }
+          
+          // Validate required fields
+          if (!logData.id || !logData.message) {
+            console.warn('[LogsContext] Invalid log data received (missing id or message):', logData);
+            return;
+          }
+          
+          // Check for duplicates using both ID and content hash
+          // Create a content hash for duplicate detection (message + timestamp + initiator)
+          const contentHash = `${logData.message}-${logData.timestamp}-${logData.initiator || 'unknown'}`;
+          
+          setSeenLogIds(prev => {
+            // Check both ID and content hash to catch duplicates even if ID changes
+            if (prev.has(logData.id) || prev.has(`content:${contentHash}`)) {
+              // Duplicate detected, skip silently
+              return prev;
+            }
+            
+            // Add both ID and content hash to seen set
+            const newSeenIds = new Set([...prev, logData.id, `content:${contentHash}`]);
+            
+            // Clean up old content hashes to prevent memory bloat (keep last 500)
+            if (newSeenIds.size > 1000) {
+              // Remove oldest content hashes (those starting with "content:")
+              const contentHashes = Array.from(newSeenIds).filter(id => id.startsWith('content:'));
+              const ids = Array.from(newSeenIds).filter(id => !id.startsWith('content:'));
+              // Keep only recent content hashes
+              const recentContentHashes = contentHashes.slice(-500);
+              return new Set([...ids, ...recentContentHashes]);
+            }
+            
+            // Add new log
+            setLogs(prevLogs => {
+              // Also check if this exact log already exists in the current logs array
+              const isDuplicate = prevLogs.some(log => 
+                log.message === logData.message && 
+                log.timestamp === logData.timestamp && 
+                log.initiator === logData.initiator
+              );
+              
+              if (isDuplicate) {
+                return prevLogs;
+              }
+              
+              const updatedLogs = [...prevLogs, logData];
+              return updatedLogs.slice(-200); // Keep last 200 logs
+            });
+            
+            return newSeenIds;
+          });
+          
+        } catch (error) {
+          console.error('Error parsing SSE log data:', error, event.data);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        const readyState = eventSource.readyState;
+        console.error('[LogsContext] SSE error event:', {
+          readyState,
+          readyStateName: readyState === EventSource.CONNECTING ? 'CONNECTING' : 
+                         readyState === EventSource.OPEN ? 'OPEN' : 
+                         readyState === EventSource.CLOSED ? 'CLOSED' : 'UNKNOWN',
+          error,
+          url: eventSource.url
+        });
+        
+        if (readyState === EventSource.CLOSED) {
+          // Connection closed, attempt to reconnect
+          eventSourceRef.current = null;
+          
+          // Only reconnect if we haven't exceeded max attempts
+          if (reconnectAttemptsRef.current < maxReconnectAttempts && username) {
+            reconnectAttemptsRef.current += 1;
+            const delay = Math.min(5000 * reconnectAttemptsRef.current, 30000); // Exponential backoff, max 30s
+            
+            console.log(`[LogsContext] SSE connection closed. Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`);
+            
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (username && !eventSourceRef.current) {
+                connectSSE();
+              }
+            }, delay);
+          } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+            console.error('[LogsContext] SSE connection failed after maximum reconnect attempts');
+            setLoading(false);
+          }
+        } else if (readyState === EventSource.CONNECTING) {
+          // Still connecting, wait a bit
+          console.log('[LogsContext] SSE connection in progress...');
+        } else {
+          // Other error states
+          console.error('[LogsContext] SSE connection error:', error, 'ReadyState:', readyState);
+        }
+      };
+      
+    } catch (error) {
+      console.error('Error creating SSE connection:', error);
+      eventSourceRef.current = null;
+      setLoading(false);
+    }
+    
+  }, [username, config.apiUrl]);
+
+  const disconnectSSE = useCallback(() => {
+    // Clear any pending reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    // Reset reconnect attempts
+    reconnectAttemptsRef.current = 0;
+    
+    if (eventSourceRef.current) {
+      try {
+        eventSourceRef.current.close();
+      } catch (error) {
+        console.warn('Error closing SSE connection:', error);
+      }
+      eventSourceRef.current = null;
+    }
+    setLoading(false);
   }, []);
 
   const fetchContainerLogs = useCallback(async () => {
@@ -177,6 +310,13 @@ export const LogsProvider = ({ children }) => {
       stopPolling();
     };
   }, [username, startPolling, stopPolling]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      disconnectSSE();
+    };
+  }, [disconnectSSE]);
 
   const addLog = (log, cluster = 'default', initiator = 'User') => {
     const timestamp = new Date().toLocaleTimeString();
