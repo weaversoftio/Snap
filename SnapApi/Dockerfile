@@ -54,7 +54,7 @@ COPY src/. .
 
 RUN mkdir -p /licenses 
 
-COPY LICENSE /licenses/
+# COPY LICENSE /licenses/
 
 # Copy docs directory for documentation system
 COPY docs /app/docs
