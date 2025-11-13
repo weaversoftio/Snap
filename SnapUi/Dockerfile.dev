@@ -3,6 +3,11 @@ FROM node:20-alpine
 # Ensure yarn is available (install with --force to overwrite if it already exists)
 RUN npm install -g yarn --force
 
+# Verify npm and yarn are available and create symlinks if needed
+RUN which npm && which yarn && \
+    npm --version && \
+    yarn --version
+
 # Set working directory
 WORKDIR /app
 
@@ -15,8 +20,8 @@ RUN yarn install
 # Copy source code
 COPY src/. .
 
-# Expose port 3000 for development server
-EXPOSE 3000
+# Expose port 8080 for development server (matching docker-compose)
+EXPOSE 8080
 
 # Start development server with hot reload
 CMD ["yarn", "start"]
