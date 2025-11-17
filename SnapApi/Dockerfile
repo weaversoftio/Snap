@@ -8,11 +8,11 @@ RUN git clone https://github.com/checkpoint-restore/checkpointctl.git && \
 # Final stage: Main application
 FROM registry.access.redhat.com/ubi9/python-39
 
-LABEL name="snap_snapapi" \
+LABEL name="1001_1001api" \
       vendor="WeaverSoft.io" \
       maintainer="support@weaversoft.io" \
-      summary="Snap API service for container checkpointing" \
-      description="Handles API layer of Snap platform. Red Hat certification compliant."
+      summary="1001 API service for container checkpointing" \
+      description="Handles API layer of 1001 platform. Red Hat certification compliant."
 
 
 
@@ -59,20 +59,18 @@ RUN mkdir -p /licenses
 # Copy docs directory for documentation system
 COPY docs /app/docs
 
-# Ensure non-root user exists (for reference, but container runs as root for buildah)
-# UBI images typically have a default user with UID 1001
-RUN if ! id 1001 >/dev/null 2>&1; then \
-        useradd -r -u 1001 -g 0 -m -d /app -s /bin/bash snapapi; \
-    fi && \
-    chown -R root:root /app /licenses && \
-    chmod -R 755 /app /licenses
-
-# Run as root to allow buildah to work without rootless mode restrictions
-# Buildah will run with root privileges, avoiding subuid/subgid requirements
-USER root
+# create user 1001
+RUN useradd -r -u 669 -g 0 -m -d /home/snap -s /bin/bash snap
+# Prepare for Buildah to run with non-root privileges, avoiding subuid/subgid requirements
+RUN touch /etc/subgid /etc/subuid \
+&& chmod g=u /etc/subgid /etc/subuid /etc/passwd \
+&& echo snap:10000:65536 > /etc/subuid \    
+&& echo snap:10000:65536 > /etc/subgid
+# The buildah container will run as `build` user
+USER snap
 
 # Expose the port
 EXPOSE 8000
 
 # Run the application
-CMD ["/bin/bash", "/app/run-snap.sh"]
+CMD ["/bin/bash", "/app/run-1001.sh"]
