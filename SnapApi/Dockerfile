@@ -66,6 +66,11 @@ RUN touch /etc/subgid /etc/subuid \
 && chmod g=u /etc/subgid /etc/subuid /etc/passwd \
 && echo snap:10000:65536 > /etc/subuid \    
 && echo snap:10000:65536 > /etc/subgid
+
+RUN echo "export BUILDAH_ISOLATION=chroot" >> /home/snap/.bashrc
+# Use VFS because fuse does not work
+RUN echo '[storage]' > /etc/containers/storage.conf && echo 'driver = "vfs"' >> /etc/containers/storage.conf
+
 # The buildah container will run as `build` user
 USER snap
 

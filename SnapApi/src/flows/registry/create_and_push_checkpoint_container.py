@@ -76,18 +76,18 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
 
         # Create new container from scratch
         await send_progress(loggeduser, {"progress": 25,"task_name": "Create and Push Checkpoint Container", "message": f"Creating new container from scratch"})
-        newcontainer = (await run(["buildah", "--storage-driver", "vfs", "from", "scratch"])).stdout.strip()
+        newcontainer = (await run(["buildah", "from", "scratch"])).stdout.strip()
 
         # Add checkpoint tar to container
         await send_progress(loggeduser, {"progress": 37.5,"task_name": "Create and Push Checkpoint Container", "message": f"Addding checkpoint tar to container"})
         # Use the base_name for the TAR file as well
         checkpoint_tar_path = os.path.join(checkpoint_dir, f"{base_name}.tar")
-        await run(["buildah","--storage-driver", "vfs", "add", newcontainer, checkpoint_tar_path, "/"])
+        await run(["buildah", "add", newcontainer, checkpoint_tar_path, "/"])
 
         # Configure container annotation
         await send_progress(loggeduser, {"progress": 50,"task_name": "Create and Push Checkpoint Container", "message": f"Configuring container annotation"})
         await run([
-            "buildah", "--storage-driver", "vfs", "config",
+            "buildah", "config",
             f"--annotation=io.kubernetes.cri-o.annotations.checkpoint.name={base_name}",
             newcontainer
         ])
@@ -137,7 +137,7 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
 
         await send_progress(loggeduser, {"progress": 62.5,"task_name": "Create and Push Checkpoint Container", "message": f"Committing the container image"})
         try:
-            commit_result = await run(["buildah", "--storage-driver", "vfs", "commit", newcontainer, local_image_tag], capture_output=True, text=True, check=True)
+            commit_result = await run(["buildah", "commit", newcontainer, local_image_tag], capture_output=True, text=True, check=True)
             print(f"SnapAPI: Buildah commit successful: {commit_result.stdout}")
         except RuntimeError as e:
             print(f"SnapAPI: Buildah commit failed: {str(e)}")
@@ -145,12 +145,12 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
 
         # Clean up the temporary container
         await send_progress(loggeduser, {"progress": 75,"task_name": "Create and Push Checkpoint Container", "message": f"Cleaning up the temporary container"})
-        await run(["buildah", "--storage-driver", "vfs", "rm", newcontainer], capture_output=False)
+        await run(["buildah", "rm", newcontainer], capture_output=False)
 
         # Tag the local image with the registry tag
         await send_progress(loggeduser, {"progress": 80,"task_name": "Create and Push Checkpoint Container", "message": f"Tagging image for registry"})
         try:
-            tag_result = await run(["buildah", "--storage-driver", "vfs", "tag", local_image_tag, buildah_registry_tag], capture_output=True, text=True, check=True)
+            tag_result = await run(["buildah", "tag", local_image_tag, buildah_registry_tag], capture_output=True, text=True, check=True)
             print(f"SnapAPI: Buildah tag successful: {tag_result.stdout}")
         except RuntimeError as e:
             print(f"SnapAPI: Buildah tag failed: {str(e)}")
@@ -159,7 +159,7 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
         # Push the image to the registry
         await send_progress(loggeduser, {"progress": 87.5,"task_name": "Create and Push Checkpoint Container", "message": f"Pushing the image to the registry"})
         try:
-            push_result = await run(["buildah", "--storage-driver", "vfs", "push", "--tls-verify=false", buildah_registry_tag], capture_output=True, text=True, check=True)
+            push_result = await run(["buildah", "push", "--tls-verify=false", buildah_registry_tag], capture_output=True, text=True, check=True)
             print(f"SnapAPI: Buildah push successful: {push_result.stdout}")
         except RuntimeError as e:
             print(f"SnapAPI: Buildah push failed: {str(e)}")
