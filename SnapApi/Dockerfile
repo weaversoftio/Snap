@@ -71,11 +71,11 @@ RUN echo "export BUILDAH_ISOLATION=chroot" >> /home/snap/.bashrc
 # Use VFS because fuse does not work
 RUN echo '[storage]' > /etc/containers/storage.conf && echo 'driver = "vfs"' >> /etc/containers/storage.conf
 
-# The buildah container will run as `build` user
+# The container will run as `SNAP` user
 USER snap
 
 # Expose the port
 EXPOSE 8000
 
 # Run the application
-CMD ["/bin/bash", "/app/run-1001.sh"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app"]

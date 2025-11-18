@@ -8,7 +8,7 @@ replicaCount: 1
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
     repository: 192.168.33.204:8082/snapapi
-    tag: "latest"
+    tag: "feature-rootless-oci-builder"
     pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
 checkpointPath: /opt/checkpoints
@@ -39,20 +39,9 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
-podSecurityContext:
-  privileged: true
-  runAsUser: 0
-  capabilities:
-    add:
-    - SYS_ADMIN
+podSecurityContext: {}
 
-securityContext:
-  capabilities:
-    add:
-    - ALL
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: 1000
+securityContext: {}
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
@@ -109,17 +98,20 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 # Additional volumes on the output Deployment definition.
-volumes: []
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
+volumes: 
+# empty dir volume for config directory
+- name: config-volume
+  emptyDir: {}
+# empty dir volume for checkpoints directory
+- name: checkpoints-volume
+  emptyDir: {}
 
 # Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
+volumeMounts: 
+- name: config-volume
+  mountPath: /app/config
+- name: checkpoints-volume
+  mountPath: /app/checkpoints
 
 nodeSelector: {}
 
