@@ -4,16 +4,8 @@ services:
       context: ./SnapApi
       dockerfile: Dockerfile
     container_name: snapapi-dev
+    image: 192.168.33.204:8082/snapapi:${BRANCH_NAME:-main}
     stop_grace_period: 2s
-    privileged: true
-    cap_add:
-    - SYS_ADMIN
-    group_add:
-      - "0"  # root group
-      - "998"  # crio group
-      - "999"  # podman group
-    security_opt:
-      - label=disable
     ports:
       - "8000:8000"
       - "8443:8443"  # SnapHook webhook port
@@ -57,12 +49,17 @@ services:
       context: ./SnapUi
       dockerfile: Dockerfile.dev
     container_name: snapui-dev
+    image: docker.io/frenzy669/snapui:${BRANCH_NAME:-main}
     ports:
       - "0.0.0.0:3000:3000"
     environment:
-      # API configuration
-      - REACT_APP_API_URL=${API_URL:-http://192.168.33.209:8000}
-      - REACT_APP_WS_URL=${WS_URL:-ws://192.168.33.209:8000}
+      # API configuration - these can be overridden via environment variables or .env file
+      # The API_URL should be the external URL that browsers can access (e.g., http://localhost:8000 or http://<host-ip>:8000)
+      # The WS_URL should be the WebSocket URL (e.g., ws://localhost:8000 or ws://<host-ip>:8000)
+      # Defaults to localhost for local development - override if accessing from remote hosts
+      # Note: Create React App requires REACT_APP_ prefix for environment variables accessible in the browser
+      - REACT_APP_API_URL=${API_URL:-http://localhost:8000}
+      - REACT_APP_WS_URL=${WS_URL:-ws://localhost:8000}
       
       # React app configuration
       - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}

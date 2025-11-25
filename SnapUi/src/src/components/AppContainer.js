@@ -141,7 +141,7 @@ export default function AppContainer({ children }) {
   const [rbacCommandLoading, setRbacCommandLoading] = useState(false);
 
   const [clusterOpen, setClusterOpen] = useState(false);
-  const { list: clusterList = [], selectedCluster = "", kubeAuthenticated = false } = useSelector(state => state.cluster)
+  const { list: clusterList = [], selectedCluster = "", kubeAuthenticated = false, loading } = useSelector(state => state.cluster)
   const { authenticated = false, user } = useSelector(state => state.auth)
   const c_selectedCluster = getCookie("selectedCluster")
 
@@ -193,10 +193,19 @@ export default function AppContainer({ children }) {
     if (!authenticated || !name || !clusterList?.length) {
       return
     }
+    // Prevent duplicate login calls - if login is already in progress, skip
+    if (loading.login) {
+      console.log("Login already in progress, skipping duplicate call");
+      return;
+    }
     // If there's an ongoing cluster action, wait for it to complete
     if (clusterAction) {
       setClusterAction("")
       return
+    }
+    // Prevent duplicate calls if cluster is already selected
+    if (selectedCluster?.name === name && kubeAuthenticated) {
+      return;
     }
     const cluster = clusterList.find(item => item.name === name)
     if (!cluster) {
@@ -211,14 +220,30 @@ export default function AppContainer({ children }) {
     dispatch(clusterActions.login(cluster))
     setCookie("selectedCluster", name)
     setSwitchCluster("")
-  }, [authenticated, clusterList, clusterAction, navigate, dispatch, switchCluster]);
+  }, [authenticated, clusterList, clusterAction, navigate, dispatch, switchCluster, loading.login, selectedCluster?.name, kubeAuthenticated]);
 
   useEffect(() => {
     !token && handleLogout()
   }, [token, handleLogout])
   useEffect(() => {
-    handleConfirmSelectCluster(c_selectedCluster)
-  }, [clusterList, authenticated, c_selectedCluster, handleConfirmSelectCluster])
+    // Only trigger if we have all required data
+    if (!authenticated || !c_selectedCluster || !clusterList?.length) {
+      return;
+    }
+    
+    // Only call if cluster exists in list and isn't already selected
+    const cluster = clusterList.find(item => item.name === c_selectedCluster);
+    if (!cluster) {
+      return;
+    }
+    
+    // Prevent duplicate calls: only trigger if cluster is not already selected
+    if (selectedCluster?.name === c_selectedCluster) {
+      return;
+    }
+    
+    handleConfirmSelectCluster(c_selectedCluster);
+  }, [authenticated, c_selectedCluster, clusterList?.length, selectedCluster?.name, handleConfirmSelectCluster])
 
   useEffect(() => {
     if (!authenticated || !user) return

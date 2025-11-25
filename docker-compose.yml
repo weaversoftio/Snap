@@ -3,7 +3,7 @@ services:
     build:
       context: ./SnapApi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapapi:v1.0.1
+    image: docker.io/frenzy669/snapapi:v1.0.3
     container_name: snapapi
     stop_grace_period: 2s
     privileged: true
@@ -55,12 +55,15 @@ services:
     build:
       context: ./SnapUi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapui:v1.0.1
+    image: docker.io/frenzy669/snapui:v1.0.3
     container_name: snapui-prod
     ports:
       - "0.0.0.0:8080:8080"
     environment:
-      # API configuration
+      # API configuration - these can be overridden via environment variables or .env file
+      # The API_URL should be the external URL that browsers can access (e.g., http://localhost:8000 or http://<host-ip>:8000)
+      # The WS_URL should be the WebSocket URL (e.g., ws://localhost:8000 or ws://<host-ip>:8000)
+      # Defaults to localhost for local development - override if accessing from remote hosts
       - API_URL=${API_URL:-http://192.168.33.209:8000}
       - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
     networks:
