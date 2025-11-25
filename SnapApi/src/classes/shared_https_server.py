@@ -178,11 +178,49 @@ class SharedHTTPServerManager:
             x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
         ]
         
-        # Add additional IPs if needed
+        # Dynamically extract IP addresses from SNAP_API_URL environment variable
+        ip_addresses = []
         try:
-            san_list.append(x509.IPAddress(ipaddress.IPv4Address("192.168.33.209")))
-        except:
-            pass
+            import socket
+            
+            # Get IP from SNAP_API_URL environment variable
+            snap_api_url = os.getenv("SNAP_API_URL", "http://localhost:8000")
+            api_host = snap_api_url.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+            
+            # Try to resolve IP addresses
+            hosts_to_resolve = [api_host]
+            
+            for host in hosts_to_resolve:
+                if host and not host.startswith('snaphook') and not host.startswith('localhost'):
+                    try:
+                        ip = socket.gethostbyname(host)
+                        ip_addresses.append(ip)
+                        logger.info(f'[SharedHTTPS] Resolved {host} to {ip}')
+                    except socket.gaierror:
+                        # If host is already an IP address, add it directly
+                        try:
+                            socket.inet_aton(host)
+                            ip_addresses.append(host)
+                            logger.info(f'[SharedHTTPS] Using IP address directly: {host}')
+                        except socket.error:
+                            pass
+            
+            # Remove duplicates while preserving order
+            ip_addresses = list(dict.fromkeys(ip_addresses))
+            
+            # Add resolved IPs to SAN list
+            for ip in ip_addresses:
+                try:
+                    san_list.append(x509.IPAddress(ipaddress.IPv4Address(ip)))
+                    logger.info(f'[SharedHTTPS] Added IP address to certificate: {ip}')
+                except (ValueError, ipaddress.AddressValueError) as e:
+                    logger.warning(f'[SharedHTTPS] Invalid IP address {ip}: {e}')
+            
+            logger.info(f'[SharedHTTPS] Generated IP addresses for certificate: {ip_addresses}')
+            
+        except Exception as e:
+            logger.warning(f'[SharedHTTPS] Could not extract IP addresses: {e}')
+            # Fallback: 127.0.0.1 is already in the list
         
         cert = x509.CertificateBuilder().subject_name(
             subject
