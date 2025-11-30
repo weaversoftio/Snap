@@ -493,11 +493,14 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
             await send_progress(username, {"progress": 50, "task_name": "Create Checkpoint", "message": f"Uploading checkpoint file from node"})
             
             print(f"SnapAPI: Uploading checkpoint from node: {checkpoint_file_path}")
-            print(f"SnapAPI: Curl Command: {debug_command}")
+            # Sanitize command before printing
+            from flows.proccess_utils import sanitize_command_for_logging
+            _, sanitized_cmd_str = sanitize_command_for_logging(debug_command)
+            print(f"SnapAPI: Curl Command: {sanitized_cmd_str}")
             print(f"SnapAPI: Upload URL: {SNAP_API_URL}/checkpoint/upload/{pod_name}?filename={checkpoint_filename}")
             
             # Call debug command
-            print(f"SnapAPI: Executing debug command: {debug_command}")
+            print(f"SnapAPI: Executing debug command: {sanitized_cmd_str}")
             debug_output = await run(debug_command)
             
             if debug_output.stdout:

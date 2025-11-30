@@ -60,6 +60,14 @@ class WebSocketLogHandler(logging.Handler):
             # Format the log message (just the message part, not the full formatted log)
             log_message = record.getMessage()
             
+            # Sanitize log message to mask any tokens that might be present
+            try:
+                from flows.proccess_utils import sanitize_string_for_logging
+                log_message = sanitize_string_for_logging(log_message)
+            except (ImportError, AttributeError):
+                # If sanitization function is not available, continue without it
+                pass
+            
             # Determine log type based on level
             log_type = 'info'
             if record.levelno == logging.ERROR:

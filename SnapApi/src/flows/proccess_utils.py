@@ -60,12 +60,14 @@ def sanitize_command_for_logging(command):
     return sanitized_cmd, cmd_str
 
 async def run(command, check=True, capture_output=True, text=True):
-    print("--------------------------------")
-    print(f"Running command: \n")
+    print()
+    print("┌" + "─" * 58 + "┐")
+    print("│" + "  COMMAND START".center(58) + "│")
+    print()
     # Sanitize command to mask sensitive information like tokens
     _, sanitized_cmd_str = sanitize_command_for_logging(command)
     print(f"{sanitized_cmd_str}")
-    print("--------------------------------")
+
     
     try:
         # Explicitly pass environment to ensure oc/kubectl can find kubeconfig
@@ -78,9 +80,6 @@ async def run(command, check=True, capture_output=True, text=True):
         )
         
         stdout, stderr = await process.communicate()
-        
-        if stdout:
-            print(f"SnapAPI: DEBUG - Process stdout length: {len(stdout)} bytes")
         
         if check and process.returncode != 0:
             error_msg = stderr.decode() if stderr else ''
@@ -97,7 +96,11 @@ async def run(command, check=True, capture_output=True, text=True):
             stdout = stdout.decode() if stdout else ''
             stderr = stderr.decode() if stderr else ''
         
-        print(f"SnapAPI: DEBUG - Command executed successfully")
+        print()
+        print("│" + "  COMMAND COMPLETED".center(58) + "│")
+        print("└" + "─" * 58 + "┘")
+        print()
+
         # Store sanitized command string in result
         _, sanitized_cmd_str = sanitize_command_for_logging(command)
         return AsyncProcessResult(

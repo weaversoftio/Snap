@@ -9,7 +9,7 @@ import { clusterApi } from "../../api/clusterApi";
 import { clusterCacheApi } from "../../api/clusterCacheApi";
 import { rbacApi } from "../../api/rbacApi";
 import { useNavigate } from "react-router-dom";
-import { Delete, SystemUpdateAlt as InstallIcon, SafetyCheck as VerifyIcon, Add as AddIcon, Cloud as CloudIcon, Storage as StorageIcon, Security as SecurityIcon, CloudUpload, Edit, ContentCopy, Close } from "@mui/icons-material";
+import { Delete, SystemUpdateAlt as InstallIcon, SafetyCheck as VerifyIcon, Add as AddIcon, Cloud as CloudIcon, Storage as StorageIcon, Security as SecurityIcon, CloudUpload, CloudDownload, Edit, ContentCopy, Close } from "@mui/icons-material";
 import { removeCookie } from "../../utils/cookies";
 import PolylineIcon from '@mui/icons-material/Polyline';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
@@ -62,6 +62,16 @@ const ClusterScreen = () => {
   const [selectedCacheRegistry, setSelectedCacheRegistry] = useState("")
   const [cacheRepo, setCacheRepo] = useState("snap_images")
 
+  // Download binaries state
+  const [downloadBinariesDialogOpen, setDownloadBinariesDialogOpen] = useState(false)
+  const [runcVersions, setRuncVersions] = useState([])
+  const [crioVersions, setCrioVersions] = useState([])
+  const [selectedRuncVersion, setSelectedRuncVersion] = useState("")
+  const [selectedCrioVersion, setSelectedCrioVersion] = useState("")
+  const [loadingVersions, setLoadingVersions] = useState(false)
+  const [downloadingRunc, setDownloadingRunc] = useState(false)
+  const [downloadingCrio, setDownloadingCrio] = useState(false)
+
   useEffect(() => {
     const fetchStats = async () => {
       if (!kubeAuthenticated) return setStats({ total_pods: 0, total_checkpoints: 0 })
@@ -95,6 +105,30 @@ const ClusterScreen = () => {
 
     fetchRegistries();
   }, []);
+
+  // Fetch binary versions when download dialog opens
+  useEffect(() => {
+    const fetchVersions = async () => {
+      if (!downloadBinariesDialogOpen) return;
+      
+      setLoadingVersions(true);
+      try {
+        const [runcVersionsData, crioVersionsData] = await Promise.all([
+          clusterApi.listRuncVersions(),
+          clusterApi.listCrioVersions()
+        ]);
+        setRuncVersions(runcVersionsData || []);
+        setCrioVersions(crioVersionsData || []);
+      } catch (error) {
+        console.error("Failed to fetch binary versions:", error);
+        enqueueSnackbar("Failed to fetch binary versions", { variant: "error" });
+      } finally {
+        setLoadingVersions(false);
+      }
+    };
+
+    fetchVersions();
+  }, [downloadBinariesDialogOpen]);
 
   // Auto-close form when leaving the page
   useEffect(() => {
@@ -199,6 +233,48 @@ const ClusterScreen = () => {
   const handleShowNodeConfig = async () => {
     // DEPRECATED: Node configuration is now handled automatically by the DaemonSet
     enqueueSnackbar("Node configuration is now handled automatically by the DaemonSet", { variant: "info" })
+  }
+
+  const handleShowDownloadBinaries = () => {
+    setDownloadBinariesDialogOpen(true);
+    setSelectedRuncVersion("");
+    setSelectedCrioVersion("");
+  }
+
+  const handleDownloadRunc = async () => {
+    if (!selectedRuncVersion) {
+      enqueueSnackbar("Please select a runc version", { variant: "warning" });
+      return;
+    }
+    
+    setDownloadingRunc(true);
+    try {
+      await clusterApi.downloadRunc(selectedRuncVersion);
+      enqueueSnackbar(`Successfully downloaded runc ${selectedRuncVersion}`, { variant: "success" });
+    } catch (error) {
+      console.error("Failed to download runc:", error);
+      enqueueSnackbar(`Failed to download runc: ${error.message || "Unknown error"}`, { variant: "error" });
+    } finally {
+      setDownloadingRunc(false);
+    }
+  }
+
+  const handleDownloadCrio = async () => {
+    if (!selectedCrioVersion) {
+      enqueueSnackbar("Please select a crio version", { variant: "warning" });
+      return;
+    }
+    
+    setDownloadingCrio(true);
+    try {
+      await clusterApi.downloadCrio(selectedCrioVersion);
+      enqueueSnackbar(`Successfully downloaded crio ${selectedCrioVersion}`, { variant: "success" });
+    } catch (error) {
+      console.error("Failed to download crio:", error);
+      enqueueSnackbar(`Failed to download crio: ${error.message || "Unknown error"}`, { variant: "error" });
+    } finally {
+      setDownloadingCrio(false);
+    }
   }
 
   const handlePlaybookConfigs = async () => {
@@ -943,6 +1019,111 @@ const ClusterScreen = () => {
     )
   }
 
+  const renderDownloadBinariesDialog = () => {
+    return (
+      <DialogComponent
+        open={downloadBinariesDialogOpen}
+        onClose={() => setDownloadBinariesDialogOpen(false)}
+        paperProps={{ maxWidth: 500 }}
+      >
+        <Box sx={{ p: 1 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>
+            Download Binaries
+          </Typography>
+        </Box>
+        <Box gap={3} display={"flex"} flexDirection={"column"}>
+          {loadingVersions ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {/* Crio Section */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Crio:
+                </Typography>
+                <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+                  <InputLabel>Crio Version</InputLabel>
+                  <Select
+                    value={selectedCrioVersion}
+                    onChange={(e) => setSelectedCrioVersion(e.target.value)}
+                    label="Crio Version"
+                  >
+                    {crioVersions.length > 0 ? (
+                      crioVersions.map((version) => (
+                        <MenuItem key={version} value={version}>
+                          {version}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuItem disabled>No versions available</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="contained"
+                  onClick={handleDownloadCrio}
+                  disabled={!selectedCrioVersion || downloadingCrio}
+                  startIcon={downloadingCrio ? <CircularProgress size={16} /> : <CloudDownload />}
+                  sx={{ mt: 2, width: '100%' }}
+                >
+                  {downloadingCrio ? "Downloading..." : "Download Crio"}
+                </Button>
+              </Box>
+
+              <Divider />
+
+              {/* Runc Section */}
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Runc:
+                </Typography>
+                <FormControl sx={{ minWidth: 120 }} fullWidth variant='outlined'>
+                  <InputLabel>Runc Version</InputLabel>
+                  <Select
+                    value={selectedRuncVersion}
+                    onChange={(e) => setSelectedRuncVersion(e.target.value)}
+                    label="Runc Version"
+                  >
+                    {runcVersions.length > 0 ? (
+                      runcVersions.map((version) => (
+                        <MenuItem key={version} value={version}>
+                          {version}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuItem disabled>No versions available</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="contained"
+                  onClick={handleDownloadRunc}
+                  disabled={!selectedRuncVersion || downloadingRunc}
+                  startIcon={downloadingRunc ? <CircularProgress size={16} /> : <CloudDownload />}
+                  sx={{ mt: 2, width: '100%' }}
+                >
+                  {downloadingRunc ? "Downloading..." : "Download Runc"}
+                </Button>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => setDownloadBinariesDialogOpen(false)}
+                  disabled={downloadingRunc || downloadingCrio}
+                >
+                  Close
+                </Button>
+              </Box>
+            </>
+          )}
+        </Box>
+      </DialogComponent>
+    )
+  }
+
   const renderDialog = () => {
     if (!dialogType) return
 
@@ -988,6 +1169,7 @@ const ClusterScreen = () => {
 
       {renderDialog()}
       {renderClusterCacheDialog()}
+      {renderDownloadBinariesDialog()}
       {isLoading ? renderLoading() : (
         <>
           {!selectedCluster ? (
@@ -1088,6 +1270,17 @@ const ClusterScreen = () => {
                           sx={{ height: 48, textTransform: 'none' }}
                         >
                           Cluster Cache Config
+                        </Button>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={4}>
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          onClick={handleShowDownloadBinaries}
+                          startIcon={<CloudDownload />}
+                          sx={{ height: 48, textTransform: 'none' }}
+                        >
+                          Download Binaries
                         </Button>
                       </Grid>
                     </>

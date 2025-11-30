@@ -2,7 +2,7 @@ import os
 import subprocess
 import json
 from classes.apirequests import PodCheckpointRequest, PodCheckpointResponse
-from flows.proccess_utils import run
+from flows.proccess_utils import run, sanitize_command_for_logging, sanitize_string_for_logging
 
 def load_cluster_config(cluster_name: str) -> dict:
     """
@@ -80,7 +80,9 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest) -> PodChec
         
         if not verify_ssl:
             checkpoint_cmd.insert(1, "-k")  # Add -k flag for insecure connections
-        print(f"SnapAPI: Checkpoint command: {checkpoint_cmd}")
+        # Sanitize command before printing
+        _, sanitized_cmd_str = sanitize_command_for_logging(checkpoint_cmd)
+        print(f"SnapAPI: Checkpoint command: {sanitized_cmd_str}")
         output = await run(checkpoint_cmd)
         print(f"SnapAPI: Output: {output}")
 
@@ -105,10 +107,15 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest) -> PodChec
             "-F", f"file=@{checkpoint_file_path}"
         ]
         try:
-            print(f"SnapAPI: Executing debug command: {debug_command}")
+            # Sanitize command before printing
+            _, sanitized_debug_cmd_str = sanitize_command_for_logging(debug_command)
+            print(f"SnapAPI: Executing debug command: {sanitized_debug_cmd_str}")
             debug_output = await run(debug_command)
-            print(f"SnapAPI: Debug command stdout: {debug_output.stdout}")
-            print(f"SnapAPI: Debug command stderr: {debug_output.stderr}")
+            # Sanitize output in case it contains sensitive data
+            sanitized_stdout = sanitize_string_for_logging(debug_output.stdout)
+            sanitized_stderr = sanitize_string_for_logging(debug_output.stderr)
+            print(f"SnapAPI: Debug command stdout: {sanitized_stdout}")
+            print(f"SnapAPI: Debug command stderr: {sanitized_stderr}")
             if debug_output.returncode != 0:
                 error_msg = f"Upload failed with return code {debug_output.returncode}. stderr: {debug_output.stderr}"
                 print(f"SnapAPI: {error_msg}")

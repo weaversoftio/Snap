@@ -155,6 +155,75 @@ const updatePlaybookConfig = async ({name, data}) => new Promise(async (resolve,
     }
 })
 
+const listRuncVersions = async () => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.get(`/download/runc/versions`)
+        if (!response.data) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const listCrioVersions = async () => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.get(`/download/crio/versions`)
+        if (!response.data) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const downloadRunc = async (version) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.get(`/download/runc/${version}`, {
+            responseType: 'blob'
+        })
+        // Create a blob URL and trigger download
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `runc.amd64`)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+        resolve(true)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const downloadCrio = async (version) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.get(`/download/crio/${version}`, {
+            responseType: 'blob'
+        })
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = response.headers['content-disposition']
+        let filename = `cri-o-${version}.rpm`
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+            if (filenameMatch) {
+                filename = filenameMatch[1]
+            }
+        }
+        // Create a blob URL and trigger download
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', filename)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+        resolve(true)
+    } catch (err) {
+        reject(err)
+    }
+})
+
 
 export const clusterApi = {
     getById,
@@ -171,5 +240,9 @@ export const clusterApi = {
     getNodeConfig,
     updateNodeConfig,
     getPlaybookConfigs,
-    updatePlaybookConfig
+    updatePlaybookConfig,
+    listRuncVersions,
+    listCrioVersions,
+    downloadRunc,
+    downloadCrio
 }
