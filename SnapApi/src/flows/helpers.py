@@ -27,7 +27,35 @@ async def _skopeo_extract_digest(image_ref: str) -> str:
     image_ref example: docker://docker.io/nginxinc/nginx-unprivileged:stable
     returns full digest like 'sha256:4833e2f3...'
     """
-    cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false", image_ref]
+    # Extract registry host to find credentials
+    # Remove docker:// prefix if present for parsing
+    image_for_parsing = image_ref.replace("docker://", "")
+    registry_host = parse_registry_host_from_image(image_for_parsing)
+    
+    # Find credentials for this registry
+    creds = None
+    cred_obj = find_registry_creds(registry_host)
+    if cred_obj is not None:
+        username = cred_obj.get("username", "")
+        password = cred_obj.get("password", "")
+        if username or password:
+            creds = f"{username}:{password}"
+            print(f"Using credentials for {registry_host}")
+    
+    # Also check environment variables as fallback
+    if not creds:
+        env_username = os.getenv("snap_registry_user", "")
+        env_password = os.getenv("snap_registry_pass", "")
+        if env_username or env_password:
+            creds = f"{env_username}:{env_password}"
+            print(f"Using env credentials")
+    
+    # Build skopeo command with credentials if available
+    cmd = ["skopeo", "inspect", "--insecure-policy", "--tls-verify=false"]
+    if creds:
+        cmd += ["--creds", creds]
+    cmd += [image_ref]
+    
     out = await run(cmd)
     data = json.loads(out.stdout)
     return data.get("Digest", "")

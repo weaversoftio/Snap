@@ -3,7 +3,7 @@ services:
     build:
       context: ./SnapApi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapapi:v1.0.3
+    image: docker.io/frenzy669/snapapi:v1.0.7
     container_name: snapapi
     stop_grace_period: 2s
     privileged: true
@@ -55,7 +55,7 @@ services:
     build:
       context: ./SnapUi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapui:v1.0.3
+    image: docker.io/frenzy669/snapui:v1.0.5
     container_name: snapui-prod
     ports:
       - "0.0.0.0:8080:8080"
