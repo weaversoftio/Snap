@@ -6,13 +6,6 @@ services:
     container_name: snapapi
     image: 192.168.33.204:8082/snapapi:${BRANCH_NAME:-main}
     stop_grace_period: 2s
-    privileged: true
-    cap_add:
-    - SYS_ADMIN
-    group_add:
-      - "0"  # root group
-      - "998"  # crio group
-      - "999"  # podman group
     ports:
       - "8000:8000"
       - "8443:8443"  # SnapHook webhook port

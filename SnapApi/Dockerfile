@@ -71,11 +71,21 @@ RUN echo "export BUILDAH_ISOLATION=chroot" >> /home/snap/.bashrc
 # Use VFS because fuse does not work
 RUN echo '[storage]' > /etc/containers/storage.conf && echo 'driver = "vfs"' >> /etc/containers/storage.conf
 
-# The container will run as `SNAP` user
-USER snap
+# Create checkpoints directory with proper permissions
+RUN mkdir -p /app/checkpoints && \
+    chown -R 669:0 /app/checkpoints && \
+    chmod -R 775 /app/checkpoints
+
+# Copy and set up entrypoint script to fix permissions at runtime
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose the port
 EXPOSE 8000
 
+# Use entrypoint to fix permissions, then switch to snap user
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# The container will run as `SNAP` user (via entrypoint)
 # Run the application
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app"]

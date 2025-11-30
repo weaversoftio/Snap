@@ -50,6 +50,8 @@ def snap_init():
         os.makedirs("config/hooks", exist_ok=True)
         os.makedirs("config/security/users", exist_ok=True)
         os.makedirs("config/security/secrets", exist_ok=True)
+        # Ensure checkpoints directory exists (mounted volume may not exist or have wrong permissions)
+        os.makedirs("/app/checkpoints", exist_ok=True)
         
         # Always check for local cluster auto-creation, regardless of initialization status
         auto_create_local_cluster()

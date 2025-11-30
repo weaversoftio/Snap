@@ -180,6 +180,32 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
 
         # Upload the checkpoint file from the node - use the dynamically configured SNAP_API_URL
         # (SNAP_API_URL was already set above with the cluster IP)
+        # First, ensure we're logged in to the cluster for oc debug command
+        try:
+            from classes.clusterconfig import ClusterConfig
+            cluster_config_path = f"config/clusters/{cluster}.json"
+            if os.path.exists(cluster_config_path):
+                with open(cluster_config_path, "r") as f:
+                    cluster_config = ClusterConfig.model_validate_json(f.read())
+                
+                kube_api_url = cluster_config.cluster_config_details.kube_api_url
+                token = cluster_config.cluster_config_details.token
+                verify_ssl = os.getenv('KUBE_VERIFY_SSL', 'false').lower() == 'true'
+                
+                # Login to cluster before running oc debug
+                login_cmd = [
+                    "oc", "login", 
+                    "--token", token,
+                    "--server", kube_api_url
+                ]
+                if not verify_ssl:
+                    login_cmd.append("--insecure-skip-tls-verify=true")
+                
+                print(f"SnapAPI: Logging in to cluster {cluster} for oc debug command")
+                await run(login_cmd, check=False)  # Don't fail if already logged in
+        except Exception as login_err:
+            print(f"SnapAPI: Warning - Could not login to cluster (may already be logged in): {login_err}")
+        
         debug_command = [
             "oc", "debug", f"node/{node_name}", "--",
             "chroot", "/host", "curl", "-X", "POST",
@@ -294,8 +320,26 @@ async def checkpoint_and_push_from_pod_spec(request: PodSpecCheckpointRequest, c
             }
             
             # Create JSON file locally in SnapAPI container
-            local_checkpoint_path = f"/app/checkpoints/{pod_name}"
-            os.makedirs(local_checkpoint_path, exist_ok=True)
+            # Ensure base checkpoints directory exists first
+            base_checkpoints_dir = "/app/checkpoints"
+            try:
+                os.makedirs(base_checkpoints_dir, exist_ok=True)
+            except PermissionError as e:
+                raise PermissionError(
+                    f"Cannot create or access checkpoints directory {base_checkpoints_dir}. "
+                    f"Please ensure the directory exists and is writable by the snap user (UID 669). "
+                    f"Original error: {e}"
+                )
+            
+            local_checkpoint_path = f"{base_checkpoints_dir}/{pod_name}"
+            try:
+                os.makedirs(local_checkpoint_path, exist_ok=True)
+            except PermissionError as e:
+                raise PermissionError(
+                    f"Cannot create checkpoint directory {local_checkpoint_path}. "
+                    f"Please ensure {base_checkpoints_dir} is writable by the snap user (UID 669). "
+                    f"Original error: {e}"
+                )
             
             # Generate JSON file path locally with normalized filename
             json_filename = os.path.splitext(checkpoint_filename)[0] + ".json"

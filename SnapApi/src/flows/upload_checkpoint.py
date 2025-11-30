@@ -24,9 +24,26 @@ def upload_checkpoint(file: IO, checkpoint_path: Union[str, Path], pod_name: str
         checkpoint_path = str(checkpoint_path)
         pod_name = str(pod_name)
 
+        # Ensure base checkpoints directory exists first
+        try:
+            os.makedirs(checkpoint_path, exist_ok=True)
+        except PermissionError as e:
+            raise PermissionError(
+                f"Cannot create or access checkpoints directory {checkpoint_path}. "
+                f"Please ensure the directory exists and is writable by the snap user (UID 669). "
+                f"Original error: {e}"
+            )
+
         # Create pod-specific directory
         pod_dir = os.path.join(checkpoint_path, pod_name)
-        os.makedirs(pod_dir, exist_ok=True)
+        try:
+            os.makedirs(pod_dir, exist_ok=True)
+        except PermissionError as e:
+            raise PermissionError(
+                f"Cannot create checkpoint directory {pod_dir}. "
+                f"Please ensure {checkpoint_path} is writable by the snap user (UID 669). "
+                f"Original error: {e}"
+            )
 
         # If filename is not provided, try to get it from the UploadFile
         print(f"Initial filename: {filename}")

@@ -194,56 +194,114 @@ class SnapWatcherOperator:
         Watch for pod events using Kubernetes watch API.
         This method runs in a separate thread and automatically restarts on timeout/errors.
         """
-        while not self._stop_event.is_set():
-            try:
-                v1 = client.CoreV1Api(self.kube_client)
-                w = watch.Watch()
-                
-                # Configure label selector to filter at Kubernetes API level
-                # Include pods with snap=true but exclude pods with mutated=true
-                label_selector = "snap.weaversoft.io/snap=true,!snap.weaversoft.io/mutated"
-                
-                # Configure watch parameters based on scope with label filtering
-                if self.scope == "namespace":
-                    logger.debug(f'[SnapWatcher] Watching pods in namespace: {self.namespace} with label selector: {label_selector}')
-                    stream = w.stream(v1.list_namespaced_pod, namespace=self.namespace, label_selector=label_selector, timeout_seconds=0)
-                else:
-                    logger.debug(f'[SnapWatcher] Watching pods cluster-wide with label selector: {label_selector}')
-                    stream = w.stream(v1.list_pod_for_all_namespaces, label_selector=label_selector, timeout_seconds=0)
-                
-                for event in stream:
-                    # Check if we should stop
-                    if self._stop_event.is_set():
-                        logger.info(f'[SnapWatcher] Stop event received, exiting watch loop')
-                        break
-                    
-                    
-                    # Process the event
-                    try:
-                        # Run the async function directly in this thread
-                        asyncio.run(self._process_pod_event(event))
-                    except Exception as e:
-                        logger.error(f'[SnapWatcher] Error processing pod event in watch loop: {e}')
-                
-                # Watch stream ended (timeout or connection closed)
-                # If we're not stopping, restart the watch loop
-                if not self._stop_event.is_set():
-                    logger.debug(f'[SnapWatcher] Watch stream ended, restarting watch loop for cluster {self.cluster_name}')
-                    # Small delay before restarting to avoid tight loop
-                    time.sleep(1)
-                
-            except Exception as e:
-                if not self._stop_event.is_set():  # Only log if not stopping
-                    logger.error(f'[SnapWatcher] Error in watch loop: {e}')
-                    # Small delay before retrying to avoid tight loop
-                    time.sleep(5)
-                else:
-                    # We're stopping, break out of the loop
-                    break
+        # Create a new event loop for this thread
+        # This is necessary because asyncio.run() cannot be called if there's already an event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # Thread is exiting - update is_running flag
-        self.is_running = False
-        logger.info(f'[SnapWatcher] Watch thread exiting for cluster {self.cluster_name}')
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    v1 = client.CoreV1Api(self.kube_client)
+                    w = watch.Watch()
+                    
+                    # Configure label selector to filter at Kubernetes API level
+                    # Include pods with snap=true but exclude pods with mutated=true
+                    label_selector = "snap.weaversoft.io/snap=true,!snap.weaversoft.io/mutated"
+                    
+                    # First, list existing pods that match the criteria and process them
+                    # This handles pods that already exist when the watcher starts
+                    logger.info(f'[SnapWatcher] Checking for existing pods with label selector: {label_selector}')
+                    try:
+                        if self.scope == "namespace":
+                            existing_pods = v1.list_namespaced_pod(namespace=self.namespace, label_selector=label_selector)
+                        else:
+                            existing_pods = v1.list_pod_for_all_namespaces(label_selector=label_selector)
+                        
+                        if existing_pods.items:
+                            logger.info(f'[SnapWatcher] Found {len(existing_pods.items)} existing pod(s) matching criteria, processing them')
+                            for pod in existing_pods.items:
+                                if self._stop_event.is_set():
+                                    break
+                                # Create an ADDED event for each existing pod
+                                pod_name = getattr(pod.metadata, 'name', 'unknown') if pod.metadata else 'unknown'
+                                pod_namespace = getattr(pod.metadata, 'namespace', 'unknown') if pod.metadata else 'unknown'
+                                logger.info(f'[SnapWatcher] Processing existing pod: {pod_namespace}/{pod_name}')
+                                event = {'type': 'ADDED', 'object': pod}
+                                try:
+                                    loop.run_until_complete(self._process_pod_event(event))
+                                except Exception as e:
+                                    logger.error(f'[SnapWatcher] Error processing existing pod {pod_name}: {e}')
+                                    import traceback
+                                    logger.error(f'[SnapWatcher] Traceback: {traceback.format_exc()}')
+                        else:
+                            logger.info(f'[SnapWatcher] No existing pods found matching criteria')
+                    except Exception as e:
+                        logger.warning(f'[SnapWatcher] Error listing existing pods (will continue with watch): {e}')
+                    
+                    # Now start watching for future changes
+                    # Configure watch parameters based on scope with label filtering
+                    if self.scope == "namespace":
+                        logger.info(f'[SnapWatcher] Starting watch for pods in namespace: {self.namespace} with label selector: {label_selector}')
+                        stream = w.stream(v1.list_namespaced_pod, namespace=self.namespace, label_selector=label_selector, timeout_seconds=0)
+                    else:
+                        logger.info(f'[SnapWatcher] Starting watch for pods cluster-wide with label selector: {label_selector}')
+                        stream = w.stream(v1.list_pod_for_all_namespaces, label_selector=label_selector, timeout_seconds=0)
+                    
+                    logger.info(f'[SnapWatcher] Watch stream established for cluster {self.cluster_name}')
+                    
+                    for event in stream:
+                        # Check if we should stop
+                        if self._stop_event.is_set():
+                            logger.info(f'[SnapWatcher] Stop event received, exiting watch loop')
+                            break
+                        
+                        
+                        # Process the event
+                        try:
+                            # Run the async function using the thread's event loop
+                            loop.run_until_complete(self._process_pod_event(event))
+                        except Exception as e:
+                            logger.error(f'[SnapWatcher] Error processing pod event in watch loop: {e}')
+                            import traceback
+                            logger.error(f'[SnapWatcher] Traceback: {traceback.format_exc()}')
+                    
+                    # Watch stream ended (timeout or connection closed)
+                    # If we're not stopping, restart the watch loop
+                    if not self._stop_event.is_set():
+                        logger.warning(f'[SnapWatcher] Watch stream ended for cluster {self.cluster_name}, restarting watch loop')
+                        # Small delay before restarting to avoid tight loop
+                        time.sleep(1)
+                    
+                except Exception as e:
+                    if not self._stop_event.is_set():  # Only log if not stopping
+                        logger.error(f'[SnapWatcher] Error in watch loop: {e}')
+                        import traceback
+                        logger.error(f'[SnapWatcher] Traceback: {traceback.format_exc()}')
+                        # Small delay before retrying to avoid tight loop
+                        time.sleep(5)
+                    else:
+                        # We're stopping, break out of the loop
+                        break
+            
+        finally:
+            # Clean up the event loop when thread exits
+            try:
+                # Cancel any pending tasks
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                # Wait for tasks to complete cancellation
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception as e:
+                logger.debug(f'[SnapWatcher] Error cleaning up event loop tasks: {e}')
+            finally:
+                loop.close()
+            
+            # Thread is exiting - update is_running flag
+            self.is_running = False
+            logger.info(f'[SnapWatcher] Watch thread exiting for cluster {self.cluster_name}')
     
     async def _process_pod_event(self, event) -> None:
         """
@@ -343,6 +401,7 @@ class SnapWatcherOperator:
         # --- ignore deletions & terminating pods ---
         if evt_type == "DELETED" or metadata.get("deletionTimestamp"):
             # Clean up tracking when pod is deleted
+            logger.debug(f'[SnapWatcher] Pod {pod} is deleted or terminating, cleaning up tracking')
             with self._tracking_lock:
                 self._processing_pods.discard(pod_key)
                 self._checkpointed_pods.discard(pod_key)
@@ -351,29 +410,46 @@ class SnapWatcherOperator:
         # Check if pod is already being processed or has been checkpointed
         with self._tracking_lock:
             if pod_key in self._processing_pods:
-                logger.debug(f'[SnapWatcher] Pod {pod} is already being checkpointed, skipping duplicate event')
+                logger.info(f'[SnapWatcher] Pod {pod} is already being checkpointed, skipping duplicate event')
                 return
             
             if pod_key in self._checkpointed_pods:
-                logger.debug(f'[SnapWatcher] Pod {pod} has already been checkpointed, skipping')
+                logger.info(f'[SnapWatcher] Pod {pod} has already been checkpointed, skipping')
                 return
 
         # Must be Running
-        if status.get("phase") != "Running":
+        pod_phase = status.get("phase")
+        if pod_phase != "Running":
             return
         
-        # Additional check: verify containers are actually running (not terminating)
+        # Additional check: verify at least one container is currently running
+        # A container status can have multiple state keys (running, waiting, terminated)
+        # but only one represents the CURRENT state. We need to check if the container
+        # is currently running, not if it has historical terminated states.
         container_statuses = status.get("container_statuses", []) or []
+        has_running_container = False
         for cs in container_statuses:
             state = cs.get("state", {}) or {}
-            # If container is in terminated or waiting state, skip checkpoint
-            if "terminated" in state:
-                logger.debug(f'[SnapWatcher] Pod {pod} has terminated containers, skipping checkpoint')
-                return
-            # If container is waiting (not started yet), skip
-            if "waiting" in state:
-                logger.debug(f'[SnapWatcher] Pod {pod} has waiting containers, skipping checkpoint')
-                return
+            # Check if this container is currently running
+            if "running" in state:
+                has_running_container = True
+                break
+        
+        if not has_running_container:
+            # Log why we're skipping - check what state the containers are in
+            container_states = []
+            for cs in container_statuses:
+                state = cs.get("state", {}) or {}
+                if "running" in state:
+                    container_states.append("running")
+                elif "waiting" in state:
+                    container_states.append("waiting")
+                elif "terminated" in state:
+                    container_states.append("terminated")
+                else:
+                    container_states.append("unknown")
+            logger.info(f'[SnapWatcher] Pod {pod} has no running containers (states: {container_states}), skipping checkpoint')
+            return
 
         # --- Check startup probe filter (when startup probe is selected) ---
         if self.trigger == "startupProbe":
@@ -383,6 +459,7 @@ class SnapWatcherOperator:
             conds = status.get("conditions", []) or []
             is_ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in conds)
             if not is_ready:
+                logger.info(f'[SnapWatcher] Pod {pod} is not Ready (startupProbe trigger), skipping')
                 return
 
         # At least one container started & running
@@ -400,6 +477,7 @@ class SnapWatcherOperator:
                 break
         
         if not started:
+            logger.info(f'[SnapWatcher] Pod {pod} has no started containers, skipping checkpoint')
             return
 
         # Extract container name (first container)
