@@ -3,8 +3,8 @@ services:
     build:
       context: ./SnapApi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapapi:v1.0.7
     container_name: snapapi
+    image: 192.168.33.204:8082/snapapi:${BRANCH_NAME:-main}
     stop_grace_period: 2s
     privileged: true
     cap_add:
@@ -13,14 +13,12 @@ services:
       - "0"  # root group
       - "998"  # crio group
       - "999"  # podman group
-    security_opt:
-      - label=disable
     ports:
       - "8000:8000"
       - "8443:8443"  # SnapHook webhook port
     environment:
       # SnapApi configuration
-      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,http://192.168.33.209:3000,*
+      - SNAP_ORIGINS=http://localhost:8080,*
       - SNAP_API_URL=http://192.168.33.209:8000
       # SnapWatcher operator configuration
       - WATCHER_CLUSTER_NAME=crc
@@ -55,8 +53,9 @@ services:
     build:
       context: ./SnapUi
       dockerfile: Dockerfile
-    image: docker.io/frenzy669/snapui:v1.0.5
-    container_name: snapui-prod
+
+    container_name: snapui
+    image: docker.io/frenzy669/snapui:${BRANCH_NAME:-main}
     ports:
       - "0.0.0.0:8080:8080"
     environment:

@@ -388,6 +388,40 @@ class SharedHTTPServerManager:
                 logger.error(f"Failed to stop shared HTTPS server: {e}")
                 return False
     
+    def regenerate_certificates(self) -> bool:
+        """
+        Regenerate certificates and restart the server.
+        This is used when certificate mismatches are detected.
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        with self._lock:
+            logger.info("[SharedHTTPS] Regenerating certificates due to mismatch detection...")
+            
+            # Stop the server if it's running
+            was_running = self.is_running
+            if was_running:
+                logger.info("[SharedHTTPS] Stopping server to regenerate certificates...")
+                self.stop_shared_server()
+            
+            # Generate new certificates
+            try:
+                self.cert_data = self.generate_shared_certificates()
+                self.ca_bundle = self.cert_data["cert"]
+                logger.info("[SharedHTTPS] New certificates generated successfully")
+                
+                # Restart the server if it was running
+                if was_running:
+                    logger.info("[SharedHTTPS] Restarting server with new certificates...")
+                    return self.start_shared_server()
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"[SharedHTTPS] Failed to regenerate certificates: {e}")
+                return False
+    
     def get_ca_bundle(self) -> str:
         """Get the CA bundle for webhook configurations."""
         return self.ca_bundle or ""

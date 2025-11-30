@@ -11,7 +11,7 @@ services:
       - "8443:8443"  # SnapHook webhook port
     environment:
       # SnapApi configuration
-      - SNAP_ORIGINS=http://localhost:3000,http://localhost:8080,http://192.168.33.209:3000,*
+      - SNAP_ORIGINS=http://localhost:8080,*
       - SNAP_API_URL=http://192.168.33.209:8000
       # SnapWatcher operator configuration
       - WATCHER_CLUSTER_NAME=crc
@@ -26,9 +26,8 @@ services:
       # Mount src folder for hot reload
       - ./SnapApi/src:/app:Z
       # Mount docs folder for documentation
-      - ./docs:/app/docs:Z
-      # Mount checkpoint storage
-      - snapapi-checkpoints:/app/checkpoints
+      - ./SnapApi/docs:/app/docs:Z
+
     networks:
       - snap-network
     restart: unless-stopped
@@ -51,24 +50,14 @@ services:
     container_name: snapui-dev
     image: docker.io/frenzy669/snapui:${BRANCH_NAME:-main}
     ports:
-      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:8080:8080"
     environment:
       # API configuration - these can be overridden via environment variables or .env file
       # The API_URL should be the external URL that browsers can access (e.g., http://localhost:8000 or http://<host-ip>:8000)
       # The WS_URL should be the WebSocket URL (e.g., ws://localhost:8000 or ws://<host-ip>:8000)
       # Defaults to localhost for local development - override if accessing from remote hosts
-      # Note: Create React App requires REACT_APP_ prefix for environment variables accessible in the browser
-      - REACT_APP_API_URL=${API_URL:-http://localhost:8000}
-      - REACT_APP_WS_URL=${WS_URL:-ws://localhost:8000}
-      
-      # React app configuration
-      - REACT_APP_USERNAME=${REACT_APP_USERNAME:-admin}
-      - REACT_APP_PASSWORD=${REACT_APP_PASSWORD:-admin}
-      
-      # Development settings
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-      - HOST=0.0.0.0
+      - API_URL=${API_URL:-http://192.168.33.209:8000}
+      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
     volumes:
       # Mount src folder for hot reload
       - ./SnapUi/src:/app:Z
@@ -78,7 +67,7 @@ services:
       - snap-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -86,12 +75,11 @@ services:
     command: >
       sh -c "
         # Start React dev server bound to all interfaces
-        HOST=0.0.0.0 yarn start
+        HOST=0.0.0.0 PORT=8080 yarn start
       "
 
 volumes:
-  snapapi-checkpoints:
-    driver: local
+
   snapui-node-modules:
     driver: local
 

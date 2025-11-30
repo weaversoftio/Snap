@@ -48,6 +48,10 @@ class SnapWatcherOperator:
         self.is_running = False
         self.watch_thread = None
         self._stop_event = threading.Event()
+        # Thread-safe tracking to prevent duplicate checkpoint attempts
+        self._processing_pods = set()  # Track pods currently being checkpointed
+        self._checkpointed_pods = set()  # Track pods that have been successfully checkpointed
+        self._tracking_lock = threading.Lock()  # Lock for thread-safe set operations
         
         # Validate namespace scope
         if scope == "namespace" and not namespace:
@@ -201,11 +205,11 @@ class SnapWatcherOperator:
                 
                 # Configure watch parameters based on scope with label filtering
                 if self.scope == "namespace":
-                    logger.info(f'[SnapWatcher] Watching pods in namespace: {self.namespace} with label selector: {label_selector}')
-                    stream = w.stream(v1.list_namespaced_pod, namespace=self.namespace, label_selector=label_selector, timeout_seconds=60)
+                    logger.debug(f'[SnapWatcher] Watching pods in namespace: {self.namespace} with label selector: {label_selector}')
+                    stream = w.stream(v1.list_namespaced_pod, namespace=self.namespace, label_selector=label_selector, timeout_seconds=0)
                 else:
-                    logger.info(f'[SnapWatcher] Watching pods cluster-wide with label selector: {label_selector}')
-                    stream = w.stream(v1.list_pod_for_all_namespaces, label_selector=label_selector, timeout_seconds=60)
+                    logger.debug(f'[SnapWatcher] Watching pods cluster-wide with label selector: {label_selector}')
+                    stream = w.stream(v1.list_pod_for_all_namespaces, label_selector=label_selector, timeout_seconds=0)
                 
                 for event in stream:
                     # Check if we should stop
@@ -224,7 +228,7 @@ class SnapWatcherOperator:
                 # Watch stream ended (timeout or connection closed)
                 # If we're not stopping, restart the watch loop
                 if not self._stop_event.is_set():
-                    logger.info(f'[SnapWatcher] Watch stream ended, restarting watch loop for cluster {self.cluster_name}')
+                    logger.debug(f'[SnapWatcher] Watch stream ended, restarting watch loop for cluster {self.cluster_name}')
                     # Small delay before restarting to avoid tight loop
                     time.sleep(1)
                 
@@ -331,17 +335,45 @@ class SnapWatcherOperator:
 
         ns = metadata.get("namespace", "-")
         pod = metadata.get("name", "-")
+        pod_key = f"{ns}/{pod}"  # Create unique key for pod tracking
         node_name = spec.get("node_name", "-")  # Use node_name instead of nodeName
         labels = metadata.get("labels", {}) or {}
         containers = spec.get("containers", []) or []
 
         # --- ignore deletions & terminating pods ---
         if evt_type == "DELETED" or metadata.get("deletionTimestamp"):
+            # Clean up tracking when pod is deleted
+            with self._tracking_lock:
+                self._processing_pods.discard(pod_key)
+                self._checkpointed_pods.discard(pod_key)
             return
+
+        # Check if pod is already being processed or has been checkpointed
+        with self._tracking_lock:
+            if pod_key in self._processing_pods:
+                logger.debug(f'[SnapWatcher] Pod {pod} is already being checkpointed, skipping duplicate event')
+                return
+            
+            if pod_key in self._checkpointed_pods:
+                logger.debug(f'[SnapWatcher] Pod {pod} has already been checkpointed, skipping')
+                return
 
         # Must be Running
         if status.get("phase") != "Running":
             return
+        
+        # Additional check: verify containers are actually running (not terminating)
+        container_statuses = status.get("container_statuses", []) or []
+        for cs in container_statuses:
+            state = cs.get("state", {}) or {}
+            # If container is in terminated or waiting state, skip checkpoint
+            if "terminated" in state:
+                logger.debug(f'[SnapWatcher] Pod {pod} has terminated containers, skipping checkpoint')
+                return
+            # If container is waiting (not started yet), skip
+            if "waiting" in state:
+                logger.debug(f'[SnapWatcher] Pod {pod} has waiting containers, skipping checkpoint')
+                return
 
         # --- Check startup probe filter (when startup probe is selected) ---
         if self.trigger == "startupProbe":
@@ -355,8 +387,8 @@ class SnapWatcherOperator:
 
         # At least one container started & running
         started = False
-        container_statuses = status.get("container_statuses", []) or []
-
+        # Note: container_statuses was already retrieved above, but we need to check again
+        # since we're checking for terminated/waiting states
         for cs in container_statuses:
             state = cs.get("state", {}) or {}
             started_flag = cs.get("started", False)
@@ -386,6 +418,10 @@ class SnapWatcherOperator:
         # -----------------------------------------------------------------
         # Directly call the checkpoint function instead of HTTP request
         # -----------------------------------------------------------------
+        # Mark pod as being processed before starting checkpoint
+        with self._tracking_lock:
+            self._processing_pods.add(pod_key)
+        
         try:
             self._safe_broadcast_progress({
                 "progress": 10, 
@@ -406,6 +442,11 @@ class SnapWatcherOperator:
             if result.get("success"):
                 logger.info(f'[SnapWatcher] Checkpoint and push completed successfully for pod {pod}')
                 logger.info(f'[SnapWatcher] Image tag: {result.get("image_tag", "N/A")}')
+                
+                # Mark as successfully checkpointed and remove from processing
+                with self._tracking_lock:
+                    self._checkpointed_pods.add(pod_key)
+                    self._processing_pods.discard(pod_key)
                 
                 # Automatically delete the pod after successful checkpoint if enabled
                 if self.auto_delete_pod:
@@ -438,6 +479,10 @@ class SnapWatcherOperator:
                     })
                     logger.info(f'[SnapWatcher] Auto-deletion disabled, keeping pod {pod}')
             else:
+                # Remove from processing on failure
+                with self._tracking_lock:
+                    self._processing_pods.discard(pod_key)
+                
                 error_msg = result.get('message', 'Unknown error')
                 self._safe_broadcast_progress({
                     "progress": "failed", 
@@ -447,6 +492,10 @@ class SnapWatcherOperator:
                 logger.error(f'[SnapWatcher] Checkpoint operation failed: {error_msg}')
                 
         except Exception as e:
+            # Remove from processing on exception
+            with self._tracking_lock:
+                self._processing_pods.discard(pod_key)
+            
             error_msg = f"Unexpected error during checkpoint operation: {str(e)}"
             self._safe_broadcast_progress({
                 "progress": "failed", 

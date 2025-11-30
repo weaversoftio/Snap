@@ -20,8 +20,13 @@ RUN yarn install
 # Copy source code
 COPY src/. .
 
+# Copy entrypoint script for environment variable substitution
+COPY src/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Expose port 8080 for development server (matching docker-compose)
 EXPOSE 8080
 
-# Start development server with hot reload
-CMD ["yarn", "start"]
+# Use entrypoint to replace environment variables, then start dev server
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["sh", "-c", "HOST=0.0.0.0 PORT=8080 yarn start"]

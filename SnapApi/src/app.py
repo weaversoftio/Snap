@@ -127,16 +127,18 @@ logging.getLogger("multipart.multipart").setLevel(logging.ERROR)  # Full path to
 logging.getLogger("multipart.multipart.parse").setLevel(logging.ERROR)  # Parser specific logger
 logging.getLogger("uvicorn").setLevel(logging.ERROR)
 
-# Filter out /logs/stream access logs
+# Filter out /logs/stream, /docs, and /cluster/status/report access logs
 class FilterLogsStream(logging.Filter):
-    """Filter to suppress /logs/stream access logs."""
+    """Filter to suppress noisy access logs."""
     def filter(self, record):
-        # Check if the log message contains /logs/stream
+        # Check if the log message contains paths we want to filter
         message = record.getMessage()
-        return "/logs/stream" not in message
+        filtered_paths = ["/logs/stream", "/docs", "/cluster/status/report"]
+        return not any(path in message for path in filtered_paths)
 
-# Apply filter to uvicorn.access logger
+# Apply filter to uvicorn.access logger and set level to WARNING to reduce noise
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.setLevel(logging.WARNING)
 uvicorn_access_logger.addFilter(FilterLogsStream())
 
 # Setup WebSocket logging handler

@@ -2,8 +2,11 @@ from pydantic import BaseModel
 from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
 import os
 import json
+import logging
 from flows.config.clusters.create_cluster_config import ClusterConfigRequest
 from typing import List
+
+logger = logging.getLogger("automation_api")
 
 class ClusterConfigResponse(BaseModel):
     success: bool
@@ -12,12 +15,18 @@ class ClusterConfigResponse(BaseModel):
 
 async def list_cluster_config():
     # get all the cluster configs from the config folder in the cluster config directory
-    path = f"config/clusters"
+    # Resolve path relative to the app's base directory (src/)
+    # File is at: src/flows/config/clusters/list_cluster_config.py
+    # Need to go up 4 levels to get to src/
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    path = os.path.join(BASE_DIR, "config", "clusters")
     cluster_configs = []
+    
+    logger.info(f"[ClusterConfig] Looking for cluster configs in: {path}")
     
     # Check if the directory exists
     if not os.path.exists(path):
-        print(f"Cluster config directory {path} does not exist")
+        logger.warning(f"[ClusterConfig] Cluster config directory {path} does not exist")
         return ClusterConfigResponse(
             success=True,
             message="No cluster configs found - directory does not exist",
@@ -25,10 +34,15 @@ async def list_cluster_config():
         )
     
     try:
-        for file in os.listdir(path):
+        files_found = os.listdir(path)
+        logger.info(f"[ClusterConfig] Found {len(files_found)} files in {path}")
+        
+        for file in files_found:
             if file.endswith(".json"):
+                file_path = os.path.join(path, file)
+                logger.info(f"[ClusterConfig] Attempting to load: {file_path}")
                 #Read the json file
-                with open(os.path.join(path, file), "r") as f:
+                with open(file_path, "r") as f:
                     try:
                         data = json.load(f)
                         cluster_details_data = data["cluster_config_details"]
@@ -45,12 +59,13 @@ async def list_cluster_config():
                             name=data["name"]
                         )
                         cluster_configs.append(config)
-                        print(f"Successfully loaded cluster config: {data['name']}")
+                        logger.info(f"[ClusterConfig] Successfully loaded cluster config: {data['name']}")
                     except Exception as e:
-                        print(f"Error loading cluster config file {file}: {e}")
+                        logger.error(f"[ClusterConfig] Error loading cluster config file {file}: {e}")
     except Exception as e:
-        print(f"Error accessing cluster config directory {path}: {e}")
+        logger.error(f"[ClusterConfig] Error accessing cluster config directory {path}: {e}")
 
+    logger.info(f"[ClusterConfig] Total cluster configs loaded: {len(cluster_configs)}")
     return ClusterConfigResponse(
         success=True,
         message="Cluster configs listed successfully",

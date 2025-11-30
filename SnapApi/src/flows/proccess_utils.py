@@ -1,13 +1,70 @@
 import asyncio
 import shlex
 import os
+import re
+
+def sanitize_string_for_logging(text):
+    """
+    Sanitize a string to mask any tokens that might be present.
+    Looks for JWT-like tokens (long base64 strings with dots).
+    """
+    if not text:
+        return text
+    
+    text_str = str(text)
+    # Pattern to match JWT tokens: long strings with dots that look like base64
+    # JWT tokens are typically 200+ characters and contain 2 dots
+    jwt_pattern = r'\b([A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})\b'
+    
+    def mask_token(match):
+        token = match.group(1)
+        if len(token) > 20:
+            return f"{token[:8]}...{token[-4:]}"
+        return "***MASKED***"
+    
+    sanitized = re.sub(jwt_pattern, mask_token, text_str)
+    return sanitized
+
+def sanitize_command_for_logging(command):
+    """
+    Sanitize command to mask sensitive information like tokens.
+    Returns both sanitized command array and sanitized string.
+    """
+    sanitized_cmd = []
+    prev_was_token = False
+    
+    for arg in command:
+        arg_str = str(arg)
+        # Check if previous argument was --token
+        if prev_was_token:
+            # Mask the token value
+            if len(arg_str) > 20:
+                sanitized_cmd.append(f"{arg_str[:8]}...{arg_str[-4:]}")
+            else:
+                sanitized_cmd.append("***MASKED***")
+            prev_was_token = False
+        elif arg_str == "--token" or arg_str == "-t":
+            sanitized_cmd.append(arg_str)
+            prev_was_token = True
+        else:
+            # Check if this looks like a JWT token (long base64-like string)
+            # JWT tokens are typically very long and contain dots
+            if len(arg_str) > 100 and '.' in arg_str and re.match(r'^[A-Za-z0-9._-]+$', arg_str):
+                # Likely a JWT token, mask it
+                sanitized_cmd.append(f"{arg_str[:8]}...{arg_str[-4:]}")
+            else:
+                sanitized_cmd.append(arg_str)
+    
+    # Convert to string
+    cmd_str = ' '.join(shlex.quote(str(arg)) for arg in sanitized_cmd)
+    return sanitized_cmd, cmd_str
 
 async def run(command, check=True, capture_output=True, text=True):
     print("--------------------------------")
     print(f"Running command: \n")
-    # Convert the command array to a shell-quoted string for easy copy-paste
-    cmd_str = ' '.join(shlex.quote(str(arg)) for arg in command)
-    print(f"{cmd_str}")
+    # Sanitize command to mask sensitive information like tokens
+    _, sanitized_cmd_str = sanitize_command_for_logging(command)
+    print(f"{sanitized_cmd_str}")
     print("--------------------------------")
     
     try:
@@ -27,9 +84,13 @@ async def run(command, check=True, capture_output=True, text=True):
         
         if check and process.returncode != 0:
             error_msg = stderr.decode() if stderr else ''
-            print(f"SnapAPI: DEBUG - Command failed with returncode {process.returncode}, error: {error_msg[:500]}")
+            # Sanitize error message to mask any tokens that might be present
+            sanitized_error_msg = sanitize_string_for_logging(error_msg)
+            print(f"SnapAPI: DEBUG - Command failed with returncode {process.returncode}, error: {sanitized_error_msg[:500]}")
+            # Sanitize command in error message
+            _, sanitized_cmd_str = sanitize_command_for_logging(command)
             raise RuntimeError(
-                f"Command '{' '.join(command)}' failed with error: {error_msg}"
+                f"Command '{sanitized_cmd_str}' failed with error: {sanitized_error_msg}"
             )
             
         if text and capture_output:
@@ -37,19 +98,25 @@ async def run(command, check=True, capture_output=True, text=True):
             stderr = stderr.decode() if stderr else ''
         
         print(f"SnapAPI: DEBUG - Command executed successfully")
+        # Store sanitized command string in result
+        _, sanitized_cmd_str = sanitize_command_for_logging(command)
         return AsyncProcessResult(
             process.returncode,
             stdout,
             stderr,
-            cmd_str
+            sanitized_cmd_str
         )
         
     except RuntimeError:
         # Re-raise RuntimeError as-is (it already has the error message)
         raise
     except Exception as e:
-        print(f"SnapAPI: DEBUG - Exception during command execution: {type(e).__name__}: {str(e)}")
-        raise RuntimeError(f"Command '{' '.join(command)}' failed with error: {str(e)}")
+        # Sanitize exception message to mask any tokens
+        sanitized_exception_msg = sanitize_string_for_logging(str(e))
+        print(f"SnapAPI: DEBUG - Exception during command execution: {type(e).__name__}: {sanitized_exception_msg}")
+        # Sanitize command in error message
+        _, sanitized_cmd_str = sanitize_command_for_logging(command)
+        raise RuntimeError(f"Command '{sanitized_cmd_str}' failed with error: {sanitized_exception_msg}")
 
 class AsyncProcessResult:
     def __init__(self, returncode, stdout, stderr, args):

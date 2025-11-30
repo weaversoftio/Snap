@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, List
 from classes.snaphook import SnapHook
 from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
 from flows.config.hook.discover_snaphooks_from_cluster import discover_snaphooks_from_clusters
+from flows.config.hook.hook_utils import sync_hook_to_config
 
 logger = logging.getLogger("automation_api")
 router = APIRouter()
@@ -96,6 +97,20 @@ async def create_snaphook(request: SnapHookCreateRequest):
         
         # Configuration persistence is now in the cluster itself, not on disk
         logger.info(f"SnapHook created: {request.name} (configuration will be persisted in cluster)")
+        
+        # Sync hook to config folder for backup
+        try:
+            await sync_hook_to_config(
+                name=request.name,
+                cluster_name=request.cluster_name,
+                cluster_config=request.cluster_config,
+                webhook_url=request.webhook_url,
+                namespace=request.namespace,
+                cert_expiry_days=request.cert_expiry_days
+            )
+            logger.info(f"Synced hook '{request.name}' to config folder for backup")
+        except Exception as e:
+            logger.error(f"Failed to sync hook '{request.name}' to config folder: {e}")
         
         return SnapHookResponse(
             name=request.name,
@@ -221,6 +236,17 @@ async def delete_snaphook(hook_name: str):
         # Remove instance
         del snaphook_instances[hook_name]
         
+        # Delete hook config from backup folder
+        try:
+            from flows.config.hook.save_snaphook_config import delete_snaphook_config
+            result = await delete_snaphook_config(hook_name, snaphook.cluster_name)
+            if result.success:
+                logger.info(f"Deleted hook config '{hook_name}' from config folder")
+            else:
+                logger.warning(f"Failed to delete hook config from config folder: {result.message}")
+        except Exception as e:
+            logger.error(f"Error deleting hook config from config folder: {e}")
+        
         # Configuration is persisted in cluster, not on disk
         # The MutatingWebhookConfiguration deletion is handled by snaphook.stop()
         logger.info(f"SnapHook deleted: {hook_name}")
@@ -271,6 +297,27 @@ async def start_snaphook(hook_name: str):
         if success:
             # Configuration is persisted in cluster, not on disk
             logger.info(f"SnapHook started: {hook_name}")
+            
+            # Sync hook to config folder for backup
+            try:
+                cluster_config_dict = {
+                    "name": snaphook.cluster_name,
+                    "cluster_config_details": {
+                        "kube_api_url": snaphook.cluster_config.cluster_config_details.kube_api_url,
+                        "token": snaphook.cluster_config.cluster_config_details.token
+                    }
+                }
+                await sync_hook_to_config(
+                    name=hook_name,
+                    cluster_name=snaphook.cluster_name,
+                    cluster_config=cluster_config_dict,
+                    webhook_url=snaphook.webhook_url,
+                    namespace=snaphook.namespace,
+                    cert_expiry_days=snaphook.cert_expiry_days
+                )
+                logger.info(f"Synced hook '{hook_name}' to config folder for backup")
+            except Exception as e:
+                logger.error(f"Failed to sync hook '{hook_name}' to config folder: {e}")
         else:
             raise HTTPException(
                 status_code=500,
@@ -330,6 +377,27 @@ async def stop_snaphook(hook_name: str):
         
         if success:
             logger.info(f"SnapHook stopped: {hook_name}")
+            
+            # Sync hook to config folder for backup
+            try:
+                cluster_config_dict = {
+                    "name": snaphook.cluster_name,
+                    "cluster_config_details": {
+                        "kube_api_url": snaphook.cluster_config.cluster_config_details.kube_api_url,
+                        "token": snaphook.cluster_config.cluster_config_details.token
+                    }
+                }
+                await sync_hook_to_config(
+                    name=hook_name,
+                    cluster_name=snaphook.cluster_name,
+                    cluster_config=cluster_config_dict,
+                    webhook_url=snaphook.webhook_url,
+                    namespace=snaphook.namespace,
+                    cert_expiry_days=snaphook.cert_expiry_days
+                )
+                logger.info(f"Synced hook '{hook_name}' to config folder for backup")
+            except Exception as e:
+                logger.error(f"Failed to sync hook '{hook_name}' to config folder: {e}")
         else:
             raise HTTPException(
                 status_code=500,
@@ -447,6 +515,7 @@ async def get_snaphook_configs():
     """
     Get all SnapHook configurations from clusters (not from disk).
     Configuration persistence is now in the cluster itself.
+    Also syncs discovered hooks to config folder for backup.
     
     Returns:
         dict: List of SnapHook configurations discovered from clusters
@@ -454,6 +523,21 @@ async def get_snaphook_configs():
     try:
         # Discover webhooks from clusters
         discovered_hooks = await discover_snaphooks_from_clusters()
+        
+        # Sync each discovered hook to config folder for backup
+        for hook_data in discovered_hooks:
+            try:
+                await sync_hook_to_config(
+                    name=hook_data.get("name"),
+                    cluster_name=hook_data.get("cluster_name"),
+                    cluster_config=hook_data.get("cluster_config", {}),
+                    webhook_url=hook_data.get("webhook_url"),
+                    namespace=hook_data.get("namespace", "snap"),
+                    cert_expiry_days=hook_data.get("cert_expiry_days", 365)
+                )
+                logger.info(f"Synced discovered hook '{hook_data.get('name')}' to config folder for backup")
+            except Exception as e:
+                logger.error(f"Failed to sync discovered hook '{hook_data.get('name')}' to config folder: {e}")
         
         return {
             "success": True,
