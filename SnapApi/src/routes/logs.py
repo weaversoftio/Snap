@@ -31,6 +31,7 @@ class NotificationRequest(BaseModel):
     title: Optional[str] = None  # Optional notification title
     category: Optional[str] = None  # Optional category for grouping notifications
 
+
 class NotificationResponse(BaseModel):
     """Response model for notification requests."""
     status: str
@@ -121,32 +122,26 @@ async def stream_logs(request: Request):
             token = request.query_params.get("token")
         
         if not token:
-            print("[SSE Stream] ERROR: Missing authentication token")
             raise HTTPException(status_code=401, detail="Missing authentication token")
         
         # Check if this is a Kubernetes service account token
         from middleware.verify_token import _is_kubernetes_service_account_token
         if _is_kubernetes_service_account_token(token):
-            print("[SSE Stream] Detected Kubernetes service account token, allowing access")
             username = "system:serviceaccount"
         else:
             # Handle regular JWT tokens for users
             from flows.config.user.verify_user_config import verify_user_config
             result = verify_user_config(token)
             if result.get("success") == False:
-                print(f"[SSE Stream] ERROR: Invalid or expired token. Result: {result}")
                 raise HTTPException(status_code=401, detail="Invalid or Expired token")
             username = result["user"]["username"]
-            print(f"[SSE Stream] Authenticated user: {username}")
         
         async def event_generator():
             try:
-                print(f"[SSE Stream] Connection established for user: {username}")
                 # Send existing logs first when connection is established
                 with log_buffer_lock:
                     existing_logs = recent_logs[-50:]  # Send last 50 existing logs
                     last_log_count = len(recent_logs)
-                    print(f"[SSE Stream] Sending {len(existing_logs)} existing logs. Total in buffer: {len(recent_logs)}")
                 
                 # Send existing logs
                 for log in existing_logs:
@@ -154,7 +149,6 @@ async def stream_logs(request: Request):
                         log_str = json.dumps(log)
                         yield f"data: {log_str}\n\n"
                     except Exception as e:
-                        print(f"[SSE Stream] Error encoding log: {e}")
                         continue
                 
                 # Then stream new logs
@@ -167,15 +161,12 @@ async def stream_logs(request: Request):
                                 # New logs available
                                 new_logs = recent_logs[last_log_count:]
                                 last_log_count = current_log_count
-                                print(f"[SSE Stream] Sending {len(new_logs)} new logs")
                                 
                                 for log in new_logs:
                                     try:
                                         log_str = json.dumps(log)
                                         yield f"data: {log_str}\n\n"
-                                        print(f"[SSE Stream] Sent log: id={log.get('id', 'no-id')}, type={log.get('type', 'no-type')}, message={log.get('message', '')[:50]}")
                                     except Exception as e:
-                                        print(f"[SSE Stream] Error encoding log: {e}")
                                         continue
                             else:
                                 # No new logs, send keep-alive
@@ -183,15 +174,12 @@ async def stream_logs(request: Request):
                         
                         await asyncio.sleep(1)  # Check every second
                     except asyncio.CancelledError:
-                        print(f"[SSE Stream] Connection cancelled for user: {username}")
                         break
                     except Exception as e:
-                        print(f"[SSE Stream] Error in event generator: {e}")
                         import traceback
                         traceback.print_exc()
                         break
             except Exception as e:
-                print(f"[SSE Stream] Fatal error in event generator: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -209,7 +197,6 @@ async def stream_logs(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[SSE Stream] Fatal error in stream_logs: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
