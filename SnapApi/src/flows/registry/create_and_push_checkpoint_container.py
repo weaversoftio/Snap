@@ -7,6 +7,7 @@ from classes.registryconfig import RegistryConfigDetails, RegistryConfig, login_
 from flows.checkpoint.checkpoint_config import CheckpointConfig
 from flows.config.configLoder import load_config
 from routes.websocket import send_progress
+from flows.helpers import _skopeo_extract_digest, _short_digest_from_full
 
 async def create_and_push_checkpoint_container(container_name: str, username: str, pod_name: str, checkpoint_config_name: str, loggeduser: str):
     try:
@@ -41,6 +42,66 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
         app = metadata["pod_info"]["app"]
         orig_image_short_digest = metadata["image_info"]["original_image_digest"]
         pod_template_hash = metadata["pod_info"]["pod_template_hash"]
+        original_image = metadata["image_info"].get("original_image", "")
+        
+        # Check if orig_image_short_digest is empty or null, and resolve it using skopeo if needed
+        if not orig_image_short_digest or orig_image_short_digest.strip() == "" or orig_image_short_digest == "unknown":
+            print(f"SnapAPI: orig_image_short_digest is missing or empty: '{orig_image_short_digest}'. Attempting to resolve using skopeo...")
+            await send_progress(loggeduser, {"progress": 17.5,"task_name": "Create and Push Checkpoint Container", "message": f"Resolving image digest using skopeo"})
+            
+            if not original_image or original_image.strip() == "":
+                error_msg = f"Cannot resolve image digest: original_image is missing from metadata"
+                print(f"SnapAPI: ERROR - {error_msg}")
+                await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": error_msg})
+                raise HTTPException(
+                    status_code=500,
+                    detail=error_msg
+                )
+            
+            try:
+                # Build an inspectable reference for skopeo (docker://...)
+                image_ref = original_image
+                if "://" not in image_ref:
+                    # assume docker transport if not specified
+                    image_ref = f"docker://{image_ref}"
+                
+                print(f"SnapAPI: Resolving digest for image: {image_ref}")
+                full_digest = await _skopeo_extract_digest(image_ref)
+                
+                if not full_digest or full_digest.strip() == "":
+                    error_msg = f"Failed to resolve image digest using skopeo: empty digest returned for image {original_image}"
+                    print(f"SnapAPI: ERROR - {error_msg}")
+                    await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": error_msg})
+                    raise HTTPException(
+                        status_code=500,
+                        detail=error_msg
+                    )
+                
+                # Convert full digest to short digest
+                orig_image_short_digest = _short_digest_from_full(full_digest)
+                
+                if not orig_image_short_digest or orig_image_short_digest.strip() == "":
+                    error_msg = f"Failed to extract short digest from full digest '{full_digest}' for image {original_image}"
+                    print(f"SnapAPI: ERROR - {error_msg}")
+                    await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": error_msg})
+                    raise HTTPException(
+                        status_code=500,
+                        detail=error_msg
+                    )
+                
+                print(f"SnapAPI: Successfully resolved digest using skopeo: {orig_image_short_digest} (from {full_digest})")
+                
+            except HTTPException:
+                # Re-raise HTTPException as-is
+                raise
+            except Exception as e:
+                error_msg = f"Failed to resolve image digest using skopeo for image {original_image}: {str(e)}"
+                print(f"SnapAPI: ERROR - {error_msg}")
+                await send_progress(loggeduser, {"progress": "failed","task_name": "Create and Push Checkpoint Container", "message": error_msg})
+                raise HTTPException(
+                    status_code=500,
+                    detail=error_msg
+                )
         
         print(f"SnapAPI: Extracted metadata for image tag:")
         print(f"  cache_registry: {cache_registry}")
