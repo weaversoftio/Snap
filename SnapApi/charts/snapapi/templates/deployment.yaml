@@ -51,7 +51,6 @@ spec:
           env:
             - name: SNAP_API_URL
               value: {{ .Values.env.SNAP_API_URL }}
-
           volumeMounts:
             - name: app-volume
               mountPath: /app/checkpoints
