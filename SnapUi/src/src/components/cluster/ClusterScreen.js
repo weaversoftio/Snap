@@ -71,6 +71,9 @@ const ClusterScreen = () => {
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [downloadingRunc, setDownloadingRunc] = useState(false)
   const [downloadingCrio, setDownloadingCrio] = useState(false)
+  
+  // Cluster deletion loading state
+  const [deletingCluster, setDeletingCluster] = useState(false)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -202,17 +205,20 @@ const ClusterScreen = () => {
   }
 
   const handleDeleteCluster = async () => {
+    setDeletingCluster(true)
     try {
       await clusterApi.remove(selectedCluster.name)
       removeCookie("selectedCluster")
       dispatch(clusterActions.clearState())
       dispatch(clusterActions.getList())
       enqueueSnackbar(`Cluster: ${selectedCluster.name} successfully deleted`, { variant: "success" })
+      setDialogType("")
     } catch (error) {
       console.error("Cluster delete error", error.toString())
       enqueueSnackbar(`Cluster: ${selectedCluster.name} deletion failed`, { variant: "error" })
+    } finally {
+      setDeletingCluster(false)
     }
-    setDialogType("")
   }
 
   const handleClusterVerification = async () => {
@@ -719,7 +725,8 @@ const ClusterScreen = () => {
     return (
       <DialogComponent
         open={!!dialogType}
-        onClose={handleClearDialog}
+        onClose={deletingCluster ? undefined : handleClearDialog}
+        disableEscapeKeyDown={deletingCluster}
         paperProps={{
           maxWidth: 500,
           sx: { borderRadius: 2 }
@@ -729,26 +736,40 @@ const ClusterScreen = () => {
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>
             Delete Cluster
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Are you sure you want to delete the cluster "{selectedCluster.name}"? This action cannot be undone.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              onClick={() => setDialogType("")}
-              sx={{ textTransform: 'none' }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleDeleteCluster}
-              sx={{ textTransform: 'none' }}
-            >
-              Delete Cluster
-            </Button>
-          </Box>
+          {deletingCluster ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 3 }}>
+              <CircularProgress sx={{ mb: 2 }} />
+              <Typography variant="body1" color="text.secondary" align="center">
+                Deleting cluster "{selectedCluster.name}"...
+              </Typography>
+              <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+                This may take a moment. Please wait while we dispose watchers, hooks, and clean up resources.
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Are you sure you want to delete the cluster "{selectedCluster.name}"? This action cannot be undone.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => setDialogType("")}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleDeleteCluster}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Delete Cluster
+                </Button>
+              </Box>
+            </>
+          )}
         </Box>
       </DialogComponent>
     )
