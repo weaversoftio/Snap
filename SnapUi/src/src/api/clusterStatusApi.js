@@ -21,7 +21,18 @@ const reportNodeStatus = async (nodeStatusData) => new Promise(async (resolve, r
     }
 })
 
+const rescanClusterStatus = async (clusterName) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.post(`/cluster/status/rescan`, { cluster_name: clusterName })
+        if (!response.data) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
 export const clusterStatusApi = {
     getClusterStatus,
-    reportNodeStatus
+    reportNodeStatus,
+    rescanClusterStatus
 }

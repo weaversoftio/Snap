@@ -13,11 +13,11 @@ services:
       # SnapApi configuration
       - SNAP_ORIGINS=http://localhost:8080,*
       - SNAP_API_URL=http://192.168.33.209:8000
-      # SnapWatcher operator configuration
-      - WATCHER_CLUSTER_NAME=crc
-      - WATCHER_MODE=compose
       # SSL configuration (set to 'true' to enable SSL verification)
       - KUBE_VERIFY_SSL=false
+      # Cluster status check version requirements
+      - CRIO_VERSION_REQUIRED=${CRIO_VERSION_REQUIRED:-1.31.2}
+      - RUNC_VERSION_REQUIRED=${RUNC_VERSION_REQUIRED:-1.2.4}
       # Development settings
       - FLASK_ENV=development
       - FLASK_DEBUG=1
