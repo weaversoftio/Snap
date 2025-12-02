@@ -471,8 +471,6 @@ const ClusterScreen = () => {
       if (response.success) {
         enqueueSnackbar("Cluster cache updated successfully", { variant: "success" });
         setClusterCacheDialogOpen(false);
-        // Refresh the cache data
-        handleShowClusterCacheConfig();
       } else {
         enqueueSnackbar(`Failed to update cluster cache: ${response.message}`, { variant: "error" });
       }
