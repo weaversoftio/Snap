@@ -1,5 +1,5 @@
-import { AccountCircle, Key, Business, Person } from "@mui/icons-material";
-import { Button, Grid2 as Grid, InputAdornment, TextField, Typography, CircularProgress, Stack, Box, ToggleButtonGroup, ToggleButton, Divider } from "@mui/material"
+import { AccountCircle, Key } from "@mui/icons-material";
+import { Button, Grid2 as Grid, InputAdornment, TextField, Typography, CircularProgress, Stack, Box, ToggleButtonGroup, ToggleButton } from "@mui/material"
 import { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from "react-redux";
@@ -149,37 +149,21 @@ const Login = () => {
         <form onSubmit={handleLogin} style={{ width: "100%" }}>
           <Stack spacing={3}>
             {/* Authentication Method Selector */}
-            <Box sx={{ width: '100%' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Authentication Method
-              </Typography>
-              <ToggleButtonGroup
-                value={authMethod}
-                exclusive
-                onChange={handleAuthMethodChange}
-                fullWidth
-                size="small"
-              >
-                <ToggleButton value="ad" aria-label="active directory">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Business sx={{ fontSize: 16 }} />
-                    <Typography variant="body2">Active Directory</Typography>
-                  </Box>
-                </ToggleButton>
-                <ToggleButton value="local" aria-label="local">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Person sx={{ fontSize: 16 }} />
-                    <Typography variant="body2">Local User</Typography>
-                  </Box>
-                </ToggleButton>
-              </ToggleButtonGroup>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                {authMethod === 'ad' && 'Authenticate using Active Directory'}
-                {authMethod === 'local' && 'Authenticate using local user account'}
-              </Typography>
-            </Box>
-
-            <Divider />
+            <ToggleButtonGroup
+              value={authMethod}
+              exclusive
+              onChange={handleAuthMethodChange}
+              fullWidth
+              size="small"
+              sx={{ mb: -1 }}
+            >
+              <ToggleButton value="ad" aria-label="active directory" sx={{ py: 0.75 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>AD</Typography>
+              </ToggleButton>
+              <ToggleButton value="local" aria-label="local" sx={{ py: 0.75 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>Local</Typography>
+              </ToggleButton>
+            </ToggleButtonGroup>
 
             <TextField
               label="Username"

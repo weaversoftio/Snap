@@ -31,6 +31,7 @@ import { rbacApi } from '../api/rbacApi';
 import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy, Close } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
@@ -615,17 +616,24 @@ export default function AppContainer({ children }) {
 
   const renderDrawer = () => {
     if (!authenticated) return
-    const mainMenu = [
+    
+    // Section 2: Cluster-dependent menu items (only show when cluster is selected)
+    const clusterMenu = [
       { text: "Pods", path: "/pods", Icon: ImageIcon },
       { text: "Checkpoints", path: "/checkpoints", Icon: CheckpointIcon },
-      { text: "Registry", path: "/registry", Icon: StorageIcon },
       { text: "Secrets", path: "/secrets", Icon: SecurityIcon },
-      { text: "Users", path: "/users", Icon: UsersIcon },
       { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
       { text: "SnapHook", path: "/snaphook", Icon: SnapHookIcon },
     ]
 
-    const showNavigation = kubeAuthenticated && selectedCluster
+    // Section 3: App-level menu items (always show when authenticated)
+    const appMenu = [
+      { text: "Registry", path: "/registry", Icon: StorageIcon },
+      { text: "Users", path: "/users", Icon: UsersIcon },
+      { text: "Settings", path: "/settings", Icon: SettingsIcon },
+    ]
+
+    const showClusterNavigation = kubeAuthenticated && selectedCluster
 
     // Helper function to decode JWT token and get auth_method
     const getAuthMethodFromToken = () => {
@@ -658,6 +666,9 @@ export default function AppContainer({ children }) {
         </DrawerHeader>
         {authenticated && user && (
           <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
+            <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em', mb: 1, display: 'block' }}>
+              User & Cluster
+            </Typography>
             <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
               User:
             </Typography>
@@ -708,24 +719,44 @@ export default function AppContainer({ children }) {
           </Box>
         )}
         <Divider />
+        
+        {/* Section 2: Cluster-dependent menu items */}
+        {showClusterNavigation && (
+          <>
+            <Box sx={{ px: 2, py: 1 }}>
+              <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
+                Cluster Operations
+              </Typography>
+            </Box>
+            <List>
+              {clusterMenu.map(({ text, path, Icon }) => (
+                <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "white" }}>
+                  <ListItemButton
+                    onClick={() => navigate(path)}
+                    sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
+                    <ListItemIcon
+                      sx={[{ minWidth: 0, justifyContent: 'center' }, open ? { mr: 3 } : { mr: 'auto' }]}>
+                      <Icon sx={{ color: isSelected(path) ? "white" : "inherit" }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={text}
+                      sx={[{ opacity: open ? 1 : 0 }, isSelected(path) && { color: "white", fontWeight: "bold" }]} />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+            <Divider />
+          </>
+        )}
+        
+        {/* Section 3: App-level menu items */}
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
+            Application
+          </Typography>
+        </Box>
         <List>
-          {/* Always show Registry menu item */}
-          <ListItem disablePadding sx={{ display: 'block', backgroundColor: isSelected("/registry") ? selectedBackgroundColor : "white" }}>
-            <ListItemButton
-              onClick={() => navigate("/registry")}
-              sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
-              <ListItemIcon
-                sx={[{ minWidth: 0, justifyContent: 'center' }, open ? { mr: 3 } : { mr: 'auto' }]}>
-                <StorageIcon sx={{ color: isSelected("/registry") ? "white" : "inherit" }} />
-              </ListItemIcon>
-              <ListItemText
-                primary="Registry"
-                sx={[{ opacity: open ? 1 : 0 }, isSelected("/registry") && { color: "white", fontWeight: "bold" }]} />
-            </ListItemButton>
-          </ListItem>
-          
-          {/* Show other menu items only when cluster is connected */}
-          {showNavigation && mainMenu.filter(item => item.text !== "Registry").map(({ text, path, Icon }, index) => (
+          {appMenu.map(({ text, path, Icon }) => (
             <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "white" }}>
               <ListItemButton
                 onClick={() => navigate(path)}
@@ -740,10 +771,7 @@ export default function AppContainer({ children }) {
               </ListItemButton>
             </ListItem>
           ))}
-        </List>
-        <Divider />
-        <List>
-          {authenticated && <ListItem key={"Logout"} disablePadding sx={{ display: 'block' }} onClick={handleLogout}>
+          <ListItem key={"Logout"} disablePadding sx={{ display: 'block' }} onClick={handleLogout}>
             <ListItemButton
               sx={[{ minHeight: 48, px: 2.5, }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' },]} >
               <ListItemIcon sx={[{ minWidth: 0, justifyContent: 'center', }, open ? { mr: 3, } : { mr: 'auto', },]} >
@@ -755,7 +783,7 @@ export default function AppContainer({ children }) {
                 ]}
               />
             </ListItemButton>
-          </ListItem>}
+          </ListItem>
         </List>
       </Drawer>
     )
@@ -770,19 +798,8 @@ export default function AppContainer({ children }) {
         {renderClusterForm()}
         {authenticated && <AppBar position="fixed" open={open} component="nav">
           <Toolbar>
-            <Stack direction="row" spacing={2} sx={{ alignItems: "flex-end", justifyContent: "space-between", flexGrow: 1 }}>
-              <Typography variant="h6" noWrap component="div">
-                Admin Panel
-              </Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button
-                  color="inherit"
-                  onClick={() => setHelpDialogOpen(true)}
-                  startIcon={<HelpIcon />}
-                  sx={{ textTransform: "capitalize" }}
-                >
-                  Help
-                </Button>
+            <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", flexGrow: 1 }}>
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                 <Box
                   component="img"
                   sx={{
@@ -792,7 +809,18 @@ export default function AppContainer({ children }) {
                   alt="SNAP logo."
                   src="/logo.png"
                 />
+                <Typography variant="h6" noWrap component="div">
+                  Dashboard
+                </Typography>
               </Stack>
+              <Button
+                color="inherit"
+                onClick={() => setHelpDialogOpen(true)}
+                startIcon={<HelpIcon />}
+                sx={{ textTransform: "capitalize" }}
+              >
+                Help
+              </Button>
             </Stack>
           </Toolbar>
         </AppBar>}
