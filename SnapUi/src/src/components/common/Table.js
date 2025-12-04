@@ -1,17 +1,10 @@
-import { Box, Card, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Card, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography, useTheme } from "@mui/material";
 import { useState } from "react";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { formatTimestamp } from "../../utils/formateDate";
 import { grey } from '@mui/material/colors';
 
 const classes = {
-  tableHead: {
-    background: 'lightgray',
-    fontWeight: 'bold',
-  },
-  tableBody: {
-    background: '#fff',
-  },
   tableCellRoot: {
     maxWidth: "50px",
     padding: 7,
@@ -44,11 +37,6 @@ const classes = {
       '&:after': {
         borderBottom: 0,
       }
-    }
-  },
-  tableStriped: {
-    '& tr:nth-child(even)': {
-      backgroundColor: '#f2f2f2'
     }
   },
   tablePaginationTextFeild: {
@@ -119,8 +107,7 @@ const TableComponent = ({
   handleRowsPerPageChange = () => null,
   handlePageChange = () => null
 }) => {
-  
-  const rowStyle = { head: classes.tableHead, root: classes.bold }
+  const theme = useTheme();
   const cellStyle = { head: classes.bold, root: classes.tableCellRoot }
 
   const renderTable = () => {
@@ -141,7 +128,10 @@ const TableComponent = ({
   const renderTableHead = () => {
     return (
       <TableHead>
-        <TableRow sx={{ '& th': { padding: '7px', fontWeight: 'bold' } }}>
+        <TableRow sx={{ 
+          bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+          '& th': { padding: '7px', fontWeight: 'bold' } 
+        }}>
           {tableHeaders.map(({ name }) => <TableCell classes={cellStyle} key={name}>{name}</TableCell>)}
         </TableRow>
       </TableHead>
@@ -151,7 +141,7 @@ const TableComponent = ({
   const renderRow = (rowData) => {
     const rowName = rowData?.name
     return (
-      <TableRow key={rowName} classes={rowStyle}>
+      <TableRow key={rowName}>
         {tableHeaders.map(({ key, name, action = null }) => {
           if (action) {
             return (
@@ -192,7 +182,7 @@ const TableComponent = ({
   const renderTableBody = () => {
     const paginatedData = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
     return (
-      <TableBody style={classes.tableBody} key="tablebody">
+      <TableBody sx={{ bgcolor: 'background.paper' }} key="tablebody">
         {paginatedData.map(renderRow)}
       </TableBody>
     )
