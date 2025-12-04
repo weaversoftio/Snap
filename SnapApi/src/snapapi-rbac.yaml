@@ -23,6 +23,7 @@ rules:
       - "nodes/checkpoint" # Required for kube-apiserver to create checkpoints when proxying checkpoint requests
       - "pods"            # Used in: src/routes/pod.py (kubectl get pods -A), src/flows/checkpoint_*.py (fetch_pod_info_from_k8s_api), src/classes/operator_watcher.py (delete_namespaced_pod)
       - "pods/log"        # Used in: src/flows/checkpoint_*.py (oc debug node command requires pods/log access)
+      - "pods/status"     # Used in: src/flows/cluster_status/get_cluster_status.py (read_namespaced_pod_status for node checking)
       - "pods/exec"       # Used in: src/flows/checkpoint_*.py (oc debug node command may require pods/exec access)
       - "namespaces"      # Used in: src/routes/operator.py (namespace scope operations)
     verbs: ["get", "list", "watch", "create", "delete"]

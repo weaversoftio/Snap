@@ -15,20 +15,40 @@ ALGORITHM = "RS256"  # Changed to RSA algorithm
 
 def verify_user_config(token: str):
     username = verify_token(token)
+    
+    if username is None:
+        return {"success": False, "message": "Invalid token"}
+    
     path = f"config/security/users/{username}.json"
     
-    if username is None or not os.path.exists(path):
-        return {"success": False, "message": "Invalid token"}
+    # If local user file exists, use it (local user)
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            user_config = json.load(f)
 
-    with open(path, "r") as f:
-        user_config = json.load(f)
+        user_data = {
+            "username": user_config["userdetails"]["username"],
+            "name": user_config["userdetails"]["name"],
+            "role": user_config["userdetails"]["role"]
+        }
 
+        return {"success": True, "user": user_data}
+    
+    # If no local user file exists but token is valid, treat as AD user
+    # Token is already verified by verify_token, so username is valid
+    # Try to get name from token payload if available
+    try:
+        payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
+        user_name = payload.get("name", username)  # Get name from token if available
+    except:
+        user_name = username
+    
     user_data = {
-        "username": user_config["userdetails"]["username"],
-        "name": user_config["userdetails"]["name"],
-        "role": user_config["userdetails"]["role"]
+        "username": username,
+        "name": user_name,
+        "role": "user"  # Default role for AD users
     }
-
+    
     return {"success": True, "user": user_data}
 
 def verify_token(token: str):

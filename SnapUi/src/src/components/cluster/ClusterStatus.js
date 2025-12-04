@@ -15,7 +15,8 @@ import {
   ListItemIcon,
   Divider,
   Alert,
-  AlertTitle
+  AlertTitle,
+  Button
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -23,7 +24,8 @@ import {
   Warning as WarningIcon,
   ExpandMore as ExpandMoreIcon,
   Computer as ComputerIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { clusterStatusApi } from '../../api/clusterStatusApi';
 import { useSnackbar } from 'notistack';
@@ -32,6 +34,7 @@ import { useSelector } from 'react-redux';
 const ClusterStatus = () => {
   const [clusterStatus, setClusterStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [rescanning, setRescanning] = useState(false);
   const [error, setError] = useState(null);
   const { enqueueSnackbar } = useSnackbar();
   
@@ -115,6 +118,34 @@ const ClusterStatus = () => {
     return 'warning';
   };
 
+  const handleRescan = async () => {
+    if (!selectedCluster?.name) {
+      enqueueSnackbar('Please select a cluster first', { variant: 'warning' });
+      return;
+    }
+
+    try {
+      setRescanning(true);
+      enqueueSnackbar('Rescanning cluster status...', { variant: 'info' });
+      
+      const response = await clusterStatusApi.rescanClusterStatus(selectedCluster.name);
+      
+      if (response.success) {
+        enqueueSnackbar('Cluster status rescan completed', { variant: 'success' });
+        // Small delay to ensure files are written to disk
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Refresh the status after rescan
+        await fetchClusterStatus();
+      } else {
+        enqueueSnackbar(`Rescan failed: ${response.message}`, { variant: 'error' });
+      }
+    } catch (err) {
+      enqueueSnackbar('Failed to rescan cluster status', { variant: 'error' });
+    } finally {
+      setRescanning(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
@@ -140,13 +171,27 @@ const ClusterStatus = () => {
 
   if (!clusterStatus) {
     return (
-      <Alert severity="info">
-        <AlertTitle>No Data</AlertTitle>
-        {selectedCluster?.name 
-          ? `No cluster status data available for cluster "${selectedCluster.name}". Deploy the cluster monitor DaemonSet to start monitoring.`
-          : 'No cluster selected. Please select a cluster to view its status.'
-        }
-      </Alert>
+      <Box>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <AlertTitle>No Data</AlertTitle>
+          {selectedCluster?.name 
+            ? `No cluster status data available for cluster "${selectedCluster.name}". Click "Rescan" to check cluster status.`
+            : 'No cluster selected. Please select a cluster to view its status.'
+          }
+        </Alert>
+        {selectedCluster?.name && (
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Button
+              variant="contained"
+              startIcon={<RefreshIcon />}
+              onClick={handleRescan}
+              disabled={rescanning}
+            >
+              {rescanning ? 'Rescanning...' : 'Rescan Cluster Status'}
+            </Button>
+          </Box>
+        )}
+      </Box>
     );
   }
 
@@ -163,8 +208,17 @@ const ClusterStatus = () => {
             <Chip
               label={clusterStatus.overall_status === 'ready' ? 'Ready' : 'Not Ready'}
               color={getStatusColor(clusterStatus.overall_status)}
-              sx={{ ml: 'auto' }}
+              sx={{ ml: 'auto', mr: 2 }}
             />
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRescan}
+              disabled={rescanning || !selectedCluster?.name}
+              size="small"
+            >
+              {rescanning ? 'Rescanning...' : 'Rescan'}
+            </Button>
           </Box>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

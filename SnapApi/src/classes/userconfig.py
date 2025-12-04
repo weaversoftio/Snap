@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class UserConfigDetails(BaseModel):
     name: str   
@@ -22,6 +23,7 @@ class UserConfig(BaseModel):
 class LoginUserConfigRequest(BaseModel):
     username: str
     password: str
+    auth_method: Optional[str] = "local"  # "ad" or "local"
 
 class VerifyUserConfigRequest(BaseModel):
     token: str

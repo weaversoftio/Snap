@@ -2,6 +2,7 @@ from pydantic import BaseModel, validator
 from classes.clusterconfig import ClusterConfig, ClusterConfigDetails
 from classes.cluster_cache_models import ClusterCacheRequest, ClusterCache
 from flows.config.clusterCache.create_cluster_cache import create_cluster_cache
+from flows.cluster_status.check_cluster_status import check_cluster_status
 import os
 import json
 from typing import Optional
@@ -36,11 +37,13 @@ async def create_cluster_config(request: ClusterConfigRequest):
             message=f"Cluster config file {request.name} already exists"
         )
 
+    cluster_details = ClusterConfigDetails(
+        kube_api_url=request.kube_api_url,
+        token=request.token
+    )
+    
     config = ClusterConfig(    
-        cluster_config_details=ClusterConfigDetails(
-            kube_api_url=request.kube_api_url,
-            token=request.token
-        ),
+        cluster_config_details=cluster_details,
         name=request.name
     )
     # if it doesn't, create the config
@@ -49,6 +52,8 @@ async def create_cluster_config(request: ClusterConfigRequest):
         json.dump(config.to_dict(), f, indent=4)
 
     # Automatically create cluster cache if registry is provided
+    cluster_cache_success = True
+    cluster_cache_message = ""
     if request.registry:
         try:
             cluster_cache_request = ClusterCacheRequest(
@@ -58,25 +63,33 @@ async def create_cluster_config(request: ClusterConfigRequest):
             )
             cluster_cache_result = await create_cluster_cache(cluster_cache_request)
             
-            if cluster_cache_result.success:
-                return ClusterConfigResponse(
-                    success=True,
-                    message=f"Cluster config file {request.name} and cluster cache created successfully"
-                )
-            else:
-                # Cluster config was created but cluster cache failed
-                return ClusterConfigResponse(
-                    success=False,
-                    message=f"Cluster config file {request.name} created but cluster cache creation failed: {cluster_cache_result.message}"
-                )
+            if not cluster_cache_result.success:
+                cluster_cache_success = False
+                cluster_cache_message = f"Cluster cache creation failed: {cluster_cache_result.message}"
         except Exception as e:
-            # Cluster config was created but cluster cache failed
-            return ClusterConfigResponse(
-                success=False,
-                message=f"Cluster config file {request.name} created but cluster cache creation failed: {str(e)}"
-            )
+            cluster_cache_success = False
+            cluster_cache_message = f"Cluster cache creation failed: {str(e)}"
+    
+    # Run cluster status check after creating cluster
+    check_result = await check_cluster_status(request.name)
+    check_message = check_result.get("message", "")
+    
+    # Build response message
+    messages = [f"Cluster config file {request.name} created successfully"]
+    if request.registry:
+        if cluster_cache_success:
+            messages.append("Cluster cache created successfully")
+        else:
+            messages.append(cluster_cache_message)
     else:
-        return ClusterConfigResponse(
-            success=True,
-            message=f"Cluster config file {request.name} created successfully (no cluster cache created - registry not specified)"
-        )
+        messages.append("No cluster cache created - registry not specified")
+    
+    if check_result.get("success"):
+        messages.append("Cluster status check completed")
+    else:
+        messages.append(f"Cluster status check failed: {check_message}")
+    
+    return ClusterConfigResponse(
+        success=True,
+        message=". ".join(messages)
+    )

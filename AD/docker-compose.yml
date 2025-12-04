@@ -1,0 +1,30 @@
+version: '3'
+services:
+  openldap:
+    image: docker.io/osixia/openldap:latest
+    container_name: openldap
+    environment:
+      - LDAP_ORGANISATION=MyCompany
+      - LDAP_DOMAIN=mycompany.local
+      - LDAP_ADMIN_PASSWORD=Admin123!
+    ports:
+      - "1389:389"
+      - "1636:636"
+    volumes:
+      - openldap-data:/var/lib/ldap
+      - openldap-config:/etc/ldap/slapd.d
+
+  phpldapadmin:
+    image: docker.io/osixia/phpldapadmin:latest
+    container_name: phpldapadmin
+    environment:
+      - PHPLDAPADMIN_LDAP_HOSTS=openldap
+      - PHPLDAPADMIN_HTTPS=false
+    ports:
+      - "8081:80"
+    depends_on:
+      - openldap
+
+volumes:
+  openldap-data:
+  openldap-config:

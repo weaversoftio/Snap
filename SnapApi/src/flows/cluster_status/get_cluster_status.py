@@ -3,8 +3,14 @@ import os
 from datetime import datetime, timedelta
 from classes.cluster_status_models import ClusterStatusListResponse, ClusterStatusSummary
 
+# Get version requirements from environment variables with defaults
+# These can be overridden via environment variables in docker-compose.yml or .env file
+# Example: CRIO_VERSION_REQUIRED=1.31.2 RUNC_VERSION_REQUIRED=1.2.4
+CRIO_VERSION_REQUIRED = os.getenv('CRIO_VERSION_REQUIRED', '1.31.2')
+RUNC_VERSION_REQUIRED = os.getenv('RUNC_VERSION_REQUIRED', '1.2.4')
+
 async def get_cluster_status(cluster_name: str = None) -> ClusterStatusListResponse:
-    """Get overall cluster status summary"""
+    """Get overall cluster status summary from saved JSON files"""
     try:
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         
@@ -23,7 +29,7 @@ async def get_cluster_status(cluster_name: str = None) -> ClusterStatusListRespo
                     overall_status="not_ready",
                     node_details=[]
                 ),
-                message="No cluster status data available"
+                message="No cluster status data available. Run cluster check first."
             )
         
         # Read all node status files
@@ -41,16 +47,30 @@ async def get_cluster_status(cluster_name: str = None) -> ClusterStatusListRespo
                         node_data = json.load(f)
                     
                     # Check if status is recent (within last 10 minutes)
-                    last_update = datetime.fromisoformat(node_data['timestamp'].replace('Z', '+00:00'))
-                    is_recent = datetime.now(last_update.tzinfo) - last_update < timedelta(minutes=10)
+                    timestamp_str = node_data.get('timestamp', '')
+                    if timestamp_str:
+                        last_update = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        is_recent = datetime.now(last_update.tzinfo) - last_update < timedelta(minutes=10)
+                    else:
+                        is_recent = False
                     
-                    # Check if all required checks pass
+                    # Check if all required checks pass (same validation as check_nodes_project)
                     checks = node_data.get('checks', {})
-                    crio_ok = checks.get('crio', '').startswith('crio:crio version') or checks.get('crio', '').startswith('crio:pass')
-                    criu_ok = checks.get('criu', '').startswith('criu:Version:') or checks.get('criu', '').startswith('criu:pass')
-                    criu_config_ok = checks.get('criu_config', '').startswith('criu_config:pass')
+                    crio_check = checks.get('crio', '')
+                    criu_check = checks.get('criu', '')
+                    runc_check = checks.get('runc', '')
                     
-                    node_ready = crio_ok and criu_ok and criu_config_ok and is_recent
+                    # Validate using environment variable requirements
+                    # crio should contain the required version
+                    # criu should be "Installed" (new format) or check for CRIU being installed (old format had "Version:")
+                    # runc should contain the required version
+                    crio_ok = CRIO_VERSION_REQUIRED in crio_check
+                    # Handle both new format ("criu:Installed") and old format ("criu:Version: X.X")
+                    # For CRIU, we just need it to be installed, so check if it's NOT "Not Installed"
+                    criu_ok = "Installed" in criu_check and "Not Installed" not in criu_check
+                    runc_ok = RUNC_VERSION_REQUIRED in runc_check
+                    
+                    node_ready = crio_ok and criu_ok and runc_ok and is_recent
                     
                     if node_ready:
                         ready_nodes += 1
@@ -61,20 +81,20 @@ async def get_cluster_status(cluster_name: str = None) -> ClusterStatusListRespo
                     node_detail = {
                         'node_name': node_name,
                         'ready': node_ready,
-                        'last_update': node_data['timestamp'],
+                        'last_update': timestamp_str,
                         'is_recent': is_recent,
                         'checks': {
                             'crio': {
                                 'status': 'pass' if crio_ok else 'fail',
-                                'details': checks.get('crio', '')
+                                'details': crio_check
                             },
                             'criu': {
                                 'status': 'pass' if criu_ok else 'fail',
-                                'details': checks.get('criu', '')
+                                'details': criu_check
                             },
-                            'criu_config': {
-                                'status': 'pass' if criu_config_ok else 'fail',
-                                'details': checks.get('criu_config', '')
+                            'runc': {
+                                'status': 'pass' if runc_ok else 'fail',
+                                'details': runc_check
                             }
                         }
                     }

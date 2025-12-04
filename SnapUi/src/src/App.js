@@ -14,6 +14,7 @@ import UserScreen from './components/user/UserScreen';
 import ClusterScreen from './components/cluster/ClusterScreen';
 import SnapWatcherScreen from './components/snapwatcher/SnapWatcherScreen';
 import SnapHookScreen from './components/snaphook/SnapHookScreen';
+import SettingsScreen from './components/settings/SettingsScreen';
 const App = () => {
   const { kubeAuthenticated = false, authenticated = false } = useSelector(state => state.auth)
 
@@ -28,6 +29,7 @@ const App = () => {
             <Route path='/registry' element={<ProtectedRoute element={<RegistryScreen />} />} />
             <Route path='/secrets' element={<ProtectedRoute element={<SecretsScreen />} />} />
             <Route path='/users' element={<ProtectedRoute element={<UserScreen />} />} />
+            <Route path='/settings' element={<ProtectedRoute element={<SettingsScreen />} />} />
             <Route path='/snapwatcher' element={<ProtectedRoute element={<SnapWatcherScreen />} />} />
             <Route path='/snaphook' element={<ProtectedRoute element={<SnapHookScreen />} />} />
           </Routes>

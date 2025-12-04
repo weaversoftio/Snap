@@ -1,5 +1,5 @@
 import { AccountCircle, Key } from "@mui/icons-material";
-import { Button, Grid2 as Grid, InputAdornment, TextField, Typography, CircularProgress, Stack, Box } from "@mui/material"
+import { Button, Grid2 as Grid, InputAdornment, TextField, Typography, CircularProgress, Stack, Box, ToggleButtonGroup, ToggleButton } from "@mui/material"
 import { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from "react-redux";
@@ -11,6 +11,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [authMethod, setAuthMethod] = useState('local') // 'ad' or 'local'
   const [error, setError] = useState('')
   const { authenticated = false, error: authError, loading = false, user } = useSelector(state => state.auth)
   const token = getCookie("token")
@@ -19,8 +20,15 @@ const Login = () => {
     e.preventDefault()
     dispatch(authActions.userLogin({
       username,
-      password
+      password,
+      auth_method: authMethod
     }))
+  }
+
+  const handleAuthMethodChange = (event, newMethod) => {
+    if (newMethod !== null) {
+      setAuthMethod(newMethod)
+    }
   }
 
   useEffect(() => {
@@ -140,6 +148,23 @@ const Login = () => {
 
         <form onSubmit={handleLogin} style={{ width: "100%" }}>
           <Stack spacing={3}>
+            {/* Authentication Method Selector */}
+            <ToggleButtonGroup
+              value={authMethod}
+              exclusive
+              onChange={handleAuthMethodChange}
+              fullWidth
+              size="small"
+              sx={{ mb: -1 }}
+            >
+              <ToggleButton value="ad" aria-label="active directory" sx={{ py: 0.75 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>AD</Typography>
+              </ToggleButton>
+              <ToggleButton value="local" aria-label="local" sx={{ py: 0.75 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>Local</Typography>
+              </ToggleButton>
+            </ToggleButtonGroup>
+
             <TextField
               label="Username"
               fullWidth
