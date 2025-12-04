@@ -1,4 +1,4 @@
-import { Box, Card, Button, CircularProgress, Collapse, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Card, Button, CircularProgress, Collapse, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography, useTheme } from "@mui/material";
 import { useState, useEffect } from "react";
 import { formatTimestamp } from "../../utils/formateDate";
 import { grey } from '@mui/material/colors';
@@ -9,13 +9,6 @@ import { useSelector } from "react-redux";
 import { useSnackbar } from "notistack";
 
 const classes = {
-  tableHead: {
-    background: 'lightgray',
-    fontWeight: 'bold'
-  },
-  tableBody: {
-    background: '#fff',
-  },
   tableCellRoot: {
     maxWidth: "50px",
     padding: 7,
@@ -51,11 +44,6 @@ const classes = {
       '&:after': {
         borderBottom: 0,
       }
-    }
-  },
-  tableStriped: {
-    '& tr:nth-child(even)': {
-      backgroundColor: '#f2f2f2'
     }
   },
   tablePaginationTextFeild: {
@@ -118,7 +106,6 @@ const classes = {
   },
 }
 
-const rowStyle = { head: classes.tableHead, root: classes.bold }
 const cellStyle = { head: classes.bold, root: classes.tableCellRoot }
 
 const TableComponent = ({
@@ -131,6 +118,7 @@ const TableComponent = ({
   handleRowsPerPageChange = () => null,
   handlePageChange = () => null
 }) => {
+  const theme = useTheme();
   const { selectedCluster = null } = useSelector(state => state.cluster)
   const { kube_api_url: kubeApi = "" } = selectedCluster?.cluster_config_details || {}
   const clusterName = selectedCluster?.name || ""
@@ -180,7 +168,10 @@ const TableComponent = ({
   const renderTableHead = () => {
     return (
       <TableHead>
-        <TableRow classes={rowStyle}>
+        <TableRow sx={{ 
+          bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+          '& th': { fontWeight: "bold" }
+        }}>
           {tableHeaders.map(({ name }, index) => <TableCell sx={{ fontWeight: "bold" }} key={`tableHead-${index}`}>{name}</TableCell>)}
         </TableRow>
       </TableHead>
@@ -191,7 +182,7 @@ const TableComponent = ({
     const paginatedData = filteredData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
     return (
-      <TableBody style={classes.tableBody}>
+      <TableBody sx={{ bgcolor: 'background.paper' }}>
         {paginatedData.map((item) => (
           <Row
             key={item.metadata?.name || item.id}
@@ -229,6 +220,7 @@ const TableComponent = ({
 }
 
 const Row = (props) => {
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false)
   const { row, tableHeaders, nestedTableHeaders, kubeApi = "", clusterName = "" } = props;
@@ -325,7 +317,9 @@ const Row = (props) => {
               </Typography>
               <Table size="small" aria-label="purchases">
                 <TableHead>
-                  <TableRow classes={rowStyle} >
+                  <TableRow sx={{ 
+                    bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+                  }}>
                     {nestedTableHeaders.map(({ name }, index) => <TableCell classes={cellStyle} key={`tableHead-${index}`}>{name}</TableCell>)}
                   </TableRow>
                 </TableHead>

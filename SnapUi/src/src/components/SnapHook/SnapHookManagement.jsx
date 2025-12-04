@@ -17,7 +17,8 @@ import {
   Stack,
   Chip,
   Alert,
-  AlertTitle
+  AlertTitle,
+  useTheme
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import DialogComponent from '../common/Dialog';
@@ -34,6 +35,7 @@ import {
 import { snapHookApi } from '../../api/snapHookApi';
 
 const SnapHookManagement = ({ clusterName, clusterConfig, onHookSelect }) => {
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const [snapHooks, setSnapHooks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -360,7 +362,9 @@ const SnapHookManagement = ({ clusterName, clusterConfig, onHookSelect }) => {
               <TableContainer>
                 <Table>
                   <TableHead>
-                    <TableRow>
+                    <TableRow sx={{ 
+                      bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+                    }}>
                       <TableCell>Name</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Webhook URL</TableCell>
@@ -368,7 +372,7 @@ const SnapHookManagement = ({ clusterName, clusterConfig, onHookSelect }) => {
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody sx={{ bgcolor: 'background.paper' }}>
                     {snapHooks.map((hook) => (
                       <TableRow 
                         key={hook.name}

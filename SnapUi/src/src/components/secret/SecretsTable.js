@@ -13,6 +13,7 @@ import {
   TableRow,
   Typography,
   Tooltip,
+  useTheme,
 } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -29,6 +30,7 @@ const nestedTableHeaders = [
 ];
 
 const Row = ({ row, renderRowAction }) => {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
 
   const apiKeysArray = Object.entries(row.api_key || {}).map(([keyName, key]) => ({
@@ -40,7 +42,9 @@ const Row = ({ row, renderRowAction }) => {
     <>
       <TableRow sx={{
         "& td": { borderBottom: "none" },
-        backgroundColor: open ? "rgba(233, 233, 233, 0.5)" : "white",
+        bgcolor: open 
+          ? (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(233, 233, 233, 0.5)')
+          : 'background.paper',
       }}>
         <TableCell sx={{ width: '50px' }}>
           <IconButton size="small" onClick={() => setOpen(!open)} >
@@ -61,7 +65,9 @@ const Row = ({ row, renderRowAction }) => {
               </Typography>
               <Table size="small">
                 <TableHead>
-                  <TableRow>
+                  <TableRow sx={{ 
+                    bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+                  }}>
                     {nestedTableHeaders.map((header) => (
                       <TableCell key={header.key}>{header.name}</TableCell>
                     ))}
@@ -101,19 +107,22 @@ const SecretsTable = ({
   handlePageChange = () => { },
   renderRowAction = () => { }
 }) => {
+  const theme = useTheme();
 
   return (
     <>
       <TableContainer>
         <Table>
           <TableHead>
-            <TableRow>
+            <TableRow sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+            }}>
               {tableHeaders.map((header) => (
                 <TableCell key={header.key} sx={{ fontWeight: 'bold' }}>{header.name}</TableCell>
               ))}
             </TableRow>
           </TableHead>
-          <TableBody>
+          <TableBody sx={{ bgcolor: 'background.paper' }}>
             {data.map((row) => (
               <Row key={row.id} row={row} renderRowAction={renderRowAction} />
             ))}

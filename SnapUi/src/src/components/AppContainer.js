@@ -5,7 +5,6 @@ import MuiDrawer from '@mui/material/Drawer';
 import MuiAppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import List from '@mui/material/List';
-import CssBaseline from '@mui/material/CssBaseline';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import ListItem from '@mui/material/ListItem';
@@ -730,7 +729,7 @@ export default function AppContainer({ children }) {
             </Box>
             <List>
               {clusterMenu.map(({ text, path, Icon }) => (
-                <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "white" }}>
+                <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
                   <ListItemButton
                     onClick={() => navigate(path)}
                     sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
@@ -757,7 +756,7 @@ export default function AppContainer({ children }) {
         </Box>
         <List>
           {appMenu.map(({ text, path, Icon }) => (
-            <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "white" }}>
+            <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
               <ListItemButton
                 onClick={() => navigate(path)}
                 sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
@@ -793,7 +792,6 @@ export default function AppContainer({ children }) {
     <>
 
       <Box sx={{ display: 'flex' }}>
-        <CssBaseline />
         {renderSwitchCluster()}
         {renderClusterForm()}
         {authenticated && <AppBar position="fixed" open={open} component="nav">
@@ -825,7 +823,7 @@ export default function AppContainer({ children }) {
           </Toolbar>
         </AppBar>}
         {renderDrawer()}
-        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: "#f5f5f5", position: "relative", paddingBottom: "80px" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
+        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.default : "#f5f5f5", position: "relative", paddingBottom: "80px" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
           <DrawerHeader />
           {children}
         </Box>
