@@ -1,4 +1,4 @@
-import { Box, Typography, Button, Select, MenuItem, FormControl, TextField, Stack, Grid2 as Grid, Card, CardContent, CircularProgress, Paper, Divider, Chip, IconButton, Tooltip, FormControlLabel, InputLabel, Tabs, Tab } from "@mui/material"
+import { Box, Typography, Button, Select, MenuItem, FormControl, TextField, Stack, Grid2 as Grid, Card, CardContent, CircularProgress, Paper, Divider, Chip, IconButton, Tooltip, FormControlLabel, InputLabel, Tabs, Tab, Checkbox, Autocomplete } from "@mui/material"
 import { useDispatch, useSelector } from "react-redux";
 import { Loading } from "../common/loading";
 import { clusterActions } from "../../features/cluster/clusterSlice";
@@ -282,6 +282,7 @@ const ClusterScreen = () => {
       setDownloadingCrio(false);
     }
   }
+
 
   const handlePlaybookConfigs = async () => {
     // DEPRECATED: Playbook configurations are now handled automatically by the DaemonSet

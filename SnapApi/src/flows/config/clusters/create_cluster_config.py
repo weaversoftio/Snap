@@ -37,11 +37,13 @@ async def create_cluster_config(request: ClusterConfigRequest):
             message=f"Cluster config file {request.name} already exists"
         )
 
+    cluster_details = ClusterConfigDetails(
+        kube_api_url=request.kube_api_url,
+        token=request.token
+    )
+    
     config = ClusterConfig(    
-        cluster_config_details=ClusterConfigDetails(
-            kube_api_url=request.kube_api_url,
-            token=request.token
-        ),
+        cluster_config_details=cluster_details,
         name=request.name
     )
     # if it doesn't, create the config

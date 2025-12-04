@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 from flows.config.registry.create_registry_config import create_registry_config , RegistryConfigRequest
 from flows.config.registry.update_registry_config import update_registry_config , RegistryConfigRequest
 from flows.config.registry.delete_registry_config import delete_registry_config , DeleteRegistryConfigRequest
@@ -23,6 +24,10 @@ from flows.config.secrets.list_secret import list_secret
 from flows.config.secrets.delete_secret import delete_secret , DeleteSecretRequest
 from flows.config.clusters.list_playbooks_config import list_playbooks_config
 from flows.config.clusters.update_playbook_config import update_playbook_config, UpdatePlaybookRequest
+from flows.config.ad_config import (
+    get_ad_config, update_ad_config, test_ad_connection, get_ad_groups,
+    ADConfigRequest, ADTestConnectionRequest
+)
 
 router = APIRouter()
 
@@ -202,3 +207,37 @@ async def update_playbook_config_endpoint(request: UpdatePlaybookRequest):
     # DEPRECATED: This endpoint is no longer used after deploying the DaemonSet
     # The DaemonSet automatically handles playbook configuration updates
     return {"success": False, "message": "This endpoint is deprecated. Playbook configuration updates are now handled automatically by the DaemonSet."}
+
+# App-level AD Configuration Routes
+
+@router.get("/ad")
+async def get_ad_config_endpoint():
+    """Get app-level AD configuration"""
+    try:
+        return get_ad_config()
+    except Exception as error:
+        return {"success": False, "message": str(error)}
+
+@router.put("/ad")
+async def update_ad_config_endpoint(request: ADConfigRequest):
+    """Update app-level AD configuration"""
+    try:
+        return update_ad_config(request)
+    except Exception as error:
+        return {"success": False, "message": str(error)}
+
+@router.post("/ad/test")
+async def test_ad_connection_endpoint(request: Optional[ADTestConnectionRequest] = None):
+    """Test AD connection"""
+    try:
+        return await test_ad_connection(request)
+    except Exception as error:
+        return {"success": False, "message": str(error)}
+
+@router.get("/ad/groups")
+async def get_ad_groups_endpoint():
+    """Get available AD groups"""
+    try:
+        return await get_ad_groups()
+    except Exception as error:
+        return {"success": False, "message": str(error)}

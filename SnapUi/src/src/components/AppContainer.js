@@ -627,6 +627,28 @@ export default function AppContainer({ children }) {
 
     const showNavigation = kubeAuthenticated && selectedCluster
 
+    // Helper function to decode JWT token and get auth_method
+    const getAuthMethodFromToken = () => {
+      try {
+        const token = getCookie("token");
+        if (!token) return "Local User";
+        // JWT tokens have 3 parts: header.payload.signature
+        const parts = token.split('.');
+        if (parts.length !== 3) return "Local User";
+        
+        // Decode base64url (JWT uses base64url, not standard base64)
+        let payload = parts[1];
+        // Add padding if needed
+        payload += '='.repeat((4 - payload.length % 4) % 4);
+        // Replace URL-safe characters
+        payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(atob(payload));
+        return decoded.auth_method === 'ad' ? 'Domain User' : 'Local User';
+      } catch (e) {
+        return 'Local User';
+      }
+    };
+
     return (
       <Drawer variant="permanent" open={open} sx={{ marginTop: "64px" }}>
         <DrawerHeader>
@@ -634,23 +656,59 @@ export default function AppContainer({ children }) {
             {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton> */}
         </DrawerHeader>
+        {authenticated && user && (
+          <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              User:
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+              {user.username || user.name || 'Unknown'}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              User Type:
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+              {getAuthMethodFromToken()}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              Cluster:
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+              <FormControl sx={{ flex: 1, minWidth: 120, maxWidth: 180 }} size="small" variant='outlined'>
+                <Select
+                  value={selectedCluster?.name || "default"}
+                  onChange={(e) => handleSelectCluster(e.target.value)}
+                  sx={{ 
+                    height: '32px',
+                    '& .MuiSelect-select': {
+                      py: 0.5,
+                      fontSize: '0.875rem'
+                    }
+                  }}
+                >
+                  <MenuItem onClick={() => setClusterOpen(true)} value={selectedCluster?.name || "default"} style={{ fontStyle: "italic" }}>Add Cluster</MenuItem>
+                  {clusterList.map(item => <MenuItem value={item.name} key={item.name}>{item.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <Button 
+                color="inherit" 
+                onClick={() => navigate("/")} 
+                sx={{ 
+                  backgroundColor: isSelected("/") ? selectedBackgroundColor : "inherit", 
+                  minWidth: '32px',
+                  width: '32px',
+                  height: '32px',
+                  p: 0,
+                  flexShrink: 0
+                }}
+              >
+                <ClusterIcon sx={{ color: isSelected("/") ? "white" : "inherit", fontSize: '1.2rem' }} />
+              </Button>
+            </Box>
+          </Box>
+        )}
         <Divider />
         <List>
-          <ListItem>
-            <FormControl sx={{ m: 1, minWidth: 120 }} size="small" fullWidth variant='outlined'>
-              <Select
-                value={selectedCluster?.name || "default"}
-                onChange={(e) => handleSelectCluster(e.target.value)}
-              >
-                <MenuItem onClick={() => setClusterOpen(true)} value={selectedCluster?.name || "default"} style={{ fontStyle: "italic" }}>Add Cluster</MenuItem>
-                {clusterList.map(item => <MenuItem value={item.name} key={item.name}>{item.name}</MenuItem>)}
-              </Select>
-
-            </FormControl>
-            <Button color="inherit" onClick={() => navigate("/")} sx={{ backgroundColor: isSelected("/") ? selectedBackgroundColor : "inherit" }}>
-              <ClusterIcon sx={{ color: isSelected("/") ? "white" : "inherit", }} />
-            </Button>
-          </ListItem>
           {/* Always show Registry menu item */}
           <ListItem disablePadding sx={{ display: 'block', backgroundColor: isSelected("/registry") ? selectedBackgroundColor : "white" }}>
             <ListItemButton

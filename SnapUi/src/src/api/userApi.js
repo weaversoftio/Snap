@@ -18,4 +18,17 @@ export const userApi = {
   remove: async (name) => {
     return await api.delete(`/config/user/delete`, { data: { username: name } });
   },
+  // App-level AD Configuration
+  getADConfig: async () => {
+    return await api.get(`/config/ad`);
+  },
+  updateADConfig: async (data) => {
+    return await api.put(`/config/ad`, data);
+  },
+  testADConnection: async (data) => {
+    return await api.post(`/config/ad/test`, data);
+  },
+  getADGroups: async () => {
+    return await api.get(`/config/ad/groups`);
+  },
 };
