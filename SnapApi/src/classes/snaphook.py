@@ -453,6 +453,46 @@ subjectAltName = @alt_names
                             
                             if image_exists:
                                 logger.info(f"[SnapHook] Image exists, will patch pod")
+                                
+                                # Add init container to pre-pull the original base image
+                                # Using the original image directly as init container image ensures
+                                # Kubernetes automatically pulls it to the node before restore
+                                if original_image:
+                                    logger.info(f"[SnapHook] Adding init container to pre-pull base image: {original_image}")
+                                    
+                                    # Check if initContainers already exist
+                                    spec = pod_spec.get("spec", {})
+                                    existing_init_containers = spec.get("initContainers", [])
+                                    
+                                    # Create simple init container using the original base image
+                                    # Kubernetes will automatically pull this image to the node
+                                    init_container = {
+                                        "name": "snap-pre-pull-base-image",
+                                        "image": original_image,
+                                        "command": ["/bin/sh", "-c"],
+                                        "args": ["echo 'Base image pre-pulled'"]
+                                    }
+                                    
+                                    # Add init container patch
+                                    if existing_init_containers:
+                                        # Append to existing init containers
+                                        updated_init_containers = existing_init_containers + [init_container]
+                                        init_container_patch = {
+                                            "op": "replace",
+                                            "path": "/spec/initContainers",
+                                            "value": updated_init_containers
+                                        }
+                                    else:
+                                        # Create new initContainers array
+                                        init_container_patch = {
+                                            "op": "add",
+                                            "path": "/spec/initContainers",
+                                            "value": [init_container]
+                                        }
+                                    
+                                    patches.append(init_container_patch)
+                                    logger.info(f"[SnapHook] Added init container patch to pre-pull {original_image}")
+                                
                                 # Create patch for image
                                 patch = {
                                     "op": "replace",
