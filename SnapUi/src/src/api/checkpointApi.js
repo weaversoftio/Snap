@@ -82,6 +82,29 @@ const getScanResults = async (data) => new Promise(async (resolve, reject) => {
     }
 })
 
+const downloadCheckpoint = async (pod_name, filename) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.get(`/checkpoint/download/${pod_name}?filename=${encodeURIComponent(filename)}`, {
+            responseType: 'blob'
+        })
+        if( !response.data ) return reject()
+        
+        // Create blob URL and trigger download
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', filename)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+        
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
 export const checkpointApi = {
     getById,
     getList,
@@ -90,6 +113,7 @@ export const checkpointApi = {
     getCheckpointctlLogs,
     pushCheckpoint,
     scanCheckpoint,
-    getScanResults
+    getScanResults,
+    downloadCheckpoint
 
 }

@@ -12,6 +12,7 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import Tooltip from '@mui/material/Tooltip';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useDispatch, useSelector } from "react-redux";
 import DialogComponent from "../common/Dialog";
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -219,6 +220,20 @@ const CheckpointsScreen = ({ classes }) => {
 
 
   }
+
+  const handleDownloadCheckpoint = async (pod_name, checkpoint_name) => {
+    try {
+      setActionRunning(true)
+      setCurrentCheckpoint({ pod_name, checkpoint_name })
+      await checkpointApi.downloadCheckpoint(pod_name, checkpoint_name)
+      enqueueSnackbar(`Downloading checkpoint: ${checkpoint_name}`, { variant: "success" })
+    } catch (error) {
+      console.error("Failed to download checkpoint:", error)
+      enqueueSnackbar(`Failed to download checkpoint: ${checkpoint_name}`, { variant: "error" })
+    }
+    setActionRunning(false)
+    setCurrentCheckpoint(null)
+  }
   const closeLogs = () => {
     setLogsOpen(false);
     setLogs(null);
@@ -356,6 +371,11 @@ const CheckpointsScreen = ({ classes }) => {
                 <IconButton onClick={() => handlePushCheckpoint(pod_name, checkpoint_name)}>
                   <Tooltip title="Upload Checkpoint">
                     <FileUploadIcon />
+                  </Tooltip>
+                </IconButton>
+                <IconButton onClick={() => handleDownloadCheckpoint(pod_name, checkpoint_name)}>
+                  <Tooltip title="Download Checkpoint">
+                    <DownloadIcon />
                   </Tooltip>
                 </IconButton>
               </Stack>
