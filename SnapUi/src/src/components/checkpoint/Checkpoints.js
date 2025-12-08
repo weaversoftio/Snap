@@ -1,5 +1,6 @@
 import { Box, Button, CircularProgress, FormControl, Grid2 as Grid, MenuItem, Select, TextField, Typography, Card, Paper } from "@mui/material"
-import { useEffect, useState } from "react";
+import ClearIcon from '@mui/icons-material/Clear';
+import { useEffect, useMemo, useState } from "react";
 import TableComponent from "../common/Table";
 import { useSnackbar } from 'notistack';
 import { checkpointApi } from "../../api/checkpointApi";
@@ -46,6 +47,9 @@ const CheckpointsScreen = ({ classes }) => {
   const [isLogsOpen, setLogsOpen] = useState(false);
   const [logs, setLogs] = useState(null);
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedPod, setSelectedPod] = useState("all")
+  const [analysisFilter, setAnalysisFilter] = useState("all")
+  const [scanFilter, setScanFilter] = useState("all")
 
   // useEffect(() => {
   //   console.log({ registryAuthenticated, registryUsername })
@@ -390,8 +394,29 @@ const CheckpointsScreen = ({ classes }) => {
       item.pod_name,
       item.checkpoint_name
     ];
-    return searchFields.some(field => String(field).toLowerCase().includes(searchTerm.toLowerCase()))
+    const matchesSearch = searchFields.some(field => String(field).toLowerCase().includes(searchTerm.toLowerCase()))
+    const matchesPod = selectedPod === "all" || item.pod_name === selectedPod
+    const matchesAnalysis = analysisFilter === "all" ? true : analysisFilter === "analyzed" ? !!item.analysis_result : !item.analysis_result
+    const matchesScan = scanFilter === "all" ? true : scanFilter === "scanned" ? !!item.scan_result : !item.scan_result
+
+    return matchesSearch && matchesPod && matchesAnalysis && matchesScan
   })
+
+  const podOptions = useMemo(() => {
+    return Array.from(new Set(data.map(item => item.pod_name).filter(Boolean)))
+  }, [data])
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setSelectedPod("all")
+    setAnalysisFilter("all")
+    setScanFilter("all")
+    setPage(0)
+  }
+
+  useEffect(() => {
+    setPage(0)
+  }, [searchTerm, selectedPod, analysisFilter, scanFilter])
 
 
   return (
@@ -401,17 +426,67 @@ const CheckpointsScreen = ({ classes }) => {
           <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
             {renderError()}
             {renderDialog()}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, ml: 1 }}>
-              <Typography variant="h6" gutterBottom component="div">
-                Search
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                Search & Filters
               </Typography>
-              <TextField
-                sx={{ width: '300px' }}
-                size="small"
-                placeholder="Podname, Checkpointname"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
+                <TextField
+                  sx={{ width: '300px', minWidth: '200px' }}
+                  size="small"
+                  placeholder="Search by pod name or checkpoint name"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <FormControl sx={{ minWidth: 180 }} size="small">
+                  <Select
+                    value={selectedPod}
+                    onChange={(e) => setSelectedPod(e.target.value)}
+                    displayEmpty
+                  >
+                    <MenuItem value="all">All Pods</MenuItem>
+                    {podOptions.map(pod => (
+                      <MenuItem key={pod} value={pod}>{pod}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl sx={{ minWidth: 150 }} size="small">
+                  <Select
+                    value={analysisFilter}
+                    onChange={(e) => setAnalysisFilter(e.target.value)}
+                    displayEmpty
+                  >
+                    <MenuItem value="all">All Analysis</MenuItem>
+                    <MenuItem value="analyzed">Analyzed</MenuItem>
+                    <MenuItem value="not-analyzed">Not Analyzed</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl sx={{ minWidth: 150 }} size="small">
+                  <Select
+                    value={scanFilter}
+                    onChange={(e) => setScanFilter(e.target.value)}
+                    displayEmpty
+                  >
+                    <MenuItem value="all">All Scan Status</MenuItem>
+                    <MenuItem value="scanned">Scanned</MenuItem>
+                    <MenuItem value="not-scanned">Not Scanned</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="outlined"
+                  startIcon={<ClearIcon />}
+                  onClick={clearFilters}
+                  size="small"
+                  disabled={searchTerm === "" && selectedPod === "all" && analysisFilter === "all" && scanFilter === "all"}
+                >
+                  Clear Filters
+                </Button>
+              </Box>
+              {filteredData.length !== data.length && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Showing {filteredData.length} of {data.length} checkpoints
+                </Typography>
+              )}
             </Box>
             <TableComponent
               classes={classes}

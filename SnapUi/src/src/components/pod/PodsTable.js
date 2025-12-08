@@ -1,5 +1,5 @@
-import { Box, Card, Button, CircularProgress, Collapse, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography, useTheme } from "@mui/material";
-import { useState, useEffect } from "react";
+import { Box, Card, Button, CircularProgress, Collapse, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tooltip, Typography, useTheme } from "@mui/material";
+import { useState } from "react";
 import { formatTimestamp } from "../../utils/formateDate";
 import { grey } from '@mui/material/colors';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -122,41 +122,17 @@ const TableComponent = ({
   const { selectedCluster = null } = useSelector(state => state.cluster)
   const { kube_api_url: kubeApi = "" } = selectedCluster?.cluster_config_details || {}
   const clusterName = selectedCluster?.name || ""
-  const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    handlePageChange(null, 0)
-  }, [searchTerm])
-
-  const filteredData = data.filter(item => {
-    const searchFields = [
-      getNestedValue(item, 'metadata.name'),
-      getNestedValue(item, 'metadata.namespace'),
-      getNestedValue(item, 'spec.nodeName')
-    ];
-    return searchFields.some(field =>
-      String(field).toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  // Data is already filtered by parent component
+  const filteredData = data;
 
   const renderTable = () => {
-    if ((!filteredData || !filteredData.length) && !searchTerm) return (
+    if (!filteredData || !filteredData.length) return (
       <Typography>No Record Found</Typography>
     )
 
     return (
       <TableContainer>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
-          <Typography variant="h6" gutterBottom component="div">
-            Search
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Name, Namespace, Node"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </Box>
         <Table>
           {renderTableHead()}
           {renderTableBody()}

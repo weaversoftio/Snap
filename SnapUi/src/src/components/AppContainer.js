@@ -657,63 +657,69 @@ export default function AppContainer({ children }) {
     };
 
     return (
-      <Drawer variant="permanent" open={open} sx={{ marginTop: "64px" }}>
+      <Drawer variant="permanent" open={open} sx={{ marginTop: "48px" }}>
         <DrawerHeader>
           {/* <IconButton onClick={handleDrawerClose}>
             {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton> */}
         </DrawerHeader>
         {authenticated && user && (
-          <Box sx={{ p: 2, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
-            <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em', mb: 1, display: 'block' }}>
+          <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
+            <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em', mb: 1, display: 'block' }}>
               User & Cluster
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-              User:
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-              {user.username || user.name || 'Unknown'}
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-              User Type:
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-              {getAuthMethodFromToken()}
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-              Cluster:
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-              <FormControl sx={{ flex: 1, minWidth: 120, maxWidth: 180 }} size="small" variant='outlined'>
-                <Select
-                  value={selectedCluster?.name || "default"}
-                  onChange={(e) => handleSelectCluster(e.target.value)}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.8rem', minWidth: '70px' }}>
+                User:
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                {user.username || user.name || 'Unknown'}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.75 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.8rem', minWidth: '70px' }}>
+                Type:
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                {getAuthMethodFromToken()}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.8rem', minWidth: '70px' }}>
+                Cluster:
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1 }}>
+                <FormControl sx={{ flex: 1, minWidth: 120, maxWidth: 180 }} size="small" variant='outlined'>
+                  <Select
+                    value={selectedCluster?.name || "default"}
+                    onChange={(e) => handleSelectCluster(e.target.value)}
+                    sx={{ 
+                      height: '32px',
+                      '& .MuiSelect-select': {
+                        py: 0.5,
+                        fontSize: '0.875rem'
+                      }
+                    }}
+                  >
+                    <MenuItem onClick={() => setClusterOpen(true)} value={selectedCluster?.name || "default"} style={{ fontStyle: "italic" }}>Add Cluster</MenuItem>
+                    {clusterList.map(item => <MenuItem value={item.name} key={item.name}>{item.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <Button 
+                  color="inherit" 
+                  onClick={() => navigate("/")} 
                   sx={{ 
+                    backgroundColor: isSelected("/") ? selectedBackgroundColor : "inherit", 
+                    minWidth: '32px',
+                    width: '32px',
                     height: '32px',
-                    '& .MuiSelect-select': {
-                      py: 0.5,
-                      fontSize: '0.875rem'
-                    }
+                    p: 0,
+                    flexShrink: 0
                   }}
                 >
-                  <MenuItem onClick={() => setClusterOpen(true)} value={selectedCluster?.name || "default"} style={{ fontStyle: "italic" }}>Add Cluster</MenuItem>
-                  {clusterList.map(item => <MenuItem value={item.name} key={item.name}>{item.name}</MenuItem>)}
-                </Select>
-              </FormControl>
-              <Button 
-                color="inherit" 
-                onClick={() => navigate("/")} 
-                sx={{ 
-                  backgroundColor: isSelected("/") ? selectedBackgroundColor : "inherit", 
-                  minWidth: '32px',
-                  width: '32px',
-                  height: '32px',
-                  p: 0,
-                  flexShrink: 0
-                }}
-              >
-                <ClusterIcon sx={{ color: isSelected("/") ? "white" : "inherit", fontSize: '1.2rem' }} />
-              </Button>
+                  <ClusterIcon sx={{ color: isSelected("/") ? "white" : "inherit", fontSize: '1.2rem' }} />
+                </Button>
+              </Box>
             </Box>
           </Box>
         )}
@@ -795,19 +801,19 @@ export default function AppContainer({ children }) {
         {renderSwitchCluster()}
         {renderClusterForm()}
         {authenticated && <AppBar position="fixed" open={open} component="nav">
-          <Toolbar>
-            <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", flexGrow: 1 }}>
-              <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+          <Toolbar sx={{ minHeight: '48px !important', py: 0.5 }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", justifyContent: "space-between", flexGrow: 1 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                 <Box
                   component="img"
                   sx={{
-                    height: 45,
+                    height: 32,
                     filter: 'brightness(0) invert(1)',
                   }}
                   alt="SNAP logo."
                   src="/logo.png"
                 />
-                <Typography variant="h6" noWrap component="div">
+                <Typography variant="h6" noWrap component="div" sx={{ fontSize: '1.1rem', fontWeight: 500 }}>
                   Dashboard
                 </Typography>
               </Stack>
@@ -815,7 +821,8 @@ export default function AppContainer({ children }) {
                 color="inherit"
                 onClick={() => setHelpDialogOpen(true)}
                 startIcon={<HelpIcon />}
-                sx={{ textTransform: "capitalize" }}
+                sx={{ textTransform: "capitalize", fontSize: '0.875rem' }}
+                size="small"
               >
                 Help
               </Button>
