@@ -1,5 +1,5 @@
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Paper, CircularProgress, Grid, Chip } from "@mui/material"
-import { useState, useEffect } from "react"
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Paper, CircularProgress, Chip } from "@mui/material"
+import { useState, useEffect, useCallback } from "react"
 import { useSnackbar } from 'notistack'
 import { checkpointApi } from "../../api/checkpointApi"
 import ReactJson from 'react-json-view'
@@ -11,7 +11,7 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
   const [loading, setLoading] = useState(false)
   const [diffData, setDiffData] = useState(null)
 
-  const loadDiff = async () => {
+  const loadDiff = useCallback(async () => {
     if (!componentName || !podName1 || !checkpointName1 || !podName2 || !checkpointName2) {
       enqueueSnackbar("Missing required parameters", { variant: "error" })
       return
@@ -29,6 +29,17 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
         checkpoint2_clean,
         componentName
       )
+      console.log('Component diff result:', {
+        componentName,
+        has_content_1: result.has_content_1,
+        has_content_2: result.has_content_2,
+        content_1_exists: result.content_1 !== null && result.content_1 !== undefined,
+        content_2_exists: result.content_2 !== null && result.content_2 !== undefined,
+        content_1_type: typeof result.content_1,
+        content_2_type: typeof result.content_2,
+        content_1_keys: result.content_1 && typeof result.content_1 === 'object' ? Object.keys(result.content_1) : null,
+        content_2_keys: result.content_2 && typeof result.content_2 === 'object' ? Object.keys(result.content_2) : null
+      })
       setDiffData(result)
     } catch (error) {
       console.error("Failed to load diff:", error)
@@ -36,7 +47,7 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
     } finally {
       setLoading(false)
     }
-  }
+  }, [componentName, podName1, checkpointName1, podName2, checkpointName2, enqueueSnackbar])
 
   // Load diff when dialog opens
   useEffect(() => {
@@ -45,7 +56,7 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
     } else {
       setDiffData(null)
     }
-  }, [open, componentName])
+  }, [open, componentName, loadDiff])
 
   // Convert content to string format for comparison
   const getContentAsString = (content) => {
@@ -93,7 +104,11 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
   }
 
   const renderSideBySideDiff = () => {
-    if (!diffData.has_content_1 && !diffData.has_content_2) {
+    // Check if content actually exists (even if has_content flags are wrong)
+    const hasContent1 = diffData.has_content_1 || (diffData.content_1 !== null && diffData.content_1 !== undefined)
+    const hasContent2 = diffData.has_content_2 || (diffData.content_2 !== null && diffData.content_2 !== undefined)
+    
+    if (!hasContent1 && !hasContent2) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
@@ -103,7 +118,7 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
       )
     }
 
-    if (!diffData.has_content_1) {
+    if (!hasContent1) {
       return (
         <Box sx={{ p: 2 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -133,7 +148,7 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
       )
     }
 
-    if (!diffData.has_content_2) {
+    if (!hasContent2) {
       return (
         <Box sx={{ p: 2 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -336,14 +351,14 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <Typography variant="body2" color="text.secondary">
-                  Checkpoint 1: {diffData.has_content_1 ? '✓ Present' : '✗ Missing'}
-                  {diffData.source === 'fingerprint_cache' && diffData.has_content_1 && (
+                  Checkpoint 1: {(diffData.has_content_1 || (diffData.content_1 !== null && diffData.content_1 !== undefined)) ? '✓ Present' : '✗ Missing'}
+                  {diffData.source === 'fingerprint_cache' && (diffData.has_content_1 || (diffData.content_1 !== null && diffData.content_1 !== undefined)) && (
                     <Chip label="From Cache" size="small" color="success" variant="outlined" sx={{ ml: 1, height: '20px', fontSize: '0.65rem' }} />
                   )}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Checkpoint 2: {diffData.has_content_2 ? '✓ Present' : '✗ Missing'}
-                  {diffData.source === 'fingerprint_cache' && diffData.has_content_2 && (
+                  Checkpoint 2: {(diffData.has_content_2 || (diffData.content_2 !== null && diffData.content_2 !== undefined)) ? '✓ Present' : '✗ Missing'}
+                  {diffData.source === 'fingerprint_cache' && (diffData.has_content_2 || (diffData.content_2 !== null && diffData.content_2 !== undefined)) && (
                     <Chip label="From Cache" size="small" color="success" variant="outlined" sx={{ ml: 1, height: '20px', fontSize: '0.65rem' }} />
                   )}
                 </Typography>
@@ -356,7 +371,8 @@ const ComponentDiffViewer = ({ open, onClose, componentName, podName1, checkpoin
             </Paper>
 
             {/* Side-by-Side Diff */}
-            {diffData.has_content_1 || diffData.has_content_2 ? (
+            {(diffData.has_content_1 || (diffData.content_1 !== null && diffData.content_1 !== undefined)) || 
+             (diffData.has_content_2 || (diffData.content_2 !== null && diffData.content_2 !== undefined)) ? (
               <Paper sx={{ overflow: 'hidden' }}>
                 {renderSideBySideDiff()}
               </Paper>

@@ -1,4 +1,3 @@
-import { Typography } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import './App.css';
 import AppContainer from './components/AppContainer';
@@ -19,7 +18,7 @@ import SettingsScreen from './components/settings/SettingsScreen';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 const App = () => {
-  const { kubeAuthenticated = false, authenticated = false } = useSelector(state => state.auth)
+  const { authenticated = false } = useSelector(state => state.auth)
 
   return (
     <ThemeProvider>

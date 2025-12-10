@@ -1,9 +1,8 @@
-import { Box, Button, CircularProgress, FormControl, Grid2 as Grid, MenuItem, Select, TextField, Typography, Card, Paper, Autocomplete, Chip, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, TablePagination, useTheme } from "@mui/material"
+import { Box, Button, CircularProgress, FormControl, Grid2 as Grid, MenuItem, Select, TextField, Typography, Paper, Autocomplete, Chip, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, TablePagination, useTheme } from "@mui/material"
 import ClearIcon from '@mui/icons-material/Clear';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSnackbar } from 'notistack';
 import { checkpointApi } from "../../api/checkpointApi";
-import { SimpleDialog } from "../common/SimpleDialog";
 import ReactJson from 'react-json-view';
 import BeautifulAnalysisResults from "../common/BeautifulAnalysisResults";
 import Stack from '@mui/material/Stack';
@@ -35,15 +34,12 @@ const CheckpointsScreen = ({ classes }) => {
   const [loading, setLoading] = useState(false)
   const [dialogType, setDialogType] = useState("")
   const [data, setData] = useState([])
-  const [total, setTotal] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(5)
   const [page, setPage] = useState(0)
   const [currentCheckpoint, setCurrentCheckpoint] = useState(null)
-  const [error, setError] = useState('')
   const [isActionRunning, setActionRunning] = useState(false);
   const [scanResults, setScanResults] = useState(null)
 
-  const [checkpointData, setPushCheckpointData] = useState("")
   const [registry, setRegistry] = useState("")
 
   const [regName, setRegName] = useState("")
@@ -66,14 +62,27 @@ const CheckpointsScreen = ({ classes }) => {
   //   }
   // }, [registryAuthenticated, registryUsername])
 
+  const handleGetCheckpoints = useCallback(async () => {
+    try {
+      setLoading(true)
+      // const result = JSON.parse(podsData.pods)
+      const result = await checkpointApi.getList()
+      setData(result?.checkpoints)
+    } catch (error) {
+      console.error("Checkpoint list error", error.toString())
+    }
+    setLoading(false)
+
+  }, [])
+
+  const handleGetRegistryList = useCallback(() => {
+    dispatch(registryActions.getList())
+  }, [dispatch])
+
   useEffect(() => {
     handleGetCheckpoints();
     handleGetRegistryList();
-  }, [])
-
-  const handleGetRegistryList = () => {
-    dispatch(registryActions.getList())
-  }
+  }, [handleGetCheckpoints, handleGetRegistryList])
 
   const handlePushCheckpoint = (pod_name, checkpoint_name) => {
     setDialogType("createAndPushCheckpoint")
@@ -85,7 +94,7 @@ const CheckpointsScreen = ({ classes }) => {
   }
 
   const handleConfirmPushCheckpoint = async () => {
-    const { pod_name, checkpoint_name, username } = currentCheckpoint || {}
+    const { checkpoint_name } = currentCheckpoint || {}
     if (!registry) return enqueueSnackbar("Please select registry", { variant: "error" })
     setActionRunning(true)
     handleClearDialog()
@@ -115,33 +124,6 @@ const CheckpointsScreen = ({ classes }) => {
     handleClearDialog()
   }
 
-  const handleScanCheckpoint = async (pod_name, checkpoint_name) => {
-    setDialogType("scanCheckpoint")
-    setCurrentCheckpoint({
-      pod_name,
-      checkpoint_name
-    })
-    const result = await checkpointApi.scanCheckpoint({
-      pod_name,
-      checkpoint_name
-    })
-    console.log("result", result)
-  }
-
-  const handleShowScanResults = async (pod_name, checkpoint_name) => {
-    setCurrentCheckpoint({
-      pod_name,
-      checkpoint_name
-    })
-    const result = await checkpointApi.getScanResults({
-      pod_name,
-      checkpoint_name
-    })
-    console.log("result", result)
-    setDialogType("scanResults")
-    setScanResults(result)
-
-  }
 
   const handleRowsPerPageChange = (event) => {
     setRowsPerPage(+event.target.value);
@@ -152,29 +134,6 @@ const CheckpointsScreen = ({ classes }) => {
     setPage(newPage);
   };
 
-  const handleGetCheckpoints = async () => {
-    try {
-      setLoading(true)
-      // const result = JSON.parse(podsData.pods)
-      const result = await checkpointApi.getList()
-      setData(result?.checkpoints)
-      setTotal(result?.checkpoints.length)
-    } catch (error) {
-      console.error("Checkpoint list error", error.toString())
-    }
-    setLoading(false)
-
-  }
-
-
-  const renderError = () => {
-    return (
-      <Grid size={4}>
-        <Typography color="error">{error}</Typography>
-      </Grid>
-    )
-  }
-
   //run analysis
   const startCheckpointctl = async (pod_name = "sample_pod", checkpoint_name = "sample_checkpoint") => {
     enqueueSnackbar(`Running analysis for: ${checkpoint_name}`, { variant: "info" });
@@ -184,7 +143,7 @@ const CheckpointsScreen = ({ classes }) => {
 
       const checkpoint_name_no_ext = checkpoint_name.replace(".tar", "");
 
-      const result = await checkpointApi.runCheckpointctl(pod_name, checkpoint_name_no_ext);
+      await checkpointApi.runCheckpointctl(pod_name, checkpoint_name_no_ext);
       await handleGetCheckpoints();
       await openLogs(pod_name, checkpoint_name_no_ext);
       enqueueSnackbar(`Finished analysis for: ${checkpoint_name}`, { variant: "success" });
@@ -644,7 +603,7 @@ const CheckpointsScreen = ({ classes }) => {
   )
 
   const renderTableRow = (row) => {
-    const { pod_name, checkpoint_name, analysis_result, scan_result, has_fingerprint } = row
+    const { pod_name, checkpoint_name, analysis_result, has_fingerprint } = row
     const isRunning = isActionRunning && currentCheckpoint?.checkpoint_name === checkpoint_name
 
     return (
@@ -879,7 +838,6 @@ const CheckpointsScreen = ({ classes }) => {
       {loading ? <Loading /> : (
         <>
           <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
-            {renderError()}
             {renderDialog()}
             <Box sx={{ mt: 2, mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

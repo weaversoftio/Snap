@@ -244,7 +244,7 @@ export default function AppContainer({ children }) {
     }
     
     handleConfirmSelectCluster(c_selectedCluster);
-  }, [authenticated, c_selectedCluster, clusterList?.length, selectedCluster?.name, handleConfirmSelectCluster])
+  }, [authenticated, c_selectedCluster, clusterList, selectedCluster?.name, handleConfirmSelectCluster])
 
   useEffect(() => {
     if (!authenticated || !user) return

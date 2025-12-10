@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import asyncio
 import difflib
+import math
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
@@ -476,6 +477,27 @@ async def process_checkpoint_directory(checkpoint_dir: Path, parent_dir: Path = 
         diff_hash = await hash_filesystem_diff(rootfs_diff)
         if diff_hash:
             hashes['rootfs_diff'] = diff_hash
+            # Store content if requested
+            if include_contents and contents is not None:
+                try:
+                    # Extract metadata about the rootfs-diff.tar contents
+                    with tarfile.open(rootfs_diff, 'r:*') as tar:
+                        members = tar.getmembers()
+                        rootfs_content = {
+                            'file_count': len(members),
+                            'files': [{'name': m.name, 'size': m.size, 'type': m.type} for m in members[:100]],  # Limit to first 100 files
+                            'total_size': sum(m.size for m in members),
+                            'tar_path': str(rootfs_diff)
+                        }
+                        # If there are more files, indicate that
+                        if len(members) > 100:
+                            rootfs_content['note'] = f'Showing first 100 of {len(members)} files'
+                    contents['rootfs_diff'] = rootfs_content
+                    logger.info("Successfully processed rootfs_diff from rootfs-diff.tar")
+                except Exception as e:
+                    logger.warning(f"Failed to extract rootfs_diff content: {str(e)}")
+                    # Store at least that it exists
+                    contents['rootfs_diff'] = {'exists': True, 'tar_path': str(rootfs_diff), 'error': str(e)}
             logger.info("Successfully processed rootfs_diff from rootfs-diff.tar")
         else:
             hashes['rootfs_diff'] = None
@@ -548,11 +570,593 @@ async def process_checkpoint_directory(checkpoint_dir: Path, parent_dir: Path = 
         hashes['crio_log_path'] = None
         logger.debug("io.kubernetes.cri-o.LogPath not found in checkpoint")
     
+    # Extract environment variables from process tree if available
+    if include_contents and contents is not None and 'process_tree' in contents:
+        try:
+            env_vars = extract_environment_variables(contents.get('process_tree'))
+            if env_vars:
+                contents['environment_variables'] = env_vars
+                # Also hash environment variables separately
+                env_canonical = canonicalize_json(env_vars)
+                hashes['environment_variables'] = hash_string(env_canonical)
+                logger.info("Successfully extracted environment variables from process tree")
+        except Exception as e:
+            logger.warning(f"Failed to extract environment variables: {str(e)}")
+    
     # Return both hashes and contents
     result = {"hashes": hashes}
     if include_contents and contents is not None:
         result["contents"] = contents
     return result
+
+
+# ============================================================================
+# Structured Data Extraction Functions
+# ============================================================================
+
+def extract_process_tree_details(pstree_data: Any) -> Dict[str, Any]:
+    """
+    Extract structured process tree information from decoded pstree.img.
+    
+    Returns:
+        Dictionary with:
+        - processes: List of processes with PID, PPID, command line
+        - added_processes: List of new processes (for comparison)
+        - removed_processes: List of removed processes (for comparison)
+        - pid_changes: List of PID changes
+        - ppid_changes: List of PPID changes
+        - cmdline_changes: List of command line changes
+    """
+    if not pstree_data or not isinstance(pstree_data, dict):
+        return {}
+    
+    processes = []
+    
+    # Extract process information from pstree structure
+    # CRIU pstree structure varies, but typically contains entries array
+    entries = pstree_data.get('entries', [])
+    if not entries:
+        # Try alternative structure
+        entries = pstree_data.get('pstree', {}).get('entries', [])
+    
+    for entry in entries:
+        if isinstance(entry, dict):
+            pid = entry.get('pid') or entry.get('item', {}).get('pid')
+            ppid = entry.get('ppid') or entry.get('item', {}).get('ppid')
+            # Command line might be in different places
+            cmdline = entry.get('cmdline') or entry.get('item', {}).get('comm') or entry.get('comm')
+            if isinstance(cmdline, list):
+                cmdline = ' '.join(cmdline)
+            
+            processes.append({
+                'pid': pid,
+                'ppid': ppid,
+                'cmdline': cmdline or '',
+                'full_entry': entry  # Keep full entry for reference
+            })
+    
+    return {
+        'processes': processes,
+        'process_count': len(processes)
+    }
+
+
+def extract_memory_map_details(mm_data: Any) -> Dict[str, Any]:
+    """
+    Extract structured memory map information from decoded mm-*.img.
+    
+    Returns:
+        Dictionary with:
+        - vmas: List of VMAs with permissions, offsets, sizes
+        - new_vmas: List of new VMAs (for comparison)
+        - removed_vmas: List of removed VMAs (for comparison)
+        - permission_changes: List of permission changes
+        - offset_changes: List of offset changes
+        - size_changes: List of size changes
+    """
+    if not mm_data or not isinstance(mm_data, dict):
+        return {}
+    
+    vmas = []
+    
+    # Extract VMA information
+    # CRIU mm structure typically has vmas array
+    vma_list = mm_data.get('vmas', [])
+    if not vma_list:
+        vma_list = mm_data.get('mm', {}).get('vmas', [])
+    
+    for vma in vma_list:
+        if isinstance(vma, dict):
+            vmas.append({
+                'start': vma.get('start'),
+                'end': vma.get('end'),
+                'size': (vma.get('end') or 0) - (vma.get('start') or 0),
+                'prot': vma.get('prot'),  # Permissions (rwx)
+                'flags': vma.get('flags'),
+                'offset': vma.get('pgoff'),  # Page offset
+                'file': vma.get('file'),  # File-backed mapping
+                'shmid': vma.get('shmid'),  # Shared memory ID
+                'full_vma': vma
+            })
+    
+    return {
+        'vmas': vmas,
+        'vma_count': len(vmas)
+    }
+
+
+def extract_file_descriptor_details(fdinfo_data: Any) -> Dict[str, Any]:
+    """
+    Extract structured file descriptor information from decoded fdinfo-*.img.
+    
+    Returns:
+        Dictionary with:
+        - file_descriptors: List of FDs with socket state, file offsets
+        - new_fds: List of new file descriptors (for comparison)
+        - closed_fds: List of closed file descriptors (for comparison)
+        - socket_state_changes: List of socket state changes
+        - offset_changes: List of file offset changes
+    """
+    if not fdinfo_data:
+        return {}
+    
+    # Handle both single fdinfo and array of fdinfo
+    fd_list = fdinfo_data if isinstance(fdinfo_data, list) else [fdinfo_data]
+    
+    file_descriptors = []
+    for fd_entry in fd_list:
+        if isinstance(fd_entry, dict):
+            fd = fd_entry.get('fd') or fd_entry.get('id')
+            fd_type = fd_entry.get('type')
+            
+            fd_info = {
+                'fd': fd,
+                'type': fd_type,
+                'full_entry': fd_entry
+            }
+            
+            # Extract socket-specific information
+            if fd_type == 'socket' or 'socket' in str(fd_type).lower():
+                fd_info['socket_state'] = fd_entry.get('state')
+                fd_info['socket_family'] = fd_entry.get('family')
+                fd_info['socket_type'] = fd_entry.get('type')
+                fd_info['socket_protocol'] = fd_entry.get('protocol')
+            
+            # Extract file-specific information
+            if 'file' in str(fd_type).lower() or fd_entry.get('pos'):
+                fd_info['file_offset'] = fd_entry.get('pos') or fd_entry.get('offset')
+                fd_info['file_path'] = fd_entry.get('name') or fd_entry.get('path')
+            
+            file_descriptors.append(fd_info)
+    
+    return {
+        'file_descriptors': file_descriptors,
+        'fd_count': len(file_descriptors)
+    }
+
+
+def extract_environment_variables(pstree_data: Any) -> Dict[str, Any]:
+    """
+    Extract environment variables from process tree data.
+    
+    Returns:
+        Dictionary mapping process PID to its environment variables
+    """
+    if not pstree_data:
+        return {}
+    
+    env_vars_by_process = {}
+    
+    # Handle different pstree structures
+    entries = []
+    if isinstance(pstree_data, dict):
+        entries = pstree_data.get('entries', []) or pstree_data.get('pstree', {}).get('entries', [])
+    elif isinstance(pstree_data, list):
+        entries = pstree_data
+    
+    for entry in entries:
+        if isinstance(entry, dict):
+            pid = entry.get('pid') or entry.get('item', {}).get('pid')
+            # Environment variables might be in different places
+            env = entry.get('env') or entry.get('environ') or entry.get('item', {}).get('env')
+            
+            if env:
+                if isinstance(env, list):
+                    # Convert list format to dict
+                    env_dict = {}
+                    for env_item in env:
+                        if isinstance(env_item, str) and '=' in env_item:
+                            key, value = env_item.split('=', 1)
+                            env_dict[key] = value
+                        elif isinstance(env_item, dict):
+                            env_dict.update(env_item)
+                    env = env_dict
+                elif isinstance(env, dict):
+                    pass  # Already in dict format
+                else:
+                    env = {}
+                
+                if pid and env:
+                    env_vars_by_process[pid] = env
+    
+    return {
+        'by_process': env_vars_by_process,
+        'all_variables': {k: v for proc_env in env_vars_by_process.values() for k, v in proc_env.items()},
+        'process_count': len(env_vars_by_process)
+    }
+
+
+def calculate_entropy(data: bytes) -> float:
+    """
+    Calculate Shannon entropy of data.
+    
+    Returns:
+        Entropy value between 0 and 8 (for bytes)
+    """
+    if not data or len(data) == 0:
+        return 0.0
+    
+    # Count byte frequencies
+    frequencies = {}
+    for byte in data:
+        frequencies[byte] = frequencies.get(byte, 0) + 1
+    
+    # Calculate entropy
+    entropy = 0.0
+    data_len = len(data)
+    for count in frequencies.values():
+        probability = count / data_len
+        if probability > 0:
+            entropy -= probability * math.log2(probability)
+    
+    return entropy
+
+
+def assess_component_risk(component: str, diff: Dict[str, Any], detailed_analysis: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Assess security risk level for a component difference.
+    
+    Args:
+        component: Component name
+        diff: Difference data for the component
+        detailed_analysis: Optional detailed analysis from comparison
+        
+    Returns:
+        Dictionary with risk_level, risk_score, risk_category, and findings
+    """
+    risk_level = "info"  # Default: info, low, medium, high, critical
+    risk_score = 0  # 0-100
+    risk_category = "operational"  # operational, security, performance, configuration
+    findings = []
+    
+    component_lower = component.lower()
+    status = diff.get("status", "")
+    
+    # Critical risk components
+    critical_components = [
+        "process_tree", "memory_mm", "memory_pages", 
+        "seccomp", "cgroup", "environment_variables"
+    ]
+    
+    # High risk components
+    high_risk_components = [
+        "fdinfo", "netns", "files", "rootfs_diff",
+        "container_spec", "container_config"
+    ]
+    
+    # Check for process tree changes (critical security risk)
+    if component == "process_tree":
+        risk_category = "security"
+        if detailed_analysis:
+            added = detailed_analysis.get("added_processes", [])
+            removed = detailed_analysis.get("removed_processes", [])
+            changed = detailed_analysis.get("changed_processes", [])
+            
+            if added:
+                # Check for suspicious process additions
+                suspicious_patterns = ["sh", "bash", "nc", "netcat", "python", "perl", "wget", "curl"]
+                for proc in added:
+                    cmdline = str(proc.get("cmdline", "")).lower()
+                    for pattern in suspicious_patterns:
+                        if pattern in cmdline:
+                            risk_level = "critical"
+                            risk_score = 95
+                            findings.append({
+                                "type": "suspicious_process_added",
+                                "severity": "critical",
+                                "message": f"Suspicious process added: {proc.get('cmdline', 'unknown')}",
+                                "pid": proc.get("pid")
+                            })
+                            break
+                
+                if risk_level != "critical":
+                    risk_level = "high"
+                    risk_score = 75
+                    findings.append({
+                        "type": "processes_added",
+                        "severity": "high",
+                        "message": f"{len(added)} new process(es) detected",
+                        "count": len(added)
+                    })
+            
+            if removed:
+                risk_level = "medium" if risk_level == "info" else risk_level
+                risk_score = max(risk_score, 50)
+                findings.append({
+                    "type": "processes_removed",
+                    "severity": "medium",
+                    "message": f"{len(removed)} process(es) terminated",
+                    "count": len(removed)
+                })
+            
+            if changed:
+                risk_level = "medium" if risk_level == "info" else risk_level
+                risk_score = max(risk_score, 45)
+                findings.append({
+                    "type": "processes_changed",
+                    "severity": "medium",
+                    "message": f"{len(changed)} process(es) modified",
+                    "count": len(changed)
+                })
+        else:
+            # No detailed analysis, but process tree changed - high risk
+            risk_level = "high"
+            risk_score = 70
+            findings.append({
+                "type": "process_tree_changed",
+                "severity": "high",
+                "message": "Process tree structure changed (detailed analysis unavailable)"
+            })
+    
+    # Check for memory map changes (critical - potential code injection)
+    elif component == "memory_mm":
+        risk_category = "security"
+        if detailed_analysis:
+            new_vmas = detailed_analysis.get("new_vmas", [])
+            changed_vmas = detailed_analysis.get("changed_vmas", [])
+            
+            if new_vmas:
+                # Check for executable memory regions
+                exec_vmas = [v for v in new_vmas if v.get("prot") and "x" in str(v.get("prot")).lower()]
+                if exec_vmas:
+                    risk_level = "critical"
+                    risk_score = 90
+                    findings.append({
+                        "type": "executable_memory_added",
+                        "severity": "critical",
+                        "message": f"{len(exec_vmas)} new executable memory region(s) detected - possible code injection",
+                        "count": len(exec_vmas)
+                    })
+                else:
+                    risk_level = "high"
+                    risk_score = 65
+                    findings.append({
+                        "type": "memory_regions_added",
+                        "severity": "high",
+                        "message": f"{len(new_vmas)} new memory region(s) mapped",
+                        "count": len(new_vmas)
+                    })
+            
+            if changed_vmas:
+                # Permission changes are critical
+                perm_changes = [v for v in changed_vmas if "permissions" in v.get("changes", {})]
+                if perm_changes:
+                    risk_level = "critical"
+                    risk_score = 85
+                    findings.append({
+                        "type": "memory_permissions_changed",
+                        "severity": "critical",
+                        "message": f"Memory permission changes detected - possible privilege escalation",
+                        "count": len(perm_changes)
+                    })
+        else:
+            risk_level = "high"
+            risk_score = 65
+            findings.append({
+                "type": "memory_map_changed",
+                "severity": "high",
+                "message": "Memory map structure changed"
+            })
+    
+    # Check for file descriptor changes (high risk - network/IO)
+    elif component == "fdinfo":
+        risk_category = "security"
+        if detailed_analysis:
+            new_fds = detailed_analysis.get("new_fds", [])
+            # Check for new network sockets
+            new_sockets = [fd for fd in new_fds if fd.get("type") == "socket" or "socket" in str(fd.get("type", "")).lower()]
+            if new_sockets:
+                risk_level = "high"
+                risk_score = 75
+                findings.append({
+                    "type": "new_network_connections",
+                    "severity": "high",
+                    "message": f"{len(new_sockets)} new network socket(s) opened",
+                    "count": len(new_sockets)
+                })
+            elif new_fds:
+                risk_level = "medium"
+                risk_score = 50
+                findings.append({
+                    "type": "file_descriptors_added",
+                    "severity": "medium",
+                    "message": f"{len(new_fds)} new file descriptor(s)",
+                    "count": len(new_fds)
+                })
+        else:
+            risk_level = "medium"
+            risk_score = 50
+            findings.append({
+                "type": "file_descriptors_changed",
+                "severity": "medium",
+                "message": "File descriptor state changed"
+            })
+    
+    # Check for environment variable changes (high risk - config injection)
+    elif component == "environment_variables":
+        risk_category = "security"
+        if detailed_analysis:
+            added_vars = detailed_analysis.get("added_variables", {})
+            changed_vars = detailed_analysis.get("changed_variables", {})
+            
+            # Check for sensitive env vars
+            sensitive_vars = ["password", "secret", "key", "token", "credential", "api_key", "auth"]
+            sensitive_added = {k: v for k, v in added_vars.items() 
+                              if any(sens in k.lower() for sens in sensitive_vars)}
+            
+            if sensitive_added:
+                risk_level = "critical"
+                risk_score = 90
+                findings.append({
+                    "type": "sensitive_env_vars_added",
+                    "severity": "critical",
+                    "message": f"Sensitive environment variables added: {', '.join(sensitive_added.keys())}",
+                    "variables": list(sensitive_added.keys())
+                })
+            elif added_vars:
+                risk_level = "high"
+                risk_score = 60
+                findings.append({
+                    "type": "environment_variables_added",
+                    "severity": "high",
+                    "message": f"{len(added_vars)} environment variable(s) added",
+                    "count": len(added_vars)
+                })
+            
+            if changed_vars:
+                sensitive_changed = {k: v for k, v in changed_vars.items() 
+                                   if any(sens in k.lower() for sens in sensitive_vars)}
+                if sensitive_changed:
+                    risk_level = "critical" if risk_level != "critical" else "critical"
+                    risk_score = max(risk_score, 85)
+                    findings.append({
+                        "type": "sensitive_env_vars_changed",
+                        "severity": "critical",
+                        "message": f"Sensitive environment variables modified: {', '.join(sensitive_changed.keys())}",
+                        "variables": list(sensitive_changed.keys())
+                    })
+        else:
+            risk_level = "high"
+            risk_score = 60
+            findings.append({
+                "type": "environment_variables_changed",
+                "severity": "high",
+                "message": "Environment variables changed"
+            })
+    
+    # Check for filesystem changes (medium-high risk)
+    elif component == "rootfs_diff":
+        risk_category = "security"
+        risk_level = "high"
+        risk_score = 70
+        findings.append({
+            "type": "filesystem_changes",
+            "severity": "high",
+            "message": "Filesystem changes detected - possible file modification or injection"
+        })
+    
+    # Check for container config changes (high risk)
+    elif component in ["container_spec", "container_config"]:
+        risk_category = "security"
+        risk_level = "high"
+        risk_score = 75
+        findings.append({
+            "type": "container_config_changed",
+            "severity": "high",
+            "message": f"Container {component} modified - possible configuration tampering"
+        })
+    
+    # Check for security-related components
+    elif component == "seccomp":
+        risk_category = "security"
+        risk_level = "high"
+        risk_score = 80
+        findings.append({
+            "type": "seccomp_changed",
+            "severity": "high",
+            "message": "Seccomp security profile changed - possible security policy modification"
+        })
+    
+    elif component == "cgroup":
+        risk_category = "security"
+        risk_level = "medium"
+        risk_score = 55
+        findings.append({
+            "type": "cgroup_changed",
+            "severity": "medium",
+            "message": "Cgroup configuration changed"
+        })
+    
+    # Network namespace changes
+    elif component == "netns":
+        risk_category = "security"
+        risk_level = "high"
+        risk_score = 70
+        findings.append({
+            "type": "network_namespace_changed",
+            "severity": "high",
+            "message": "Network namespace configuration changed"
+        })
+    
+    # Missing component in one checkpoint
+    elif status == "missing_in_one":
+        risk_category = "operational"
+        risk_level = "medium"
+        risk_score = 40
+        findings.append({
+            "type": "component_missing",
+            "severity": "medium",
+            "message": f"Component {component} missing in one checkpoint"
+        })
+    
+    # Default for other components
+    else:
+        if component in critical_components:
+            risk_level = "high"
+            risk_score = 65
+        elif component in high_risk_components:
+            risk_level = "medium"
+            risk_score = 50
+        else:
+            risk_level = "low"
+            risk_score = 30
+        
+        findings.append({
+            "type": "component_changed",
+            "severity": risk_level,
+            "message": f"Component {component} changed"
+        })
+    
+    return {
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "risk_category": risk_category,
+        "findings": findings,
+        "component": component
+    }
+
+
+def analyze_memory_pages(pages_data: Any) -> Dict[str, Any]:
+    """
+    Analyze memory pages for entropy, shared pages, and differences.
+    
+    Returns:
+        Dictionary with:
+        - page_count: Total number of pages
+        - high_entropy_pages: Pages with high entropy (potentially sensitive)
+        - shared_pages: Shared memory pages
+        - page_analysis: Detailed page analysis
+    """
+    if not pages_data:
+        return {}
+    
+    # This is a placeholder - actual implementation would need to parse page data
+    # CRIU pages format is complex and binary, would need specialized parsing
+    
+    return {
+        'note': 'Memory page analysis requires specialized parsing of CRIU page format',
+        'data_available': pages_data is not None
+    }
 
 
 async def extract_checkpoint_tar(tar_path: Path) -> Path:
@@ -675,6 +1279,8 @@ async def get_component_content(
         'dump_log': ('dump.log', 'parent', False),
         'stats_dump': ('stats-dump', 'parent', False),
         'crio_log_path': ('io.kubernetes.cri-o.LogPath', 'parent', False),
+        'rootfs_diff': ('rootfs-diff.tar', 'parent', False),  # Filesystem diff tar file
+        'environment_variables': ('process_tree', 'checkpoint', True),  # Extracted from process_tree
     }
     
     if component_name not in component_map:
@@ -752,6 +1358,21 @@ async def get_component_content(
             if file_path.suffix == '.dump':
                 with open(file_path, 'r') as f:
                     return json.load(f)
+            elif file_path.suffix == '.tar' and 'rootfs-diff' in file_path.name:
+                # Handle rootfs-diff.tar - extract metadata about contents
+                try:
+                    with tarfile.open(file_path, 'r:*') as tar:
+                        members = tar.getmembers()
+                        return {
+                            'file_count': len(members),
+                            'files': [{'name': m.name, 'size': m.size, 'type': m.type} for m in members[:200]],  # Limit to first 200 files
+                            'total_size': sum(m.size for m in members),
+                            'tar_path': str(file_path),
+                            'note': f'Showing first 200 of {len(members)} files' if len(members) > 200 else None
+                        }
+                except Exception as e:
+                    logger.warning(f"Error reading rootfs-diff.tar: {str(e)}")
+                    return {"error": str(e), "tar_path": str(file_path)}
             elif file_path.name in ['bind.mounts', 'dump.log', 'stats-dump', 'io.kubernetes.cri-o.LogPath']:
                 # Read as text file
                 with open(file_path, 'r') as f:
@@ -875,8 +1496,17 @@ async def get_component_diff(
                 fingerprint_data_1 = json.load(f)
                 contents_1 = fingerprint_data_1.get('contents', {})
                 content_1 = contents_1.get(component_name)
+                # Handle nested structure (e.g., if content is wrapped in a key)
+                if content_1 is None and isinstance(contents_1, dict):
+                    # Try to find content in nested structure
+                    for key, value in contents_1.items():
+                        if component_name in str(key).lower() or (isinstance(value, dict) and component_name in value):
+                            content_1 = value.get(component_name) if isinstance(value, dict) else value
+                            break
                 if content_1 is not None:
-                    logger.info(f"Loaded {component_name} content from fingerprint file for checkpoint 1")
+                    logger.info(f"Loaded {component_name} content from fingerprint file for checkpoint 1 (type: {type(content_1).__name__})")
+                else:
+                    logger.debug(f"{component_name} not found in fingerprint cache for checkpoint 1 (available components: {list(contents_1.keys())})")
         except Exception as e:
             logger.warning(f"Failed to load content from fingerprint file 1: {str(e)}")
     
@@ -886,13 +1516,26 @@ async def get_component_diff(
                 fingerprint_data_2 = json.load(f)
                 contents_2 = fingerprint_data_2.get('contents', {})
                 content_2 = contents_2.get(component_name)
+                # Handle nested structure (e.g., if content is wrapped in a key)
+                if content_2 is None and isinstance(contents_2, dict):
+                    # Try to find content in nested structure
+                    for key, value in contents_2.items():
+                        if component_name in str(key).lower() or (isinstance(value, dict) and component_name in value):
+                            content_2 = value.get(component_name) if isinstance(value, dict) else value
+                            break
                 if content_2 is not None:
-                    logger.info(f"Loaded {component_name} content from fingerprint file for checkpoint 2")
+                    logger.info(f"Loaded {component_name} content from fingerprint file for checkpoint 2 (type: {type(content_2).__name__})")
+                else:
+                    logger.debug(f"{component_name} not found in fingerprint cache for checkpoint 2 (available components: {list(contents_2.keys())})")
         except Exception as e:
             logger.warning(f"Failed to load content from fingerprint file 2: {str(e)}")
     
     # If we have both contents from fingerprint files, use them directly
-    if content_1 is not None and content_2 is not None:
+    # Check for content existence more robustly (handle empty dicts, etc.)
+    has_content_1 = content_1 is not None and content_1 != {} and (not isinstance(content_1, dict) or len(content_1) > 0 or 'error' not in content_1)
+    has_content_2 = content_2 is not None and content_2 != {} and (not isinstance(content_2, dict) or len(content_2) > 0 or 'error' not in content_2)
+    
+    if has_content_1 and has_content_2:
         logger.info("Using content from fingerprint files (no extraction needed)")
         unified_diff = generate_unified_diff(content_1, content_2, component_name)
         canonical_1 = canonicalize_json(content_1) if content_1 is not None else ""
@@ -905,10 +1548,18 @@ async def get_component_diff(
             "canonical_1": canonical_1,
             "canonical_2": canonical_2,
             "unified_diff": unified_diff,
-            "has_content_1": content_1 is not None,
-            "has_content_2": content_2 is not None,
+            "has_content_1": True,  # Explicitly set to True since we have content
+            "has_content_2": True,  # Explicitly set to True since we have content
             "source": "fingerprint_cache"  # Indicate we used cached content
         }
+    
+    # If we have at least one, still use cache for that one
+    if has_content_1 or has_content_2:
+        logger.info(f"Partial content from cache: has_content_1={has_content_1}, has_content_2={has_content_2}, will extract missing one(s)")
+    
+    # If we have at least one content from cache, use it and only extract the missing one
+    if content_1 is not None or content_2 is not None:
+        logger.info(f"Partial content from cache: content_1={content_1 is not None}, content_2={content_2 is not None}")
     
     # If we only have one or neither, extract and get content
     # Extract both checkpoints
@@ -936,6 +1587,15 @@ async def get_component_diff(
             if parent_dir_1.exists():
                 parent_files = [f.name for f in parent_dir_1.iterdir() if f.is_file()][:10]
                 logger.info(f"Files in parent_dir_1: {parent_files}")
+                # Specifically check for rootfs-diff.tar
+                rootfs_diff_file = parent_dir_1 / 'rootfs-diff.tar'
+                if rootfs_diff_file.exists():
+                    logger.info(f"Found rootfs-diff.tar in parent_dir_1: {rootfs_diff_file}")
+                else:
+                    logger.debug(f"rootfs-diff.tar not found in parent_dir_1, searching recursively...")
+                    rootfs_matches = list(parent_dir_1.rglob('rootfs-diff.tar'))
+                    if rootfs_matches:
+                        logger.info(f"Found rootfs-diff.tar recursively: {rootfs_matches}")
         else:
             checkpoint_dir_1 = checkpoint_file_1
             parent_dir_1 = checkpoint_dir_1.parent
@@ -952,19 +1612,32 @@ async def get_component_diff(
             if parent_dir_2.exists():
                 parent_files = [f.name for f in parent_dir_2.iterdir() if f.is_file()][:10]
                 logger.info(f"Files in parent_dir_2: {parent_files}")
+                # Specifically check for rootfs-diff.tar
+                rootfs_diff_file = parent_dir_2 / 'rootfs-diff.tar'
+                if rootfs_diff_file.exists():
+                    logger.info(f"Found rootfs-diff.tar in parent_dir_2: {rootfs_diff_file}")
+                else:
+                    logger.debug(f"rootfs-diff.tar not found in parent_dir_2, searching recursively...")
+                    rootfs_matches = list(parent_dir_2.rglob('rootfs-diff.tar'))
+                    if rootfs_matches:
+                        logger.info(f"Found rootfs-diff.tar recursively: {rootfs_matches}")
         else:
             checkpoint_dir_2 = checkpoint_file_2
             parent_dir_2 = checkpoint_dir_2.parent
         
         # Get component content from both (only if not already loaded from fingerprint)
         logger.info(f"Getting content for component: {component_name}")
-        if content_1 is None:
+        if content_1 is None or (isinstance(content_1, dict) and len(content_1) == 0):
             content_1 = await get_component_content(checkpoint_dir_1, parent_dir_1, component_name)
-        if content_2 is None:
+        if content_2 is None or (isinstance(content_2, dict) and len(content_2) == 0):
             content_2 = await get_component_content(checkpoint_dir_2, parent_dir_2, component_name)
         
-        logger.info(f"Content 1 found: {content_1 is not None}")
-        logger.info(f"Content 2 found: {content_2 is not None}")
+        # More robust content detection
+        has_content_1_final = content_1 is not None and content_1 != {} and (not isinstance(content_1, dict) or len(content_1) > 0 or 'error' not in content_1)
+        has_content_2_final = content_2 is not None and content_2 != {} and (not isinstance(content_2, dict) or len(content_2) > 0 or 'error' not in content_2)
+        
+        logger.info(f"Content 1 found: {has_content_1_final} (content_1 type: {type(content_1).__name__}, is None: {content_1 is None})")
+        logger.info(f"Content 2 found: {has_content_2_final} (content_2 type: {type(content_2).__name__}, is None: {content_2 is None})")
         
         # Generate diff
         unified_diff = generate_unified_diff(content_1, content_2, component_name)
@@ -981,8 +1654,8 @@ async def get_component_diff(
             "canonical_1": canonical_1,
             "canonical_2": canonical_2,
             "unified_diff": unified_diff,
-            "has_content_1": content_1 is not None,
-            "has_content_2": content_2 is not None
+            "has_content_1": has_content_1_final,  # Use robust detection
+            "has_content_2": has_content_2_final   # Use robust detection
         }
         
     finally:
@@ -1243,23 +1916,141 @@ async def compare_checkpoints_use_case(
                 }
             # One is None, other has value - this is a difference
             elif hash_1 is None or hash_2 is None:
+                # Assess risk for missing component
+                risk_assessment = assess_component_risk(component, {
+                    "checkpoint_1": hash_1,
+                    "checkpoint_2": hash_2,
+                    "status": "missing_in_one"
+                })
+                
                 component_differences[component] = {
                     "checkpoint_1": hash_1,
                     "checkpoint_2": hash_2,
                     "content_1": content_1,  # Include stored content if available
                     "content_2": content_2,  # Include stored content if available
                     "match": False,
-                    "status": "missing_in_one" if (hash_1 is None or hash_2 is None) else "present_in_both"
+                    "status": "missing_in_one" if (hash_1 is None or hash_2 is None) else "present_in_both",
+                    "risk_assessment": risk_assessment
                 }
             # Both have values - compare them
             elif hash_1 != hash_2:
+                # Perform detailed analysis based on component type
+                detailed_analysis = None
+                try:
+                    if component == 'process_tree' and content_1 and content_2:
+                        details_1 = extract_process_tree_details(content_1)
+                        details_2 = extract_process_tree_details(content_2)
+                        # Compare processes
+                        pids_1 = {p['pid']: p for p in details_1.get('processes', [])}
+                        pids_2 = {p['pid']: p for p in details_2.get('processes', [])}
+                        added = [p for pid, p in pids_2.items() if pid not in pids_1]
+                        removed = [p for pid, p in pids_1.items() if pid not in pids_2]
+                        changed = []
+                        for pid in set(pids_1.keys()) & set(pids_2.keys()):
+                            p1, p2 = pids_1[pid], pids_2[pid]
+                            if p1 != p2:
+                                changes = {}
+                                if p1.get('ppid') != p2.get('ppid'):
+                                    changes['ppid'] = {'old': p1.get('ppid'), 'new': p2.get('ppid')}
+                                if p1.get('cmdline') != p2.get('cmdline'):
+                                    changes['cmdline'] = {'old': p1.get('cmdline'), 'new': p2.get('cmdline')}
+                                if changes:
+                                    changed.append({'pid': pid, 'changes': changes})
+                        detailed_analysis = {
+                            'added_processes': added,
+                            'removed_processes': removed,
+                            'changed_processes': changed,
+                            'process_count_1': details_1.get('process_count', 0),
+                            'process_count_2': details_2.get('process_count', 0)
+                        }
+                    elif component == 'memory_mm' and content_1 and content_2:
+                        details_1 = extract_memory_map_details(content_1)
+                        details_2 = extract_memory_map_details(content_2)
+                        # Compare VMAs
+                        vmas_1 = {f"{v.get('start')}-{v.get('end')}": v for v in details_1.get('vmas', [])}
+                        vmas_2 = {f"{v.get('start')}-{v.get('end')}": v for v in details_2.get('vmas', [])}
+                        new_vmas = [v for key, v in vmas_2.items() if key not in vmas_1]
+                        removed_vmas = [v for key, v in vmas_1.items() if key not in vmas_2]
+                        changed_vmas = []
+                        for key in set(vmas_1.keys()) & set(vmas_2.keys()):
+                            v1, v2 = vmas_1[key], vmas_2[key]
+                            if v1 != v2:
+                                changes = {}
+                                if v1.get('prot') != v2.get('prot'):
+                                    changes['permissions'] = {'old': v1.get('prot'), 'new': v2.get('prot')}
+                                if v1.get('offset') != v2.get('offset'):
+                                    changes['offset'] = {'old': v1.get('offset'), 'new': v2.get('offset')}
+                                if v1.get('size') != v2.get('size'):
+                                    changes['size'] = {'old': v1.get('size'), 'new': v2.get('size')}
+                                if changes:
+                                    changed_vmas.append({'vma': key, 'changes': changes})
+                        detailed_analysis = {
+                            'new_vmas': new_vmas,
+                            'removed_vmas': removed_vmas,
+                            'changed_vmas': changed_vmas,
+                            'vma_count_1': details_1.get('vma_count', 0),
+                            'vma_count_2': details_2.get('vma_count', 0)
+                        }
+                    elif component == 'fdinfo' and content_1 and content_2:
+                        details_1 = extract_file_descriptor_details(content_1)
+                        details_2 = extract_file_descriptor_details(content_2)
+                        # Compare file descriptors
+                        fds_1 = {fd.get('fd'): fd for fd in details_1.get('file_descriptors', [])}
+                        fds_2 = {fd.get('fd'): fd for fd in details_2.get('file_descriptors', [])}
+                        new_fds = [fd for fd_id, fd in fds_2.items() if fd_id not in fds_1]
+                        closed_fds = [fd for fd_id, fd in fds_1.items() if fd_id not in fds_2]
+                        changed_fds = []
+                        for fd_id in set(fds_1.keys()) & set(fds_2.keys()):
+                            f1, f2 = fds_1[fd_id], fds_2[fd_id]
+                            if f1 != f2:
+                                changes = {}
+                                if f1.get('socket_state') != f2.get('socket_state'):
+                                    changes['socket_state'] = {'old': f1.get('socket_state'), 'new': f2.get('socket_state')}
+                                if f1.get('file_offset') != f2.get('file_offset'):
+                                    changes['file_offset'] = {'old': f1.get('file_offset'), 'new': f2.get('file_offset')}
+                                if changes:
+                                    changed_fds.append({'fd': fd_id, 'changes': changes})
+                        detailed_analysis = {
+                            'new_fds': new_fds,
+                            'closed_fds': closed_fds,
+                            'changed_fds': changed_fds,
+                            'fd_count_1': details_1.get('fd_count', 0),
+                            'fd_count_2': details_2.get('fd_count', 0)
+                        }
+                    elif component == 'environment_variables' and content_1 and content_2:
+                        env_1 = content_1.get('all_variables', {})
+                        env_2 = content_2.get('all_variables', {})
+                        added_vars = {k: v for k, v in env_2.items() if k not in env_1}
+                        removed_vars = {k: v for k, v in env_1.items() if k not in env_2}
+                        changed_vars = {k: {'old': env_1[k], 'new': env_2[k]} 
+                                       for k in set(env_1.keys()) & set(env_2.keys()) 
+                                       if env_1[k] != env_2[k]}
+                        detailed_analysis = {
+                            'added_variables': added_vars,
+                            'removed_variables': removed_vars,
+                            'changed_variables': changed_vars,
+                            'variable_count_1': len(env_1),
+                            'variable_count_2': len(env_2)
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to perform detailed analysis for {component}: {str(e)}")
+                
+                # Assess risk for this component difference
+                risk_assessment = assess_component_risk(component, {
+                    "checkpoint_1": hash_1,
+                    "checkpoint_2": hash_2,
+                    "status": "different_values"
+                }, detailed_analysis)
+                
                 component_differences[component] = {
                     "checkpoint_1": hash_1,
                     "checkpoint_2": hash_2,
                     "content_1": content_1,  # Include stored content if available
                     "content_2": content_2,  # Include stored content if available
                     "match": False,
-                    "status": "different_values"
+                    "status": "different_values",
+                    "detailed_analysis": detailed_analysis,  # Add detailed analysis
+                    "risk_assessment": risk_assessment  # Add risk assessment
                 }
             # Both have same value - they match
             else:
@@ -1269,6 +2060,41 @@ async def compare_checkpoints_use_case(
                     "match": True,
                     "status": "identical"
                 }
+        
+        # Calculate risk summary
+        risk_summary = {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "info": 0,
+            "total_findings": 0,
+            "max_risk_score": 0
+        }
+        
+        all_findings = []
+        for component, diff in component_differences.items():
+            risk_assessment = diff.get("risk_assessment", {})
+            if risk_assessment:
+                risk_level = risk_assessment.get("risk_level", "info")
+                risk_summary[risk_level] = risk_summary.get(risk_level, 0) + 1
+                risk_summary["max_risk_score"] = max(
+                    risk_summary.get("max_risk_score", 0),
+                    risk_assessment.get("risk_score", 0)
+                )
+                
+                findings = risk_assessment.get("findings", [])
+                risk_summary["total_findings"] += len(findings)
+                for finding in findings:
+                    finding["component"] = component
+                    all_findings.append(finding)
+        
+        # Sort findings by severity (critical first)
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        all_findings.sort(key=lambda x: (
+            severity_order.get(x.get("severity", "info"), 4),
+            -x.get("risk_score", 0) if "risk_score" in x else 0
+        ))
         
         # Build differences dictionary
         differences = {
@@ -1283,7 +2109,9 @@ async def compare_checkpoints_use_case(
             "components_matching": list(component_matches.keys()),
             "total_components": len(all_components),
             "matching_count": len(component_matches),
-            "differing_count": len(component_differences)
+            "differing_count": len(component_differences),
+            "risk_summary": risk_summary,
+            "findings": all_findings[:50]  # Limit to top 50 findings
         }
         
         message = "Checkpoints are identical" if are_identical else f"Checkpoints differ in {len(component_differences)} component(s)"

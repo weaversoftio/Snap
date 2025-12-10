@@ -1,4 +1,4 @@
-import { Box, Card, Button, CircularProgress, Collapse, Grid2 as Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, CircularProgress, Collapse, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tooltip, Typography, useTheme } from "@mui/material";
 import { useState } from "react";
 import { formatTimestamp } from "../../utils/formateDate";
 import { grey } from '@mui/material/colors';
@@ -162,7 +162,6 @@ const TableComponent = ({
         {paginatedData.map((item) => (
           <Row
             key={item.metadata?.name || item.id}
-            kubeApi={kubeApi}
             clusterName={clusterName}
             nestedTableHeaders={nestedTableHeaders}
             row={item}
@@ -199,7 +198,7 @@ const Row = (props) => {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false)
-  const { row, tableHeaders, nestedTableHeaders, kubeApi = "", clusterName = "" } = props;
+  const { row, tableHeaders, nestedTableHeaders, clusterName = "" } = props;
   const { metadata = null, spec = null } = row || {}
   const { name: podName = "", namespace } = metadata || {}
   const { nodeName = "" } = spec || {}

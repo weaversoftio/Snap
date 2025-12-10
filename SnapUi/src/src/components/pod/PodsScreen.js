@@ -1,30 +1,22 @@
 import { Box, Button, Grid2 as Grid, IconButton, Paper, Tooltip, Typography, TextField, FormControl, Select, MenuItem, Autocomplete } from "@mui/material"
 import ClearIcon from '@mui/icons-material/Clear';
 import { useEffect, useMemo, useState } from "react";
-import { useSnackbar } from 'notistack';
 import { podsApi } from "../../api/podsApi";
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import CloseIcon from '@mui/icons-material/Close';
-import DialogComponent from "../common/Dialog";
 import { useSelector } from "react-redux";
-import ReactJson from "react-json-view";
 import BeautifulAnalysisResults from "../common/BeautifulAnalysisResults";
-import CircularProgress from '@mui/material/CircularProgress';
 import TableComponent from "./PodsTable";
 import { Loading } from "../common/loading";
 import { CustomerContainer } from "../common/CustomContainer";
 
 const PodsScreen = ({ classes }) => {
-  const { enqueueSnackbar } = useSnackbar();
   const { selectedCluster = null } = useSelector(state => state.cluster)
 
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState([])
   const [currentPod, setCurrentPod] = useState(null)
-  const [total, setTotal] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(5)
   const [page, setPage] = useState(0)
-  const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedNamespace, setSelectedNamespace] = useState(null)
   const [selectedNode, setSelectedNode] = useState("all")
@@ -73,7 +65,6 @@ const PodsScreen = ({ classes }) => {
       // console.log({ result })
       // const data = JSON.parse(podsData.pods)
       setData(data.items)
-      setTotal(data.items.length)
     } catch (error) {
       console.error("Pods error ", error)
     }
@@ -132,14 +123,6 @@ const PodsScreen = ({ classes }) => {
     setPage(0)
   }, [searchTerm, selectedNamespace, selectedNode, containerFilter])
 
-  const renderError = () => {
-    return (
-      <Grid size={4}>
-        <Typography color="error">{error}</Typography>
-      </Grid>
-    )
-  }
-
   const renderDialog = () => {
     if (!currentPod) return
     const { metadata = null } = currentPod || {}
@@ -166,7 +149,6 @@ const PodsScreen = ({ classes }) => {
       {loading ? <Loading /> : (
         <>
           <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
-            {renderError()}
             {renderDialog()}
             <Box sx={{ mt: 2, mb: 2 }}>
               <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
