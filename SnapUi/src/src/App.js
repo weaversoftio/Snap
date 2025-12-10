@@ -7,6 +7,7 @@ import PodsScreen from './components/pod/PodsScreen';
 import ProtectedRoute from './components/common/ProtectedRouter';
 import { SnackbarProvider } from 'notistack';
 import CheckpointsScreen from './components/checkpoint/Checkpoints';
+import CompareFingerprintsScreen from './components/checkpoint/CompareFingerprints';
 import { useSelector } from 'react-redux';
 import RegistryScreen from './components/registry/Registry';
 import SecretsScreen from './components/secret/Secrets';
@@ -29,6 +30,7 @@ const App = () => {
               <Route path='/' element={authenticated? <ClusterScreen /> : <Login />} />
               <Route path='/pods' element={<ProtectedRoute element={<PodsScreen />} />} />
               <Route path='/checkpoints' element={<ProtectedRoute element={<CheckpointsScreen />} />} />
+              <Route path='/checkpoints/compare' element={<ProtectedRoute element={<CompareFingerprintsScreen />} />} />
               <Route path='/registry' element={<ProtectedRoute element={<RegistryScreen />} />} />
               <Route path='/secrets' element={<ProtectedRoute element={<SecretsScreen />} />} />
               <Route path='/users' element={<ProtectedRoute element={<UserScreen />} />} />

@@ -19,7 +19,7 @@ LABEL name="1001_1001api" \
 USER root
 
 # Install system dependencies
-RUN dnf install -y wget buildah tar gzip skopeo --allowerasing curl libselinux-utils container-selinux \
+RUN dnf install -y crit wget buildah tar gzip skopeo --allowerasing curl libselinux-utils container-selinux \
     glibc glibc-langpack-en && dnf clean all
 
 # Set up environment

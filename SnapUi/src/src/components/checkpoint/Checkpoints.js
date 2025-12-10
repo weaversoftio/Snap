@@ -1,7 +1,6 @@
-import { Box, Button, CircularProgress, FormControl, Grid2 as Grid, MenuItem, Select, TextField, Typography, Card, Paper } from "@mui/material"
+import { Box, Button, CircularProgress, FormControl, Grid2 as Grid, MenuItem, Select, TextField, Typography, Card, Paper, Autocomplete, Chip, TableContainer, Table, TableHead, TableBody, TableRow, TableCell, TablePagination, useTheme } from "@mui/material"
 import ClearIcon from '@mui/icons-material/Clear';
 import { useEffect, useMemo, useState } from "react";
-import TableComponent from "../common/Table";
 import { useSnackbar } from 'notistack';
 import { checkpointApi } from "../../api/checkpointApi";
 import { SimpleDialog } from "../common/SimpleDialog";
@@ -14,6 +13,12 @@ import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import Tooltip from '@mui/material/Tooltip';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import DownloadIcon from '@mui/icons-material/Download';
+import DeleteIcon from '@mui/icons-material/Delete';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from "react-redux";
 import DialogComponent from "../common/Dialog";
 import AddCircleIcon from '@mui/icons-material/AddCircle';
@@ -24,6 +29,7 @@ import { CustomerContainer } from "../common/CustomContainer";
 
 const CheckpointsScreen = ({ classes }) => {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const { enqueueSnackbar } = useSnackbar();
   const { list: registryList = [], } = useSelector(state => state.registry)
   const [loading, setLoading] = useState(false)
@@ -46,6 +52,8 @@ const CheckpointsScreen = ({ classes }) => {
 
   const [isLogsOpen, setLogsOpen] = useState(false);
   const [logs, setLogs] = useState(null);
+  const [fingerprintResults, setFingerprintResults] = useState(null);
+  const [keepExtractedFolder, setKeepExtractedFolder] = useState(false);
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPod, setSelectedPod] = useState("all")
   const [analysisFilter, setAnalysisFilter] = useState("all")
@@ -238,9 +246,77 @@ const CheckpointsScreen = ({ classes }) => {
     setActionRunning(false)
     setCurrentCheckpoint(null)
   }
+
+  const handleDeleteCheckpoint = (pod_name, checkpoint_name) => {
+    setCurrentCheckpoint({ pod_name, checkpoint_name })
+    setDialogType("deleteConfirm")
+  }
+
+  const handleConfirmDelete = async () => {
+    const { pod_name, checkpoint_name } = currentCheckpoint || {}
+    if (!pod_name || !checkpoint_name) return
+
+    try {
+      setActionRunning(true)
+      setDialogType("")
+      await checkpointApi.deleteCheckpoint(pod_name, checkpoint_name)
+      enqueueSnackbar(`Checkpoint ${checkpoint_name} deleted successfully`, { variant: "success" })
+      await handleGetCheckpoints()
+    } catch (error) {
+      console.error("Failed to delete checkpoint:", error)
+      enqueueSnackbar(`Failed to delete checkpoint: ${checkpoint_name}`, { variant: "error" })
+    }
+    setActionRunning(false)
+    setCurrentCheckpoint(null)
+  }
+
+  const handleFingerprintCheckpoint = (pod_name, checkpoint_name) => {
+    setCurrentCheckpoint({ pod_name, checkpoint_name })
+    setDialogType("fingerprintOptions")
+  }
+
+  const handleConfirmFingerprint = async () => {
+    const { pod_name, checkpoint_name } = currentCheckpoint || {}
+    if (!pod_name || !checkpoint_name) return
+    
+    try {
+      setActionRunning(true)
+      setDialogType("")
+      enqueueSnackbar(`Generating forensic fingerprint for: ${checkpoint_name}`, { variant: "info" })
+      
+      const checkpoint_name_no_ext = checkpoint_name.replace(".tar", "")
+      const result = await checkpointApi.fingerprintCheckpoint({
+        pod_name,
+        checkpoint_name: checkpoint_name_no_ext,
+        keep_extracted_folder: keepExtractedFolder,
+        force_regenerate: true  // Force regenerate when user clicks the button
+      })
+      
+      setFingerprintResults(result)
+      setDialogType("fingerprint")
+      const successMsg = keepExtractedFolder && result.extracted_folder_path
+        ? `Forensic fingerprint generated successfully. Extracted folder kept at: ${result.extracted_folder_path}`
+        : `Forensic fingerprint generated successfully`
+      enqueueSnackbar(successMsg, { variant: "success" })
+    } catch (error) {
+      console.error("Failed to generate fingerprint:", error)
+      enqueueSnackbar(`Failed to generate fingerprint: ${error.message || 'Unknown error'}`, { variant: "error" })
+    }
+    setActionRunning(false)
+  }
+
+  const closeFingerprint = () => {
+    setFingerprintResults(null)
+    setDialogType("")
+    setKeepExtractedFolder(false)
+  }
   const closeLogs = () => {
     setLogsOpen(false);
     setLogs(null);
+  }
+
+  const handleCompareCheckpoints = () => {
+    navigate('/checkpoints/compare')
   }
 
   const handleClearDialog = () => {
@@ -248,6 +324,8 @@ const CheckpointsScreen = ({ classes }) => {
     setRegName("")
     setRegistryUsername("")
     setRegistryPassword("")
+    setFingerprintResults(null)
+    setKeepExtractedFolder(false)
   }
 
   const renderRegistryLoginForm = () => {
@@ -322,6 +400,213 @@ const CheckpointsScreen = ({ classes }) => {
       </DialogComponent>
     )
   }
+
+  const renderFingerprintOptions = () => {
+    if (!currentCheckpoint) return null
+    
+    // Check if fingerprint already exists for this checkpoint
+    const checkpointItem = data.find(item => 
+      item.pod_name === currentCheckpoint?.pod_name && 
+      item.checkpoint_name === currentCheckpoint?.checkpoint_name
+    )
+    const hasExistingFingerprint = checkpointItem?.has_fingerprint || false
+    
+    return (
+      <DialogComponent 
+        open={dialogType === "fingerprintOptions"} 
+        onClose={handleClearDialog} 
+        paperProps={{ maxWidth: 500 }}
+      >
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            {hasExistingFingerprint ? "View/Regenerate Forensic Fingerprint" : "Generate Forensic Fingerprint"}
+          </Typography>
+          
+          {hasExistingFingerprint && (
+            <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+              <Typography variant="body2" color="info.main">
+                A cached fingerprint exists for this checkpoint. You can view it or regenerate a new one.
+              </Typography>
+            </Box>
+          )}
+          
+          <Box>
+            <Typography fontWeight={"bold"} display={"inline"}>
+              Pod: <Typography display={"inline"}>{currentCheckpoint?.pod_name}</Typography>
+            </Typography>
+            <Typography fontWeight={"bold"} display={"inline"} sx={{ display: 'block', mt: 1 }}>
+              Checkpoint: <Typography display={"inline"} style={{ wordWrap: "break-word" }}>
+                {currentCheckpoint?.checkpoint_name}
+              </Typography>
+            </Typography>
+          </Box>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={keepExtractedFolder}
+                onChange={(e) => setKeepExtractedFolder(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Keep extracted folder for inspection"
+          />
+          <Typography variant="caption" color="text.secondary">
+            If enabled, the extracted checkpoint folder will be kept in /tmp/ for manual inspection. 
+            Useful for debugging and detailed analysis.
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+            <Button variant="outlined" onClick={handleClearDialog}>
+              Cancel
+            </Button>
+            {hasExistingFingerprint && (
+              <Button 
+                variant="outlined" 
+                color="primary"
+                onClick={async () => {
+                  // Load cached fingerprint
+                  try {
+                    setDialogType("")
+                    setActionRunning(true)
+                    const checkpoint_name_no_ext = currentCheckpoint.checkpoint_name.replace(".tar", "")
+                    const result = await checkpointApi.fingerprintCheckpoint({
+                      pod_name: currentCheckpoint.pod_name,
+                      checkpoint_name: checkpoint_name_no_ext,
+                      keep_extracted_folder: false,
+                      force_regenerate: false
+                    })
+                    setFingerprintResults(result)
+                    setDialogType("fingerprint")
+                    enqueueSnackbar("Loaded cached fingerprint", { variant: "success" })
+                  } catch (error) {
+                    enqueueSnackbar(`Failed to load cached fingerprint: ${error.message}`, { variant: "error" })
+                  }
+                  setActionRunning(false)
+                }}
+              >
+                View Cached
+              </Button>
+            )}
+            <Button variant="contained" onClick={handleConfirmFingerprint}>
+              {hasExistingFingerprint ? "Regenerate" : "Generate Fingerprint"}
+            </Button>
+          </Box>
+        </Box>
+      </DialogComponent>
+    )
+  }
+
+  const renderFingerprintResults = () => {
+    if (!fingerprintResults) return null
+    
+    return (
+      <DialogComponent 
+        open={dialogType === "fingerprint"} 
+        onClose={closeFingerprint} 
+        paperProps={{ maxWidth: 1000, maxHeight: '90vh' }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            Forensic Fingerprint Results
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Checkpoint: {currentCheckpoint?.checkpoint_name} | Pod: {currentCheckpoint?.pod_name}
+          </Typography>
+          
+          {fingerprintResults.extracted_folder_path && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Extracted Folder Kept:
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                {fingerprintResults.extracted_folder_path}
+              </Typography>
+            </Box>
+          )}
+          
+          {fingerprintResults.forensic_data && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Fingerprint: {fingerprintResults.fingerprint}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Components Processed: {fingerprintResults.forensic_data.components_processed} / {fingerprintResults.forensic_data.components_total}
+              </Typography>
+              
+              <Box sx={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto', 
+                border: '1px solid #e0e0e0', 
+                borderRadius: 1,
+                p: 2,
+                bgcolor: '#fafafa'
+              }}>
+                <ReactJson 
+                  src={fingerprintResults.forensic_data} 
+                  theme="rjv-default"
+                  collapsed={1}
+                  displayDataTypes={false}
+                  displayObjectSize={true}
+                  enableClipboard={true}
+                  style={{ fontSize: '14px' }}
+                />
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </DialogComponent>
+    )
+  }
+
+  const renderDeleteConfirm = () => {
+    if (!currentCheckpoint) return null
+    
+    return (
+      <DialogComponent 
+        open={dialogType === "deleteConfirm"} 
+        onClose={handleClearDialog} 
+        paperProps={{ maxWidth: 500 }}
+      >
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            Delete Checkpoint
+          </Typography>
+          <Typography variant="body1">
+            Are you sure you want to delete this checkpoint? This action cannot be undone.
+          </Typography>
+          <Box sx={{ p: 2, bgcolor: '#fff3cd', borderRadius: 1 }}>
+            <Typography variant="body2" fontWeight="bold" gutterBottom>
+              Pod: <Typography display="inline">{currentCheckpoint?.pod_name}</Typography>
+            </Typography>
+            <Typography variant="body2" fontWeight="bold">
+              Checkpoint: <Typography display="inline" style={{ wordWrap: "break-word" }}>
+                {currentCheckpoint?.checkpoint_name}
+              </Typography>
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            This will delete the checkpoint file and all associated files (analysis results, fingerprints, etc.).
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+            <Button variant="outlined" onClick={handleClearDialog} disabled={isActionRunning}>
+              Cancel
+            </Button>
+            <Button 
+              variant="contained" 
+              color="error" 
+              onClick={handleConfirmDelete}
+              disabled={isActionRunning}
+              startIcon={isActionRunning ? <CircularProgress size={20} /> : <DeleteIcon />}
+            >
+              {isActionRunning ? "Deleting..." : "Delete"}
+            </Button>
+          </Box>
+        </Box>
+      </DialogComponent>
+    )
+  }
+
   const renderDialog = () => {
     const dialogContent = {
       log: (
@@ -334,60 +619,230 @@ const CheckpointsScreen = ({ classes }) => {
       ),
       registryForm: renderRegistryLoginForm(),
       createAndPushCheckpoint: renderCreateAnPushCheckpointDialog(),
-      scanResults: renderScanResults()
+      scanResults: renderScanResults(),
+      fingerprintOptions: renderFingerprintOptions(),
+      fingerprint: renderFingerprintResults(),
+      deleteConfirm: renderDeleteConfirm()
     }
     return dialogContent[dialogType]
   }
 
-  const tableHeaders = [
-    { name: "Checkpoint", key: "checkpoint_name" },
-    { name: "Pod Name", key: "pod_name" },
-    {
-      name: "Actions", key: "", action: ({ pod_name, checkpoint_name, analysis_result, scan_result }) => (
-        <>
-          {
-            isActionRunning && (currentCheckpoint?.checkpoint_name === checkpoint_name) ? <CircularProgress size={24} /> :
-              <Stack direction="row" spacing={1}>
-                <Tooltip title={analysis_result ? "Re-analyze" : "Analyze"}>
-                  <IconButton aria-label="analyze" onClick={() => startCheckpointctl(pod_name, checkpoint_name)}>
-                    <PlayArrowRoundedIcon />
+  const theme = useTheme()
+
+  const renderStatusChip = (label, color, variant = "outlined") => (
+    <Chip 
+      label={label} 
+      color={color} 
+      variant={variant}
+      size="small"
+      sx={{ 
+        fontWeight: 500,
+        fontSize: '0.75rem',
+        height: '24px'
+      }}
+    />
+  )
+
+  const renderTableRow = (row) => {
+    const { pod_name, checkpoint_name, analysis_result, scan_result, has_fingerprint } = row
+    const isRunning = isActionRunning && currentCheckpoint?.checkpoint_name === checkpoint_name
+
+    return (
+      <TableRow
+        key={`${pod_name}-${checkpoint_name}`}
+        sx={{
+          '&:hover': {
+            bgcolor: theme.palette.mode === 'dark' ? 'action.hover' : 'grey.50',
+            transition: 'background-color 0.2s ease'
+          },
+          '&:last-child td': { borderBottom: 0 },
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <TableCell sx={{ py: 2, px: 3 }}>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              fontWeight: 500,
+              color: 'text.primary',
+              wordBreak: 'break-word'
+            }}
+          >
+            {checkpoint_name}
+          </Typography>
+        </TableCell>
+        <TableCell sx={{ py: 2, px: 3 }}>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: 'text.secondary',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem'
+            }}
+          >
+            {pod_name}
+          </Typography>
+        </TableCell>
+        <TableCell sx={{ py: 2, px: 3 }}>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {analysis_result 
+              ? renderStatusChip("Analyzed", "success", "filled")
+              : renderStatusChip("Not Analyzed", "default", "outlined")
+            }
+            {has_fingerprint && renderStatusChip("Fingerprinted", "primary", "filled")}
+          </Box>
+        </TableCell>
+        <TableCell sx={{ py: 2, px: 3 }}>
+          {isRunning ? (
+            <CircularProgress size={24} />
+          ) : (
+            <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+              <Tooltip title={analysis_result ? "Re-analyze" : "Analyze"}>
+                <IconButton 
+                  aria-label="analyze" 
+                  onClick={() => startCheckpointctl(pod_name, checkpoint_name)}
+                  size="small"
+                  sx={{ 
+                    '&:hover': { bgcolor: 'primary.light', color: 'primary.contrastText' }
+                  }}
+                >
+                  <PlayArrowRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              {analysis_result && (
+                <Tooltip title="Show Analysis">
+                  <IconButton 
+                    aria-label="show analysis" 
+                    onClick={() => openLogs(pod_name, checkpoint_name)}
+                    size="small"
+                    sx={{ 
+                      '&:hover': { bgcolor: 'info.light', color: 'info.contrastText' }
+                    }}
+                  >
+                    <TextSnippetRoundedIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                {
-                  analysis_result &&
-                  <Tooltip title="Show Analysis">
-                    <IconButton aria-label="show analysis" onClick={() => openLogs(pod_name, checkpoint_name)}>
-                      <TextSnippetRoundedIcon />
-                    </IconButton>
-                  </Tooltip>
-                }
-                {/* <IconButton onClick={() => handleScanCheckpoint(pod_name, checkpoint_name)}>
-                  <Tooltip title="Scan">
-                    <ScanIcon />
-                  </Tooltip>
+              )}
+              <Tooltip title={has_fingerprint ? "View/Regenerate Forensic Fingerprint" : "Generate Forensic Fingerprint"}>
+                <IconButton 
+                  onClick={() => handleFingerprintCheckpoint(pod_name, checkpoint_name)}
+                  size="small"
+                  sx={{ 
+                    '&:hover': { bgcolor: has_fingerprint ? 'primary.light' : 'action.hover' }
+                  }}
+                >
+                  <FingerprintIcon 
+                    fontSize="small" 
+                    color={has_fingerprint ? "primary" : "inherit"} 
+                  />
                 </IconButton>
-                {scan_result && <IconButton onClick={() => handleShowScanResults(pod_name, checkpoint_name)}>
-                  <Tooltip title="Scan Results">
-                    <ScanResultsIcon />
-                  </Tooltip>
-                </IconButton>} */}
+              </Tooltip>
+              <Tooltip title="Upload Checkpoint">
+                <IconButton 
+                  onClick={() => handlePushCheckpoint(pod_name, checkpoint_name)}
+                  size="small"
+                  sx={{ 
+                    '&:hover': { bgcolor: 'success.light', color: 'success.contrastText' }
+                  }}
+                >
+                  <FileUploadIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Download Checkpoint">
+                <IconButton 
+                  onClick={() => handleDownloadCheckpoint(pod_name, checkpoint_name)}
+                  size="small"
+                  sx={{ 
+                    '&:hover': { bgcolor: 'info.light', color: 'info.contrastText' }
+                  }}
+                >
+                  <DownloadIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete Checkpoint">
+                <IconButton 
+                  onClick={() => handleDeleteCheckpoint(pod_name, checkpoint_name)}
+                  size="small"
+                  sx={{ 
+                    '&:hover': { bgcolor: 'error.light', color: 'error.contrastText' }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" color="error" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          )}
+        </TableCell>
+      </TableRow>
+    )
+  }
 
-                <IconButton onClick={() => handlePushCheckpoint(pod_name, checkpoint_name)}>
-                  <Tooltip title="Upload Checkpoint">
-                    <FileUploadIcon />
-                  </Tooltip>
-                </IconButton>
-                <IconButton onClick={() => handleDownloadCheckpoint(pod_name, checkpoint_name)}>
-                  <Tooltip title="Download Checkpoint">
-                    <DownloadIcon />
-                  </Tooltip>
-                </IconButton>
-              </Stack>
-          }
-        </>
+  const renderBeautifiedTable = () => {
+    if (!filteredData || filteredData.length === 0) {
+      return (
+        <Box sx={{ py: 8, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            No checkpoints found
+          </Typography>
+        </Box>
       )
-    },
-  ]
+    }
+
+    const paginatedData = filteredData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+
+    return (
+      <TableContainer 
+        sx={{ 
+          borderRadius: 2,
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}
+      >
+        <Table>
+          <TableHead>
+            <TableRow sx={{ 
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
+              '& th': { 
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                color: 'text.secondary',
+                py: 2,
+                px: 3,
+                borderBottom: `2px solid ${theme.palette.divider}`
+              } 
+            }}>
+              <TableCell>Checkpoint</TableCell>
+              <TableCell>Pod Name</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedData.map(renderTableRow)}
+          </TableBody>
+        </Table>
+        {filteredData.length > 0 && (
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={filteredData.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            sx={{
+              borderTop: `1px solid ${theme.palette.divider}`,
+              '& .MuiTablePagination-toolbar': {
+                px: 2
+              }
+            }}
+          />
+        )}
+      </TableContainer>
+    )
+  }
 
   const filteredData = data.filter(item => {
     const searchFields = [
@@ -427,9 +882,20 @@ const CheckpointsScreen = ({ classes }) => {
             {renderError()}
             {renderDialog()}
             <Box sx={{ mt: 2, mb: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                Search & Filters
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Search & Filters
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<CompareArrowsIcon />}
+                  onClick={handleCompareCheckpoints}
+                  disabled={!data.some(item => item.has_fingerprint) || data.filter(item => item.has_fingerprint).length < 2}
+                  size="small"
+                >
+                  Compare Fingerprints
+                </Button>
+              </Box>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
                 <TextField
                   sx={{ width: '300px', minWidth: '200px' }}
@@ -438,18 +904,21 @@ const CheckpointsScreen = ({ classes }) => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <FormControl sx={{ minWidth: 180 }} size="small">
-                  <Select
-                    value={selectedPod}
-                    onChange={(e) => setSelectedPod(e.target.value)}
-                    displayEmpty
-                  >
-                    <MenuItem value="all">All Pods</MenuItem>
-                    {podOptions.map(pod => (
-                      <MenuItem key={pod} value={pod}>{pod}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  sx={{ minWidth: 180 }}
+                  size="small"
+                  options={["all", ...podOptions]}
+                  value={selectedPod}
+                  onChange={(event, newValue) => setSelectedPod(newValue || "all")}
+                  getOptionLabel={(option) => option === "all" ? "All Pods" : option}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="All Pods" />
+                  )}
+                  freeSolo
+                  selectOnFocus
+                  clearOnBlur
+                  handleHomeEndKeys
+                />
                 <FormControl sx={{ minWidth: 150 }} size="small">
                   <Select
                     value={analysisFilter}
@@ -488,16 +957,7 @@ const CheckpointsScreen = ({ classes }) => {
                 </Typography>
               )}
             </Box>
-            <TableComponent
-              classes={classes}
-              data={filteredData}
-              tableHeaders={tableHeaders}
-              total={filteredData.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              handleRowsPerPageChange={handleRowsPerPageChange}
-              handlePageChange={handlePageChange}
-            />
+            {renderBeautifiedTable()}
           </Paper>
         </>
       )}

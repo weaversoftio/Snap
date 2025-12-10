@@ -12,6 +12,13 @@ from flows.proccess_utils import run
 from flows.upload_checkpoint import upload_checkpoint
 from flows.analytics.checkpoint_insights import CheckpointInsightsUseCase, CheckpointInsightsRequest
 from flows.analytics.analyze_checkpoint_volatility import analyze_checkpoint_volatility, VolatilityRequest, checkpoint_volatility_analysis
+from flows.checkpoint.fingerprint_checkpoint import (
+    fingerprint_checkpoint_use_case,
+    compare_checkpoints_use_case,
+    get_component_diff,
+    FingerprintCheckpointRequest,
+    CompareCheckpointsRequest
+)
 from middleware.verify_token import verify_token
 from routes.websocket import send_progress
 
@@ -105,12 +112,18 @@ async def checkpoints_list():
                             has_analysis = os.path.exists(analysis_result_path)
                             analysis_file = analysis_result if has_analysis else None
                             
+                            # Check for fingerprint file
+                            fingerprint_file = f"{checkpoint_name}_fingerprint.json"
+                            fingerprint_file_path = os.path.join(pod_path, fingerprint_file)
+                            has_fingerprint = os.path.exists(fingerprint_file_path)
+                            
                             pod_container_mapping.append({
                                 "pod_name": pod,
                                 "checkpoint_name": container,
                                 "analysis_result": analysis_file if has_analysis else None,
                                 "scan_result": os.path.exists(volatility_analysis_file),
-                                "has_analysis": has_analysis
+                                "has_analysis": has_analysis,
+                                "has_fingerprint": has_fingerprint
                             })
 
                         
@@ -154,6 +167,74 @@ async def download_checkpoint_route(pod_name: str, filename: str):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+
+@router.delete("/delete/{pod_name}")
+async def delete_checkpoint_route(pod_name: str, filename: str, username: str = Depends(verify_token)):
+    """
+    Delete a checkpoint and all its associated files.
+    
+    Deletes:
+    - The checkpoint .tar file
+    - Analysis results (_inspect.json)
+    - Metadata file (.json)
+    - Volatility analysis (_volatility_analysis.txt)
+    - Fingerprint file (_fingerprint.json)
+    - Any extracted folders if they exist
+    """
+    try:
+        checkpoint_dir = os.path.join(checkpoint_path, pod_name)
+        checkpoint_file_path = os.path.join(checkpoint_dir, filename)
+        
+        if not os.path.exists(checkpoint_file_path):
+            raise HTTPException(status_code=404, detail="Checkpoint file not found")
+        
+        # Extract checkpoint name without extension
+        checkpoint_name = filename.replace('.tar', '') if filename.endswith('.tar') else filename
+        
+        # List of files to delete
+        files_to_delete = [
+            checkpoint_file_path,  # Main checkpoint file
+            os.path.join(checkpoint_dir, f"{checkpoint_name}_inspect.json"),  # Analysis results
+            os.path.join(checkpoint_dir, f"{checkpoint_name}.json"),  # Metadata
+            os.path.join(checkpoint_dir, f"{checkpoint_name}_volatility_analysis.txt"),  # Volatility analysis
+            os.path.join(checkpoint_dir, f"{checkpoint_name}_fingerprint.json"),  # Fingerprint
+        ]
+        
+        deleted_files = []
+        errors = []
+        
+        for file_path in files_to_delete:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    deleted_files.append(os.path.basename(file_path))
+                    logger.info(f"SnapAPI: Deleted file: {file_path}")
+                except Exception as e:
+                    errors.append(f"Failed to delete {os.path.basename(file_path)}: {str(e)}")
+                    logger.error(f"SnapAPI: Failed to delete {file_path}: {str(e)}")
+        
+        # Check if pod directory is empty and remove it if so
+        try:
+            if os.path.exists(checkpoint_dir) and not os.listdir(checkpoint_dir):
+                os.rmdir(checkpoint_dir)
+                logger.info(f"SnapAPI: Removed empty pod directory: {checkpoint_dir}")
+        except Exception as e:
+            logger.warning(f"SnapAPI: Could not remove pod directory {checkpoint_dir}: {str(e)}")
+        
+        if errors and not deleted_files:
+            raise HTTPException(status_code=500, detail=f"Failed to delete checkpoint: {'; '.join(errors)}")
+        
+        return {
+            "success": True,
+            "message": f"Checkpoint {filename} deleted successfully",
+            "deleted_files": deleted_files,
+            "errors": errors if errors else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SnapAPI: Failed to delete checkpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete checkpoint: {str(e)}")
 
 async def run_checkpointctl_fallback(checkpoint_file_path: str, username: str, error_message: str):
     """
@@ -363,3 +444,168 @@ async def return_checkpoint_volatility_analysis(params: VolatilityRequest = Depe
     checkpoint_name = params.checkpoint_name
     request = VolatilityRequest(pod_name=pod_name, checkpoint_name=checkpoint_name)
     return await checkpoint_volatility_analysis(request)
+
+@router.post("/fingerprint")
+async def fingerprint_checkpoint(
+    request: FingerprintCheckpointRequest,
+    username: str = Depends(verify_token)
+):
+    """
+    Generate a deterministic forensic fingerprint from a CRIU container checkpoint.
+    
+    The fingerprint is computed by:
+    - Decoding CRIU image files (pstree, memory maps, files, mounts, namespaces, etc.)
+    - Canonicalizing and hashing each component
+    - Combining all component hashes into a single fingerprint
+    
+    This creates a baseline that can be compared against production checkpoints to detect:
+    - Code injection
+    - Binary modification
+    - Unexpected open sockets or file descriptors
+    - Changed mounts
+    - Modified container config
+    - Filesystem drift
+    """
+    try:
+        await send_progress(username, {
+            "progress": 10,
+            "task_name": "Forensic Fingerprint",
+            "message": f"Extracting checkpoint: {request.checkpoint_name}"
+        })
+        
+        await send_progress(username, {
+            "progress": 30,
+            "task_name": "Forensic Fingerprint",
+            "message": "Decoding CRIU images and processing components..."
+        })
+        
+        result = await fingerprint_checkpoint_use_case(request)
+        
+        components_count = result.forensic_data.get('components_processed', 0)
+        await send_progress(username, {
+            "progress": 100,
+            "task_name": "Forensic Fingerprint",
+            "message": f"Fingerprint generated: {result.fingerprint[:16]}... ({components_count} components processed)"
+        })
+        
+        return result
+    except FileNotFoundError as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Fingerprint Checkpoint",
+            "message": f"Checkpoint file not found: {str(e)}"
+        })
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Fingerprint Checkpoint",
+            "message": f"Failed to generate fingerprint: {str(e)}"
+        })
+        logger.error(f"SnapAPI: Failed to fingerprint checkpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fingerprint checkpoint: {str(e)}")
+
+@router.post("/fingerprint/compare")
+async def compare_checkpoints(
+    request: CompareCheckpointsRequest,
+    username: str = Depends(verify_token)
+):
+    """
+    Compare two checkpoints using forensic fingerprints.
+    
+    Performs component-by-component comparison showing which specific aspects differ:
+    - Process tree
+    - Memory maps and pages
+    - Open files and descriptors
+    - Mount points
+    - Namespaces (network, UTS, etc.)
+    - Container configuration
+    - Filesystem changes
+    
+    Returns detailed differences to help identify drift, tampering, or code injection.
+    """
+    try:
+        await send_progress(username, {
+            "progress": 10,
+            "task_name": "Compare Checkpoints",
+            "message": f"Generating fingerprints for both checkpoints..."
+        })
+        
+        result = await compare_checkpoints_use_case(request)
+        
+        diff_count = len(result.differences.get('components_differing', []))
+        status_msg = "Identical" if result.are_identical else f"Different ({diff_count} components)"
+        await send_progress(username, {
+            "progress": 100,
+            "task_name": "Compare Checkpoints",
+            "message": f"Forensic comparison complete: {status_msg}"
+        })
+        
+        return result
+    except FileNotFoundError as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Compare Checkpoints",
+            "message": f"Checkpoint file not found: {str(e)}"
+        })
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Compare Checkpoints",
+            "message": f"Failed to compare checkpoints: {str(e)}"
+        })
+        logger.error(f"SnapAPI: Failed to compare checkpoints: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to compare checkpoints: {str(e)}")
+
+
+@router.get("/fingerprint/compare/diff")
+async def get_component_diff_endpoint(
+    pod_name_1: str = Query(..., description="Pod name for checkpoint 1"),
+    checkpoint_name_1: str = Query(..., description="Checkpoint name for checkpoint 1"),
+    pod_name_2: str = Query(..., description="Pod name for checkpoint 2"),
+    checkpoint_name_2: str = Query(..., description="Checkpoint name for checkpoint 2"),
+    component_name: str = Query(..., description="Component name to diff"),
+    username: str = Depends(verify_token)
+):
+    """
+    Get the content diff for a specific component between two checkpoints.
+    Returns a Git-diff style unified diff showing the differences.
+    """
+    try:
+        await send_progress(username, {
+            "progress": 10,
+            "task_name": "Component Diff",
+            "message": f"Extracting checkpoints and loading component: {component_name}"
+        })
+        
+        result = await get_component_diff(
+            pod_name_1,
+            checkpoint_name_1,
+            pod_name_2,
+            checkpoint_name_2,
+            component_name
+        )
+        
+        await send_progress(username, {
+            "progress": 100,
+            "task_name": "Component Diff",
+            "message": f"Diff generated for {component_name}"
+        })
+        
+        return result
+    except FileNotFoundError as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Component Diff",
+            "message": f"Checkpoint file not found: {str(e)}"
+        })
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Component Diff",
+            "message": f"Failed to generate diff: {str(e)}"
+        })
+        logger.error(f"SnapAPI: Failed to get component diff: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get component diff: {str(e)}")

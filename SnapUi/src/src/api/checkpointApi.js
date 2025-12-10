@@ -105,6 +105,53 @@ const downloadCheckpoint = async (pod_name, filename) => new Promise(async (reso
     }
 })
 
+const deleteCheckpoint = async (pod_name, filename) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.delete(`/checkpoint/delete/${pod_name}?filename=${encodeURIComponent(filename)}`)
+        if( !response.data ) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const fingerprintCheckpoint = async (data) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.post(`/checkpoint/fingerprint`, data)
+        if( !response.data ) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const compareCheckpointFingerprints = async (data) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.post(`/checkpoint/fingerprint/compare`, data)
+        if( !response.data ) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
+const getComponentDiff = async (pod_name_1, checkpoint_name_1, pod_name_2, checkpoint_name_2, component_name) => new Promise(async (resolve, reject) => {
+    try {
+        const params = new URLSearchParams({
+            pod_name_1,
+            checkpoint_name_1,
+            pod_name_2,
+            checkpoint_name_2,
+            component_name
+        })
+        const response = await api.get(`/checkpoint/fingerprint/compare/diff?${params.toString()}`)
+        if( !response.data ) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
 export const checkpointApi = {
     getById,
     getList,
@@ -114,6 +161,10 @@ export const checkpointApi = {
     pushCheckpoint,
     scanCheckpoint,
     getScanResults,
-    downloadCheckpoint
+    downloadCheckpoint,
+    deleteCheckpoint,
+    fingerprintCheckpoint,
+    compareCheckpointFingerprints,
+    getComponentDiff
 
 }

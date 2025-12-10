@@ -31,7 +31,7 @@ import { registryActions } from '../features/registry/registrySlice';
 import UsersIcon from '@mui/icons-material/Group';
 import ClusterIcon from '@mui/icons-material/Tune';
 import SettingsIcon from '@mui/icons-material/Settings';
-import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy, Close } from '@mui/icons-material';
+import { CloudUpload, Visibility as WatchersIcon, Webhook as SnapHookIcon, Help as HelpIcon, ContentCopy, Close, CompareArrows } from '@mui/icons-material';
 import LogsSection from './common/LogsSection';
 import { useLogs } from './common/LogsContext';
 import HelpDialog from './common/HelpDialog';
@@ -66,8 +66,9 @@ const DrawerHeader = styled('div')(({ theme }) => ({
   alignItems: 'center',
   justifyContent: 'flex-end',
   padding: theme.spacing(0, 1),
+  minHeight: '48px',
+  height: '48px',
   // necessary for content to be below app bar
-  ...theme.mixins.toolbar,
 }));
 
 const AppBar = styled(MuiAppBar, {
@@ -620,6 +621,7 @@ export default function AppContainer({ children }) {
     const clusterMenu = [
       { text: "Pods", path: "/pods", Icon: ImageIcon },
       { text: "Checkpoints", path: "/checkpoints", Icon: CheckpointIcon },
+      { text: "Compare Fingerprints", path: "/checkpoints/compare", Icon: CompareArrows },
       { text: "Secrets", path: "/secrets", Icon: SecurityIcon },
       { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
       { text: "SnapHook", path: "/snaphook", Icon: SnapHookIcon },
@@ -657,14 +659,28 @@ export default function AppContainer({ children }) {
     };
 
     return (
-      <Drawer variant="permanent" open={open} sx={{ marginTop: "48px" }}>
-        <DrawerHeader>
+      <Drawer 
+        variant="permanent" 
+        open={open} 
+        sx={{ 
+          height: 'calc(100vh - 48px)',
+          marginTop: '48px',
+          '& .MuiDrawer-paper': {
+            height: 'calc(100vh - 48px)',
+            marginTop: '48px',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+          }
+        }}
+      >
+        <DrawerHeader sx={{ minHeight: '48px !important', height: '48px' }}>
           {/* <IconButton onClick={handleDrawerClose}>
             {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton> */}
         </DrawerHeader>
         {authenticated && user && (
-          <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
+          <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.12)', flexShrink: 0 }}>
             <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em', mb: 1, display: 'block' }}>
               User & Cluster
             </Typography>
@@ -728,12 +744,12 @@ export default function AppContainer({ children }) {
         {/* Section 2: Cluster-dependent menu items */}
         {showClusterNavigation && (
           <>
-            <Box sx={{ px: 2, py: 1 }}>
+            <Box sx={{ px: 2, py: 1, flexShrink: 0 }}>
               <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
                 Cluster Operations
               </Typography>
             </Box>
-            <List>
+            <List sx={{ flexShrink: 0 }}>
               {clusterMenu.map(({ text, path, Icon }) => (
                 <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
                   <ListItemButton
@@ -755,12 +771,12 @@ export default function AppContainer({ children }) {
         )}
         
         {/* Section 3: App-level menu items */}
-        <Box sx={{ px: 2, py: 1 }}>
+        <Box sx={{ px: 2, py: 1, flexShrink: 0 }}>
           <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
             Application
           </Typography>
         </Box>
-        <List>
+        <List sx={{ flexGrow: 1, overflowY: 'auto' }}>
           {appMenu.map(({ text, path, Icon }) => (
             <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
               <ListItemButton
