@@ -1,5 +1,6 @@
 # First stage: Build checkpointctl
-FROM golang:1.23 AS builder
+FROM golang:latest AS builder
+ENV GOTOOLCHAIN=auto
 RUN git clone https://github.com/checkpoint-restore/checkpointctl.git && \
     cd checkpointctl && \
     make && \
@@ -88,4 +89,4 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # The container will run as `SNAP` user (via entrypoint)
 # Run the application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app", "--timeout-graceful-shutdown", "0"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app", "--timeout-graceful-shutdown", "0", "--proxy-headers"]

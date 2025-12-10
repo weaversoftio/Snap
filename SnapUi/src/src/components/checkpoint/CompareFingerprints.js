@@ -484,7 +484,7 @@ const CompareFingerprintsScreen = ({ classes }) => {
         <Box>
           <Paper elevation={0} sx={{ px: 2, py: 1.5, bgcolor: 'background.paper', borderRadius: 1, mb: compareResults ? 2 : 3 }}>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={5}>
+              <Grid size={{ xs: 12, sm: 5 }}>
                 <Autocomplete
                   options={filteredData}
                   getOptionLabel={(option) => `${option.pod_name} / ${option.checkpoint_name}`}
@@ -504,11 +504,11 @@ const CompareFingerprintsScreen = ({ classes }) => {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={2} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Grid size={{ xs: 12, sm: 2 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <CompareArrowsIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
               </Grid>
 
-              <Grid item xs={12} sm={5}>
+              <Grid size={{ xs: 12, sm: 5 }}>
                 <Autocomplete
                   options={filteredData.filter(item => 
                     !(item.pod_name === selectedCheckpoint1?.pod_name && item.checkpoint_name === selectedCheckpoint1?.checkpoint_name)

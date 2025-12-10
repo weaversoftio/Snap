@@ -300,16 +300,19 @@ const ClusterStatus = () => {
                                   </Typography>
                                 }
                                 secondary={
-                                  <Box>
-                                    <Typography variant="body2" color="text.secondary">
+                                  <>
+                                    <Typography variant="body2" color="text.secondary" component="span">
                                       Status: {checkData.status}
                                     </Typography>
                                     {checkData.details && (
-                                      <Typography variant="caption" color="text.secondary">
-                                        Details: {checkData.details}
-                                      </Typography>
+                                      <>
+                                        <br />
+                                        <Typography variant="caption" color="text.secondary" component="span">
+                                          Details: {checkData.details}
+                                        </Typography>
+                                      </>
                                     )}
-                                  </Box>
+                                  </>
                                 }
                               />
                             </ListItem>

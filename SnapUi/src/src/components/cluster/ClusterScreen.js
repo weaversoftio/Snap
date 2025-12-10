@@ -1243,7 +1243,7 @@ const ClusterScreen = () => {
                 <Divider sx={{ my: 2 }} />
                 <Grid container spacing={3}>
                   {statistics.map((item, index) => (
-                    <Grid item xs={12} sm={6} md={4} key={index}>
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                       <Card
                         sx={{
                           height: '100%',
@@ -1281,7 +1281,7 @@ const ClusterScreen = () => {
                 <Grid container spacing={2}>
                   {kubeAuthenticated && (
                     <>
-                      <Grid item xs={12} sm={6} md={4}>
+                      <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                         <Button
                           fullWidth
                           variant="outlined"
@@ -1292,7 +1292,7 @@ const ClusterScreen = () => {
                           Cluster Cache Config
                         </Button>
                       </Grid>
-                      <Grid item xs={12} sm={6} md={4}>
+                      <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                         <Button
                           fullWidth
                           variant="outlined"
@@ -1306,7 +1306,7 @@ const ClusterScreen = () => {
                     </>
                   )}
 
-                  <Grid item xs={12} sm={6} md={4}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <Button
                       fullWidth
                       variant="outlined"

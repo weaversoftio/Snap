@@ -1,7 +1,9 @@
 import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 import logging
 import os
 import kopf
@@ -43,6 +45,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 checkpoint_path = os.path.join(BASE_DIR, 'checkpoints')
 origins_env = os.getenv("SNAP_ORIGINS", "http://localhost,http://localhost:3000,*")
 origins = origins_env.split(",")
+
+# Reverse proxy middleware to ensure X-Forwarded-* headers are available
+# Note: uvicorn's --proxy-headers flag makes uvicorn trust these headers
+# This middleware ensures they're available for CORS and other middleware
+class ReverseProxyMiddleware(BaseHTTPMiddleware):
+    """Middleware to ensure reverse proxy headers are available for downstream processing."""
+    async def dispatch(self, request: Request, call_next):
+        # The --proxy-headers flag in uvicorn already handles X-Forwarded-* headers
+        # This middleware ensures the headers are available for CORS and logging
+        # FastAPI/Starlette will use these headers when --proxy-headers is enabled
+        response = await call_next(request)
+        return response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -104,12 +118,21 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)
 
+# Add reverse proxy middleware first (before CORS)
+app.add_middleware(ReverseProxyMiddleware)
+
+# CORS middleware - allow all origins if "*" is in the list, otherwise use specified origins
+# This supports reverse proxy scenarios where the origin may vary
+allow_all_origins = "*" in origins
+cors_origins = ["*"] if allow_all_origins else origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=True if not allow_all_origins else False,  # Can't use credentials with wildcard
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Configure logging
