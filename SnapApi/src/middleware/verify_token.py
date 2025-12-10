@@ -49,10 +49,17 @@ def verify_token(request: Request):
         
         # Handle regular JWT tokens for users
         result = verify_user_config(token)
-        if (result.get("success") == False):
-            raise HTTPException(status_code=401, detail="Invalid or Expired token")
+        if result.get("success") == False:
+            raise HTTPException(status_code=401, detail=result.get("message", "Invalid or Expired token"))
 
-        username = result["user"]["username"]
+        user = result.get("user")
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user data")
+        
+        username = user.get("username")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token: missing username")
+        
         return username
         
     else:

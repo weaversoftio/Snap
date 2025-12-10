@@ -1172,17 +1172,22 @@ async def extract_checkpoint_tar(tar_path: Path) -> Path:
     temp_dir = Path(tempfile.mkdtemp())
     
     try:
-        # Log tar file contents for debugging
-        with tarfile.open(tar_path, 'r:*') as tar:
-            members = tar.getmembers()
-            logger.info(f"Tar file contains {len(members)} members")
-            # Log first 20 members
-            for i, member in enumerate(members[:20]):
-                logger.debug(f"  {i+1}. {member.name} (size: {member.size}, type: {member.type})")
-            if len(members) > 20:
-                logger.debug(f"  ... and {len(members) - 20} more")
-            
-            tar.extractall(path=temp_dir)
+        # Extract tar file in a thread to avoid blocking the event loop
+        def extract_tar_sync():
+            """Synchronous tar extraction function to run in thread."""
+            with tarfile.open(tar_path, 'r:*') as tar:
+                members = tar.getmembers()
+                logger.info(f"Tar file contains {len(members)} members")
+                # Log first 20 members
+                for i, member in enumerate(members[:20]):
+                    logger.debug(f"  {i+1}. {member.name} (size: {member.size}, type: {member.type})")
+                if len(members) > 20:
+                    logger.debug(f"  ... and {len(members) - 20} more")
+                
+                tar.extractall(path=temp_dir)
+        
+        # Run tar extraction in thread pool to avoid blocking
+        await asyncio.to_thread(extract_tar_sync)
         
         # Fix permissions on extracted files to ensure they're readable
         # This is necessary because some tar files may have restrictive permissions
@@ -1213,9 +1218,9 @@ async def extract_checkpoint_tar(tar_path: Path) -> Path:
             except (OSError, PermissionError) as e:
                 logger.warning(f"Could not fix permissions for {path}: {str(e)}")
         
-        # Fix permissions for the entire extracted directory
+        # Fix permissions for the entire extracted directory in thread to avoid blocking
         try:
-            fix_permissions(temp_dir)
+            await asyncio.to_thread(fix_permissions, temp_dir)
         except Exception as e:
             logger.warning(f"Error fixing permissions: {str(e)}")
         
@@ -1531,9 +1536,16 @@ async def get_component_diff(
             logger.warning(f"Failed to load content from fingerprint file 2: {str(e)}")
     
     # If we have both contents from fingerprint files, use them directly
-    # Check for content existence more robustly (handle empty dicts, etc.)
-    has_content_1 = content_1 is not None and content_1 != {} and (not isinstance(content_1, dict) or len(content_1) > 0 or 'error' not in content_1)
-    has_content_2 = content_2 is not None and content_2 != {} and (not isinstance(content_2, dict) or len(content_2) > 0 or 'error' not in content_2)
+    # Check for content existence: content exists if it's not None and not an error dict
+    # Empty dicts/arrays should be considered as having content (they exist, just empty)
+    has_content_1 = (
+        content_1 is not None and 
+        not (isinstance(content_1, dict) and 'error' in content_1 and len(content_1) == 1)
+    )
+    has_content_2 = (
+        content_2 is not None and 
+        not (isinstance(content_2, dict) and 'error' in content_2 and len(content_2) == 1)
+    )
     
     if has_content_1 and has_content_2:
         logger.info("Using content from fingerprint files (no extraction needed)")
@@ -1548,8 +1560,8 @@ async def get_component_diff(
             "canonical_1": canonical_1,
             "canonical_2": canonical_2,
             "unified_diff": unified_diff,
-            "has_content_1": True,  # Explicitly set to True since we have content
-            "has_content_2": True,  # Explicitly set to True since we have content
+            "has_content_1": has_content_1,  # Use computed value
+            "has_content_2": has_content_2,  # Use computed value
             "source": "fingerprint_cache"  # Indicate we used cached content
         }
     
@@ -1632,9 +1644,15 @@ async def get_component_diff(
         if content_2 is None or (isinstance(content_2, dict) and len(content_2) == 0):
             content_2 = await get_component_content(checkpoint_dir_2, parent_dir_2, component_name)
         
-        # More robust content detection
-        has_content_1_final = content_1 is not None and content_1 != {} and (not isinstance(content_1, dict) or len(content_1) > 0 or 'error' not in content_1)
-        has_content_2_final = content_2 is not None and content_2 != {} and (not isinstance(content_2, dict) or len(content_2) > 0 or 'error' not in content_2)
+        # More robust content detection: empty dicts/arrays should be considered as having content
+        has_content_1_final = (
+            content_1 is not None and 
+            not (isinstance(content_1, dict) and 'error' in content_1 and len(content_1) == 1)
+        )
+        has_content_2_final = (
+            content_2 is not None and 
+            not (isinstance(content_2, dict) and 'error' in content_2 and len(content_2) == 1)
+        )
         
         logger.info(f"Content 1 found: {has_content_1_final} (content_1 type: {type(content_1).__name__}, is None: {content_1 is None})")
         logger.info(f"Content 2 found: {has_content_2_final} (content_2 type: {type(content_2).__name__}, is None: {content_2 is None})")
@@ -1866,7 +1884,7 @@ async def compare_checkpoints_use_case(
         CompareCheckpointsResponse with detailed comparison results
     """
     try:
-        # Generate fingerprints for both checkpoints
+        # Generate fingerprints for both checkpoints in parallel to avoid deadlocks
         # Use force_regenerate=False to allow caching, but ensure both are processed consistently
         fingerprint_1_request = FingerprintCheckpointRequest(
             pod_name=request.pod_name_1,
@@ -1879,12 +1897,15 @@ async def compare_checkpoints_use_case(
             force_regenerate=False  # Allow cache for performance
         )
         
-        logger.info(f"Generating fingerprint for checkpoint 1: {request.pod_name_1}/{request.checkpoint_name_1}")
-        result_1 = await fingerprint_checkpoint_use_case(fingerprint_1_request)
-        logger.info(f"Checkpoint 1 fingerprint: {result_1.fingerprint[:16]}... (components: {len(result_1.forensic_data.get('hashes', {}))})")
+        logger.info(f"Generating fingerprints for both checkpoints in parallel: {request.pod_name_1}/{request.checkpoint_name_1} and {request.pod_name_2}/{request.checkpoint_name_2}")
         
-        logger.info(f"Generating fingerprint for checkpoint 2: {request.pod_name_2}/{request.checkpoint_name_2}")
-        result_2 = await fingerprint_checkpoint_use_case(fingerprint_2_request)
+        # Run both fingerprint generations in parallel to prevent deadlocks
+        result_1, result_2 = await asyncio.gather(
+            fingerprint_checkpoint_use_case(fingerprint_1_request),
+            fingerprint_checkpoint_use_case(fingerprint_2_request)
+        )
+        
+        logger.info(f"Checkpoint 1 fingerprint: {result_1.fingerprint[:16]}... (components: {len(result_1.forensic_data.get('hashes', {}))})")
         logger.info(f"Checkpoint 2 fingerprint: {result_2.fingerprint[:16]}... (components: {len(result_2.forensic_data.get('hashes', {}))})")
         
         # Compare fingerprints

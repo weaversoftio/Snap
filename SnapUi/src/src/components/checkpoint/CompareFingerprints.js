@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Grid, TextField, Typography, Paper, Autocomplete, Chip, Tabs, Tab, Badge, Alert, AlertTitle, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemIcon, Divider } from "@mui/material"
+import { Box, Button, CircularProgress, Grid2 as Grid, TextField, Typography, Paper, Autocomplete, Chip, Tabs, Tab, Badge, Alert, AlertTitle, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemIcon, Divider } from "@mui/material"
 import { useEffect, useState, useCallback } from "react";
 import { useSnackbar } from 'notistack';
 import { checkpointApi } from "../../api/checkpointApi";
@@ -232,8 +232,25 @@ const CompareFingerprintsScreen = ({ classes }) => {
     // Use diff data if available, otherwise fall back to cached content
     const content1 = diffData?.content_1 ?? diff.content_1
     const content2 = diffData?.content_2 ?? diff.content_2
-    const finalHasContent1 = diffData ? (diffData.has_content_1 || (diffData.content_1 !== null && diffData.content_1 !== undefined)) : hasContent1
-    const finalHasContent2 = diffData ? (diffData.has_content_2 || (diffData.content_2 !== null && diffData.content_2 !== undefined)) : hasContent2
+    
+    // Content detection: use has_content flag if available, otherwise check if content exists and is not an error dict
+    const hasValidContent = (content, hasContentFlag) => {
+      // If flag is explicitly set, use it
+      if (hasContentFlag === true) return true
+      if (hasContentFlag === false) return false
+      // Otherwise, check if content exists and is not an error dict
+      if (content === null || content === undefined) return false
+      // Empty objects/arrays should be considered as having content (they exist, just empty)
+      if (typeof content === 'object' && 'error' in content && Object.keys(content).length === 1) return false
+      return true
+    }
+    
+    const finalHasContent1 = diffData 
+      ? hasValidContent(diffData.content_1, diffData.has_content_1)
+      : hasValidContent(diff.content_1, diff.content_1 !== undefined && diff.content_1 !== null)
+    const finalHasContent2 = diffData 
+      ? hasValidContent(diffData.content_2, diffData.has_content_2)
+      : hasValidContent(diff.content_2, diff.content_2 !== undefined && diff.content_2 !== null)
 
     if (isLoading) {
       return (
@@ -482,7 +499,7 @@ const CompareFingerprintsScreen = ({ classes }) => {
     <CustomerContainer title="Compare Fingerprints" subtitle="Compare forensic fingerprints of two checkpoints">
       {loading ? <Loading /> : (
         <Box>
-          <Paper elevation={0} sx={{ px: 2, py: 1.5, bgcolor: 'background.paper', borderRadius: 1, mb: compareResults ? 2 : 3 }}>
+          <Paper elevation={0} sx={{ px: 3, py: 2.5, bgcolor: 'background.paper', borderRadius: 2, mb: compareResults ? 2 : 3 }}>
             <Grid container spacing={2} alignItems="center">
               <Grid size={{ xs: 12, sm: 5 }}>
                 <Autocomplete
@@ -491,7 +508,7 @@ const CompareFingerprintsScreen = ({ classes }) => {
                   value={selectedCheckpoint1}
                   onChange={(event, newValue) => setSelectedCheckpoint1(newValue)}
                   renderInput={(params) => (
-                    <TextField {...params} placeholder="Checkpoint 1" size="small" />
+                    <TextField {...params} placeholder="Select Checkpoint 1" size="small" fullWidth />
                   )}
                   renderOption={(props, option) => (
                     <Box component="li" {...props}>
@@ -504,8 +521,8 @@ const CompareFingerprintsScreen = ({ classes }) => {
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, sm: 2 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CompareArrowsIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
+              <Grid size={{ xs: 12, sm: 2 }} sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', justifyContent: 'center' }}>
+                <CompareArrowsIcon sx={{ fontSize: 28, color: 'text.secondary' }} />
               </Grid>
 
               <Grid size={{ xs: 12, sm: 5 }}>
@@ -517,7 +534,7 @@ const CompareFingerprintsScreen = ({ classes }) => {
                   value={selectedCheckpoint2}
                   onChange={(event, newValue) => setSelectedCheckpoint2(newValue)}
                   renderInput={(params) => (
-                    <TextField {...params} placeholder="Checkpoint 2" size="small" />
+                    <TextField {...params} placeholder="Select Checkpoint 2" size="small" fullWidth />
                   )}
                   renderOption={(props, option) => (
                     <Box component="li" {...props}>
@@ -531,15 +548,20 @@ const CompareFingerprintsScreen = ({ classes }) => {
               </Grid>
             </Grid>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
               <Button
                 variant="contained"
-                size="medium"
-                startIcon={<CompareArrowsIcon />}
+                size="large"
+                startIcon={!isActionRunning && <CompareArrowsIcon />}
                 onClick={handleCompare}
                 disabled={!selectedCheckpoint1 || !selectedCheckpoint2 || isActionRunning}
+                sx={{ 
+                  minWidth: 150,
+                  px: 3,
+                  py: 1.5
+                }}
               >
-                {isActionRunning ? <CircularProgress size={20} /> : "Compare"}
+                {isActionRunning ? <CircularProgress size={20} color="inherit" /> : "COMPARE"}
               </Button>
             </Box>
 
