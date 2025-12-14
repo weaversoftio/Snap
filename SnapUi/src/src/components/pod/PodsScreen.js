@@ -1,5 +1,9 @@
-import { Box, Button, Grid2 as Grid, IconButton, Paper, Tooltip, Typography, TextField, FormControl, Select, MenuItem, Autocomplete } from "@mui/material"
+import { Box, Button, Chip, Divider, Grid2 as Grid, IconButton, InputAdornment, Paper, Stack, Tooltip, Typography, TextField, FormControl, Select, MenuItem, Autocomplete } from "@mui/material"
 import ClearIcon from '@mui/icons-material/Clear';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import LanOutlinedIcon from '@mui/icons-material/LanOutlined';
 import { useEffect, useMemo, useState } from "react";
 import { podsApi } from "../../api/podsApi";
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -21,6 +25,8 @@ const PodsScreen = ({ classes }) => {
   const [selectedNamespace, setSelectedNamespace] = useState(null)
   const [selectedNode, setSelectedNode] = useState("all")
   const [containerFilter, setContainerFilter] = useState("all")
+
+  const totalPods = data.length
 
   const tableHeaders = [
     { name: "", key: "" },
@@ -111,6 +117,24 @@ const PodsScreen = ({ classes }) => {
     return Array.from(new Set(data.map(item => getNestedValue(item, 'spec.nodeName')).filter(Boolean)))
   }, [data]);
 
+  const containerSummary = useMemo(() => {
+    return filteredData.reduce((acc, item) => {
+      const count = getNestedValue(item, 'spec.containers.length') || 0;
+      if (count <= 1) acc.single += 1;
+      if (count > 1) acc.multiple += 1;
+      return acc;
+    }, { single: 0, multiple: 0 });
+  }, [filteredData]);
+
+  const activeFilters = useMemo(() => {
+    const chips = [];
+    if (searchTerm) chips.push({ label: `Search: ${searchTerm}`, key: 'search' });
+    if (selectedNamespace) chips.push({ label: `Namespace: ${selectedNamespace}`, key: 'namespace' });
+    if (selectedNode !== "all") chips.push({ label: `Node: ${selectedNode}`, key: 'node' });
+    if (containerFilter !== "all") chips.push({ label: containerFilter === "single" ? "Single container" : "Multiple containers", key: 'container' });
+    return chips;
+  }, [searchTerm, selectedNamespace, selectedNode, containerFilter]);
+
   const clearFilters = () => {
     setSearchTerm("")
     setSelectedNamespace(null)
@@ -150,7 +174,39 @@ const PodsScreen = ({ classes }) => {
         <>
           <Paper elevation={0} sx={{ px: 3, py: 1, bgcolor: 'background.paper', borderRadius: 2 }}>
             {renderDialog()}
-            <Box sx={{ mt: 2, mb: 2 }}>
+            <Grid container spacing={2} sx={{ mt: 1, mb: 1 }}>
+              <Grid xs={12} md={4}>
+                <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'grey.100', border: '1px solid', borderColor: 'divider' }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                    <FilterAltOutlinedIcon fontSize="small" />
+                    <Typography variant="body2">Filtered Pods</Typography>
+                  </Stack>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{filteredData.length}</Typography>
+                  <Typography variant="caption" color="text.secondary">of {totalPods} total pods</Typography>
+                </Box>
+              </Grid>
+              <Grid xs={12} md={4}>
+                <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'grey.100', border: '1px solid', borderColor: 'divider' }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                    <LanOutlinedIcon fontSize="small" />
+                    <Typography variant="body2">Namespaces</Typography>
+                  </Stack>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{namespaceOptions.length || 0}</Typography>
+                  <Typography variant="caption" color="text.secondary">unique namespaces detected</Typography>
+                </Box>
+              </Grid>
+              <Grid xs={12} md={4}>
+                <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: 'grey.100', border: '1px solid', borderColor: 'divider' }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                    <LayersOutlinedIcon fontSize="small" />
+                    <Typography variant="body2">Containers</Typography>
+                  </Stack>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{containerSummary.single} single / {containerSummary.multiple} multi</Typography>
+                  <Typography variant="caption" color="text.secondary">within filtered pods</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+            <Box sx={{ mt: 2, mb: 2, p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
               <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
                 Search & Filters
               </Typography>
@@ -161,6 +217,13 @@ const PodsScreen = ({ classes }) => {
                   placeholder="Search by name, namespace, or node"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                    )
+                  }}
                 />
                 <Autocomplete
                   sx={{ minWidth: 180 }}
@@ -200,7 +263,8 @@ const PodsScreen = ({ classes }) => {
                   </Select>
                 </FormControl>
                 <Button
-                  variant="outlined"
+                  variant="contained"
+                  color="secondary"
                   startIcon={<ClearIcon />}
                   onClick={clearFilters}
                   size="small"
@@ -209,6 +273,21 @@ const PodsScreen = ({ classes }) => {
                   Clear Filters
                 </Button>
               </Box>
+              {!!activeFilters.length && (
+                <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap sx={{ mt: 2 }}>
+                  {activeFilters.map(({ label, key }) => (
+                    <Chip
+                      key={key}
+                      label={label}
+                      size="small"
+                      onDelete={clearFilters}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  ))}
+                </Stack>
+              )}
+              <Divider sx={{ my: 2 }} />
               {filteredData.length !== data.length && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Showing {filteredData.length} of {data.length} pods

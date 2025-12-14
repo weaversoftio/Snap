@@ -1,10 +1,10 @@
-# First stage: Build checkpointctl
-FROM golang:latest AS builder
+# First stage: Build checkpointctl using UBI9-based Go to match runtime GLIBC
+FROM registry.access.redhat.com/ubi9/go-toolset:latest AS builder
 ENV GOTOOLCHAIN=auto
 RUN git clone https://github.com/checkpoint-restore/checkpointctl.git && \
     cd checkpointctl && \
     make && \
-    mv checkpointctl /checkpointctl
+    mv checkpointctl /tmp/checkpointctl
 
 # Final stage: Main application
 FROM registry.access.redhat.com/ubi9/python-39
@@ -33,7 +33,7 @@ RUN curl -L https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/lat
 
 
 # Copy checkpointctl from builder stage
-COPY --from=builder /checkpointctl /usr/local/bin/
+COPY --from=builder /tmp/checkpointctl /usr/local/bin/checkpointctl
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -55,7 +55,7 @@ COPY src/. .
 
 RUN mkdir -p /licenses 
 
-# COPY LICENSE /licenses/
+COPY LICENSE /licenses/
 
 # Copy docs directory for documentation system
 COPY docs /app/docs

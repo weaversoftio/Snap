@@ -1,4 +1,5 @@
-import { Box, Button, CircularProgress, Collapse, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, CircularProgress, Collapse, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, Tooltip, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useState } from "react";
 import { formatTimestamp } from "../../utils/formateDate";
 import { grey } from '@mui/material/colors';
@@ -128,12 +129,15 @@ const TableComponent = ({
 
   const renderTable = () => {
     if (!filteredData || !filteredData.length) return (
-      <Typography>No Record Found</Typography>
+      <Box sx={{ p: 3, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No pods match the current filters</Typography>
+        <Typography variant="body2" color="text.secondary">Try clearing filters or adjust your search.</Typography>
+      </Box>
     )
 
     return (
-      <TableContainer>
-        <Table>
+      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: "1px solid", borderColor: "divider" }}>
+        <Table stickyHeader>
           {renderTableHead()}
           {renderTableBody()}
         </Table>
@@ -144,11 +148,11 @@ const TableComponent = ({
   const renderTableHead = () => {
     return (
       <TableHead>
-        <TableRow sx={{ 
-          bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
-          '& th': { fontWeight: "bold" }
+        <TableRow sx={{
+          bgcolor: alpha(theme.palette.primary.main, 0.06),
+          '& th': { fontWeight: 700, color: 'text.primary', textTransform: 'uppercase', fontSize: 12, letterSpacing: 0.3 }
         }}>
-          {tableHeaders.map(({ name }, index) => <TableCell sx={{ fontWeight: "bold" }} key={`tableHead-${index}`}>{name}</TableCell>)}
+          {tableHeaders.map(({ name }, index) => <TableCell sx={{ fontWeight: 700 }} key={`tableHead-${index}`}>{name}</TableCell>)}
         </TableRow>
       </TableHead>
     )
@@ -235,6 +239,8 @@ const Row = (props) => {
     <>
       <TableRow key={podName} sx={{
         "& td": { borderBottom: "none" },
+        transition: "background-color 120ms ease-in-out",
+        "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.05) }
       }}>
         <TableCell sx={{ borderBottom: "none" }}>
           <IconButton
@@ -286,14 +292,14 @@ const Row = (props) => {
       <TableRow>
         <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ margin: 1 }}>
-              <Typography variant="h6" gutterBottom component="div">
+            <Box sx={{ margin: 1, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.02), border: "1px solid", borderColor: "divider", p: 1.5 }}>
+              <Typography variant="subtitle1" gutterBottom component="div" sx={{ fontWeight: 600 }}>
                 Containers
               </Typography>
               <Table size="small" aria-label="purchases">
                 <TableHead>
                   <TableRow sx={{ 
-                    bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : 'grey.200',
+                    bgcolor: alpha(theme.palette.primary.main, 0.06),
                   }}>
                     {nestedTableHeaders.map(({ name }, index) => <TableCell classes={cellStyle} key={`tableHead-${index}`}>{name}</TableCell>)}
                   </TableRow>
