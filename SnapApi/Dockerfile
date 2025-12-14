@@ -88,5 +88,7 @@ EXPOSE 8000
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # The container will run as `SNAP` user (via entrypoint)
+USER snap
+
 # Run the application
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app", "--timeout-graceful-shutdown", "0", "--proxy-headers"]
