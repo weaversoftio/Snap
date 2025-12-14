@@ -1,0 +1,23 @@
+time="2025-12-14T15:10:21+02:00" level=info msg="certification library version" version="1.14.1 <commit: 436b6cd740f4144eba59ad1378be00383c7b0269>"
+time="2025-12-14T15:10:21+02:00" level=info msg="running checks for 192.168.33.204:8082/snapapi:main for platform amd64"
+time="2025-12-14T15:10:23+02:00" level=info msg="target image" image="192.168.33.204:8082/snapapi:main"
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=HasLicense result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=HasUniqueTag result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=LayerCountAcceptable result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=HasNoProhibitedPackages result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=HasRequiredLabel result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=HasNoProhibitedLabels result=PASSED
+time="2025-12-14T15:11:59+02:00" level=info msg="USER snap specified that is non-root" check=RunAsNonRoot
+time="2025-12-14T15:11:59+02:00" level=info msg="check completed" check=RunAsNonRoot result=PASSED
+time="2025-12-14T15:13:28+02:00" level=info msg="check completed" check=HasModifiedFiles result=PASSED
+time="2025-12-14T15:13:29+02:00" level=info msg="check completed" check=BasedOnUbi result=PASSED
+time="2025-12-14T15:13:29+02:00" level=info msg="check completed" check=HasProhibitedContainerName result=PASSED
+time="2025-12-14T15:13:29+02:00" level=info msg="This image's tag main will be paired with digest sha256:b5385ebefe885d3c713613de7c24dff7ed292c0ee8734528f138c41844045f48 once this image has been published in accordance with Red Hat Certification policy. You may then add or remove any supplemental tags through your Red Hat Connect portal as you see fit."
+time="2025-12-14T15:13:33+02:00" level=info msg="preparing results that will be submitted to Red Hat"
+time="2025-12-14T15:13:39+02:00" level=info msg="Test results have been submitted to Red Hat."
+time="2025-12-14T15:13:39+02:00" level=info msg="These results will be reviewed by Red Hat for final certification."
+time="2025-12-14T15:13:39+02:00" level=info msg="The container's image id is: 693eb7ff5b92da4b342a1322."
+time="2025-12-14T15:13:39+02:00" level=info msg="Please check https://connect.redhat.com/component/view/6909c7963dad0bf6cfe6e5ab/certification/test-results/693eb7fe090bb669163a08c4 to view test results."
+time="2025-12-14T15:13:39+02:00" level=info msg="Please check https://connect.redhat.com/component/view/6909c7963dad0bf6cfe6e5ab/security/vulnerabilities/693eb7ff5b92da4b342a1322 to view security vulnerabilities."
+time="2025-12-14T15:13:39+02:00" level=info msg="Please check https://connect.redhat.com/component/view/6909c7963dad0bf6cfe6e5ab/images to monitor the progress."
+time="2025-12-14T15:13:39+02:00" level=info msg="Preflight result: PASSED"

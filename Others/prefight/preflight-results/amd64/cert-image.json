@@ -11,52 +11,32 @@
         "image_id": "sha256:b5385ebefe885d3c713613de7c24dff7ed292c0ee8734528f138c41844045f48",
         "labels": [
             {
-                "name": "summary",
-                "value": "1001 API service for container checkpointing"
+                "name": "io.openshift.s2i.scripts-url",
+                "value": "image:///usr/libexec/s2i"
+            },
+            {
+                "name": "io.s2i.scripts-url",
+                "value": "image:///usr/libexec/s2i"
+            },
+            {
+                "name": "name",
+                "value": "1001_1001api"
             },
             {
                 "name": "vcs-ref",
                 "value": "e749568112135e344158d979461261585f8d0fc1"
             },
             {
-                "name": "vendor",
-                "value": "WeaverSoft.io"
+                "name": "io.k8s.description",
+                "value": "Python 3.9 available as container is a base platform for building and running various Python 3.9 applications and frameworks. Python is an easy to learn, powerful programming language. It has efficient high-level data structures and a simple but effective approach to object-oriented programming. Python's elegant syntax and dynamic typing, together with its interpreted nature, make it an ideal language for scripting and rapid application development in many areas on most platforms."
             },
             {
-                "name": "version",
-                "value": "1"
+                "name": "io.openshift.tags",
+                "value": "builder,python,python39,python-39,rh-python39"
             },
             {
-                "name": "architecture",
-                "value": "x86_64"
-            },
-            {
-                "name": "io.buildah.version",
-                "value": "1.39.4"
-            },
-            {
-                "name": "io.k8s.display-name",
-                "value": "Python 3.9"
-            },
-            {
-                "name": "io.openshift.expose-services",
-                "value": "8080:http"
-            },
-            {
-                "name": "usage",
-                "value": "s2i build https://github.com/sclorg/s2i-python-container.git --context-dir=3.9/test/setup-test-app/ ubi9/python-39 python-sample-app"
-            },
-            {
-                "name": "com.redhat.license_terms",
-                "value": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI"
-            },
-            {
-                "name": "description",
-                "value": "Handles API layer of 1001 platform. Red Hat certification compliant."
-            },
-            {
-                "name": "distribution-scope",
-                "value": "public"
+                "name": "maintainer",
+                "value": "support@weaversoft.io"
             },
             {
                 "name": "org.opencontainers.image.revision",
@@ -67,52 +47,72 @@
                 "value": "https://catalog.redhat.com/en/search?searchType=containers"
             },
             {
+                "name": "usage",
+                "value": "s2i build https://github.com/sclorg/s2i-python-container.git --context-dir=3.9/test/setup-test-app/ ubi9/python-39 python-sample-app"
+            },
+            {
+                "name": "description",
+                "value": "Handles API layer of 1001 platform. Red Hat certification compliant."
+            },
+            {
+                "name": "io.k8s.display-name",
+                "value": "Python 3.9"
+            },
+            {
+                "name": "release",
+                "value": "1762200774"
+            },
+            {
                 "name": "vcs-type",
                 "value": "git"
             },
             {
-                "name": "com.redhat.component",
-                "value": "python-39-container"
+                "name": "vendor",
+                "value": "WeaverSoft.io"
             },
             {
-                "name": "io.buildpacks.stack.id",
-                "value": "com.redhat.stacks.ubi9-python-39"
-            },
-            {
-                "name": "io.k8s.description",
-                "value": "Python 3.9 available as container is a base platform for building and running various Python 3.9 applications and frameworks. Python is an easy to learn, powerful programming language. It has efficient high-level data structures and a simple but effective approach to object-oriented programming. Python's elegant syntax and dynamic typing, together with its interpreted nature, make it an ideal language for scripting and rapid application development in many areas on most platforms."
-            },
-            {
-                "name": "io.openshift.s2i.scripts-url",
-                "value": "image:///usr/libexec/s2i"
-            },
-            {
-                "name": "io.openshift.tags",
-                "value": "builder,python,python39,python-39,rh-python39"
-            },
-            {
-                "name": "io.s2i.scripts-url",
-                "value": "image:///usr/libexec/s2i"
-            },
-            {
-                "name": "maintainer",
-                "value": "support@weaversoft.io"
-            },
-            {
-                "name": "name",
-                "value": "1001_1001api"
+                "name": "architecture",
+                "value": "x86_64"
             },
             {
                 "name": "build-date",
                 "value": "2025-11-03T20:14:02Z"
             },
             {
+                "name": "com.redhat.component",
+                "value": "python-39-container"
+            },
+            {
                 "name": "cpe",
                 "value": "cpe:/a:redhat:enterprise_linux:9::appstream"
             },
             {
-                "name": "release",
-                "value": "1762200774"
+                "name": "io.buildah.version",
+                "value": "1.39.4"
+            },
+            {
+                "name": "summary",
+                "value": "1001 API service for container checkpointing"
+            },
+            {
+                "name": "version",
+                "value": "1"
+            },
+            {
+                "name": "com.redhat.license_terms",
+                "value": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI"
+            },
+            {
+                "name": "distribution-scope",
+                "value": "public"
+            },
+            {
+                "name": "io.buildpacks.stack.id",
+                "value": "com.redhat.stacks.ubi9-python-39"
+            },
+            {
+                "name": "io.openshift.expose-services",
+                "value": "8080:http"
             }
         ],
         "layers": [
@@ -232,12 +232,12 @@
     "repositories": [
         {
             "published": false,
-            "push_date": "2025-12-14T12:12:26Z",
+            "push_date": "2025-12-14T13:11:58Z",
             "registry": "192.168.33.204:8082",
             "repository": "snapapi",
             "tags": [
                 {
-                    "added_date": "2025-12-14T12:12:26Z",
+                    "added_date": "2025-12-14T13:11:58Z",
                     "name": "main"
                 }
             ]

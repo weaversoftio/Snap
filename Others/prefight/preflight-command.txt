@@ -1,0 +1,1 @@
+preflight check container 192.168.33.204:8082/snapapi:main --docker-config ${XDG_RUNTIME_DIR}/containers/auth.json --certification-component-id 6909c7963dad0bf6cfe6e5ab --pyxis-api-token 78ssxaw74bzjws57tdof9ulf61t81z6c  --submit  --artifacts ./preflight-results

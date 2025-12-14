@@ -25,7 +25,7 @@
             },
             {
                 "name": "HasNoProhibitedPackages",
-                "elapsed_time": 321,
+                "elapsed_time": 293,
                 "description": "Checks to ensure that the image in use does not include prohibited packages, such as Red Hat Enterprise Linux (RHEL) kernel packages."
             },
             {
@@ -35,7 +35,7 @@
             },
             {
                 "name": "HasNoProhibitedLabels",
-                "elapsed_time": 1,
+                "elapsed_time": 0,
                 "description": "Checking if the labels (name, vendor, maintainer) violate Red Hat trademark."
             },
             {
@@ -45,12 +45,12 @@
             },
             {
                 "name": "HasModifiedFiles",
-                "elapsed_time": 93489,
+                "elapsed_time": 88953,
                 "description": "Checks that no files installed via RPM in the base Red Hat layer have been modified"
             },
             {
                 "name": "BasedOnUbi",
-                "elapsed_time": 715,
+                "elapsed_time": 610,
                 "description": "Checking if the container's base image is based upon the Red Hat Universal Base Image (UBI)"
             },
             {
