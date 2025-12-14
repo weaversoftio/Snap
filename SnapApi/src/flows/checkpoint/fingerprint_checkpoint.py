@@ -15,13 +15,21 @@ import tempfile
 import asyncio
 import difflib
 import math
+import base64
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple, Union
 from pydantic import BaseModel
 from datetime import datetime
 from flows.proccess_utils import run
 
 logger = logging.getLogger("automation_api")
+
+# Cache for crit availability check to avoid deadlocks from concurrent subprocess calls
+_crit_available_cache: Optional[bool] = None
+_crit_check_lock = asyncio.Lock()
+
+# Semaphore to limit concurrent crit decode subprocess calls (prevent deadlocks)
+_crit_decode_semaphore = asyncio.Semaphore(4)  # Allow max 4 concurrent crit decode calls
 
 
 class FingerprintCheckpointRequest(BaseModel):
@@ -74,6 +82,32 @@ def canonicalize_json(data: Any) -> str:
     return json.dumps(data, sort_keys=True, separators=(',', ':'))
 
 
+def make_json_serializable(obj: Any) -> Any:
+    """
+    Recursively convert bytes objects to base64-encoded strings for JSON serialization.
+    
+    Args:
+        obj: Any object that may contain bytes
+        
+    Returns:
+        Object with bytes converted to base64 strings
+    """
+    if isinstance(obj, bytes):
+        # Convert bytes to base64 string
+        return base64.b64encode(obj).decode('utf-8')
+    elif isinstance(obj, dict):
+        return {key: make_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_serializable(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(make_json_serializable(item) for item in obj)
+    elif isinstance(obj, set):
+        return {make_json_serializable(item) for item in obj}
+    else:
+        # For other types, return as-is (int, str, float, bool, None, etc.)
+        return obj
+
+
 def hash_string(content: str) -> str:
     """Compute SHA256 hash of a string."""
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
@@ -92,15 +126,31 @@ async def check_crit_available() -> bool:
     """
     Check if crit command is available in the system.
     
+    Uses caching and locking to prevent deadlocks from concurrent subprocess calls.
+    
     Returns:
         True if crit is available, False otherwise
     """
-    try:
-        cmd = ['which', 'crit']
-        result = await run(cmd, check=False, capture_output=True, text=True)
-        return result.returncode == 0 and result.stdout.strip() != ''
-    except Exception:
-        return False
+    global _crit_available_cache
+    
+    # Return cached result if available
+    if _crit_available_cache is not None:
+        return _crit_available_cache
+    
+    # Use lock to ensure only one check happens at a time
+    async with _crit_check_lock:
+        # Double-check after acquiring lock (another coroutine might have set it)
+        if _crit_available_cache is not None:
+            return _crit_available_cache
+        
+        try:
+            cmd = ['which', 'crit']
+            result = await run(cmd, check=False, capture_output=True, text=True)
+            _crit_available_cache = result.returncode == 0 and result.stdout.strip() != ''
+            return _crit_available_cache
+        except Exception:
+            _crit_available_cache = False
+            return False
 
 
 async def decode_criu_image(img_path: Path) -> Optional[Dict[str, Any]]:
@@ -134,14 +184,21 @@ async def decode_criu_image(img_path: Path) -> Optional[Dict[str, Any]]:
         if not crit_available:
             logger.warning(f"crit command not available. Cannot decode CRIU images. Please install crit (part of CRIU tools).")
             return None
-            
-        cmd = ['crit', 'decode', '-i', str(img_path)]
-        result = await run(cmd, check=False, capture_output=True, text=True)
+        
+        # Use semaphore to limit concurrent crit decode calls
+        async with _crit_decode_semaphore:
+            cmd = ['crit', 'decode', '-i', str(img_path)]
+            result = await run(cmd, check=False, capture_output=True, text=True)
         
         if result.returncode != 0:
+            stderr_str = str(result.stderr)
             # Check if it's a "command not found" error
-            if 'No such file or directory' in str(result.stderr) or 'command not found' in str(result.stderr).lower():
+            if 'No such file or directory' in stderr_str or 'command not found' in stderr_str.lower():
                 logger.warning(f"crit command not found. Please install crit (part of CRIU tools) to decode CRIU images.")
+            # Check if it's a raw data file (like pages.img) that can't be decoded
+            elif 'Unknown magic' in stderr_str or 'raw data' in stderr_str.lower() or 'pages.img' in stderr_str.lower():
+                # This is expected for raw memory page files - they can't be decoded, only hashed
+                logger.debug(f"File {img_path.name} contains raw data and cannot be decoded with crit (this is expected for pages.img files). Will use raw file hash instead.")
             else:
                 logger.warning(f"Failed to decode {img_path}: {result.stderr}")
             return None
@@ -162,9 +219,10 @@ async def decode_criu_image(img_path: Path) -> Optional[Dict[str, Any]]:
             # Check crit availability before retry
             crit_available = await check_crit_available()
             if crit_available:
-                # Retry the decode
-                cmd = ['crit', 'decode', '-i', str(img_path)]
-                result = await run(cmd, check=False, capture_output=True, text=True)
+                # Retry the decode with semaphore protection
+                async with _crit_decode_semaphore:
+                    cmd = ['crit', 'decode', '-i', str(img_path)]
+                    result = await run(cmd, check=False, capture_output=True, text=True)
                 if result.returncode == 0:
                     try:
                         decoded_data = json.loads(result.stdout)
@@ -179,34 +237,40 @@ async def decode_criu_image(img_path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def hash_criu_image(img_path: Path, component_name: str) -> Optional[str]:
+async def hash_criu_image(img_path: Path, component_name: str, return_decoded: bool = False) -> Union[Optional[str], Tuple[Optional[str], Optional[Dict[str, Any]]]]:
     """
     Decode and hash a CRIU image file.
     
-    If crit is not available, falls back to hashing the raw file content.
+    If crit is not available or the file contains raw data (like pages.img), 
+    falls back to hashing the raw file content.
     
     Args:
         img_path: Path to the .img file
         component_name: Name of the component for logging
+        return_decoded: If True, returns tuple (hash, decoded_data). If False, returns just hash.
         
     Returns:
-        SHA256 hash of canonicalized decoded JSON, or raw file hash if crit unavailable
+        If return_decoded=False: SHA256 hash of canonicalized decoded JSON, or raw file hash if crit unavailable or file is raw data
+        If return_decoded=True: Tuple of (hash, decoded_data) where decoded_data may be None
     """
     decoded = await decode_criu_image(img_path)
     if decoded is None:
-        # Fallback: hash the raw file if crit is not available
-        crit_available = await check_crit_available()
-        if not crit_available and img_path.exists():
-            logger.info(f"crit not available, using raw file hash for {component_name}: {img_path.name}")
+        # Fallback: hash the raw file if decoding failed
+        # This is expected for files like pages.img which contain raw memory page data
+        # and cannot be decoded with crit decode
+        if img_path.exists():
+            logger.debug(f"Using raw file hash for {component_name}: {img_path.name} (file cannot be decoded - may contain raw data)")
             try:
-                return hash_file(img_path)
+                hash_result = hash_file(img_path)
+                return (hash_result, None) if return_decoded else hash_result
             except Exception as e:
                 logger.warning(f"Failed to hash raw file {img_path}: {str(e)}")
-                return None
-        return None
+                return (None, None) if return_decoded else None
+        return (None, None) if return_decoded else None
     
     canonical = canonicalize_json(decoded)
-    return hash_string(canonical)
+    hash_result = hash_string(canonical)
+    return (hash_result, decoded) if return_decoded else hash_result
 
 
 async def hash_filesystem_diff(rootfs_diff_path: Path) -> Optional[str]:
@@ -333,15 +397,21 @@ async def process_checkpoint_directory(checkpoint_dir: Path, parent_dir: Path = 
                     component_contents_list = []
                     for match in sorted(matches):
                         logger.info(f"Processing {component_name}: {match.name} (path: {match})")
-                        img_hash = await hash_criu_image(match, component_name)
+                        # Decode once and reuse for both hash and content
+                        need_decoded = include_contents and contents is not None
+                        result = await hash_criu_image(match, component_name, return_decoded=need_decoded)
+                        if need_decoded:
+                            img_hash, decoded = result
+                        else:
+                            img_hash = result
+                            decoded = None
+                        
                         if img_hash:
                             component_hashes.append(f"{match.name}:{img_hash}")
                             logger.info(f"Successfully hashed {component_name}: {match.name} -> {img_hash[:16]}...")
-                            # Also decode and store content if requested
-                            if include_contents and contents is not None:
-                                decoded = await decode_criu_image(match)
-                                if decoded is not None:
-                                    component_contents_list.append({match.name: decoded})
+                            # Store decoded content if available
+                            if decoded is not None:
+                                component_contents_list.append({match.name: decoded})
                         else:
                             logger.warning(f"Failed to hash {component_name}: {match.name} (hash_criu_image returned None)")
                     if component_hashes:
@@ -383,14 +453,20 @@ async def process_checkpoint_directory(checkpoint_dir: Path, parent_dir: Path = 
                         except Exception as e:
                             logger.warning(f"Failed to hash bind.mounts: {str(e)}")
                     else:
-                        img_hash = await hash_criu_image(img_path, component_name)
+                        # Decode once and reuse for both hash and content
+                        need_decoded = include_contents and contents is not None
+                        result = await hash_criu_image(img_path, component_name, return_decoded=need_decoded)
+                        if need_decoded:
+                            img_hash, decoded = result
+                        else:
+                            img_hash = result
+                            decoded = None
+                        
                         if img_hash:
                             hashes[component_name] = img_hash
-                            # Also decode and store content if requested
-                            if include_contents and contents is not None:
-                                decoded = await decode_criu_image(img_path)
-                                if decoded is not None:
-                                    contents[component_name] = decoded
+                            # Store decoded content if available
+                            if decoded is not None:
+                                contents[component_name] = decoded
                             logger.info(f"Successfully hashed {component_name}")
                             found = True
                             break
@@ -1729,15 +1805,25 @@ async def fingerprint_checkpoint_use_case(
         if not request.force_regenerate and os.path.exists(fingerprint_file_path):
             try:
                 logger.info(f"Loading cached fingerprint from: {fingerprint_file_path}")
-                with open(fingerprint_file_path, 'r') as f:
-                    cached_data = json.load(f)
-                
-                # Verify the cached fingerprint is for the same checkpoint file
-                if cached_data.get('checkpoint_dir') == checkpoint_file_path:
-                    cached_fingerprint = cached_data
-                    logger.info("Using cached fingerprint")
+                # Check file size to detect potential corruption
+                file_size = os.path.getsize(fingerprint_file_path)
+                if file_size == 0:
+                    logger.warning(f"Cached fingerprint file is empty, regenerating...")
                 else:
-                    logger.info("Cached fingerprint is for a different checkpoint file, regenerating...")
+                    with open(fingerprint_file_path, 'r', encoding='utf-8') as f:
+                        cached_data = json.load(f)
+                    
+                    # Verify the cached fingerprint is for the same checkpoint file
+                    if cached_data.get('checkpoint_dir') == checkpoint_file_path:
+                        cached_fingerprint = cached_data
+                        logger.info("Using cached fingerprint")
+                    else:
+                        logger.info("Cached fingerprint is for a different checkpoint file, regenerating...")
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Failed to load cached fingerprint (corrupted JSON): "
+                    f"line {e.lineno}, column {e.colno}: {str(e)}. Regenerating..."
+                )
             except Exception as e:
                 logger.warning(f"Failed to load cached fingerprint: {str(e)}, regenerating...")
         
@@ -1815,12 +1901,18 @@ async def fingerprint_checkpoint_use_case(
         }
         
         # Save fingerprint to a file for future reference (cache)
+        # Convert bytes to JSON-serializable format before saving
         try:
-            with open(fingerprint_file_path, 'w') as f:
-                json.dump(forensic_data, f, indent=2)
+            # Make a deep copy and convert bytes to base64 strings
+            serializable_forensic_data = make_json_serializable(forensic_data)
+            with open(fingerprint_file_path, 'w', encoding='utf-8') as f:
+                json.dump(serializable_forensic_data, f, indent=2, ensure_ascii=False)
             logger.info(f"Forensic fingerprint saved to cache: {fingerprint_file_path}")
         except Exception as e:
             logger.warning(f"Failed to save fingerprint file: {str(e)}")
+            # Log more details about the error
+            import traceback
+            logger.warning(f"Traceback: {traceback.format_exc()}")
         
         # Determine if we should keep the extracted folder
         extracted_folder_path = None
@@ -2149,3 +2241,229 @@ async def compare_checkpoints_use_case(
     except Exception as e:
         logger.error(f"Error comparing checkpoints: {str(e)}")
         raise Exception(f"Failed to compare checkpoints: {str(e)}")
+
+
+class VerifyFingerprintRequest(BaseModel):
+    """Request model for verifying fingerprint checkpoint"""
+    pod_name: str
+    checkpoint_name: str
+
+
+class VerifyFingerprintResponse(BaseModel):
+    """Response model for verifying fingerprint checkpoint"""
+    success: bool
+    fingerprint_matches: bool
+    hash_mismatches: Dict[str, Dict[str, Any]]
+    content_mismatches: Dict[str, Dict[str, Any]]
+    verification_summary: Dict[str, Any]
+    message: str
+
+
+async def verify_fingerprint_checkpoint_use_case(
+    request: VerifyFingerprintRequest
+) -> VerifyFingerprintResponse:
+    """
+    Verify the correctness of a fingerprint checkpoint by re-processing the checkpoint
+    and comparing with the stored fingerprint JSON.
+    
+    This function:
+    1. Loads the cached fingerprint JSON file
+    2. Re-extracts and re-processes the checkpoint (force regeneration)
+    3. Compares newly generated hashes with stored hashes
+    4. Compares newly generated contents with stored contents
+    5. Reports any discrepancies
+    
+    Args:
+        request: VerifyFingerprintRequest containing pod_name and checkpoint_name
+        
+    Returns:
+        VerifyFingerprintResponse with verification results
+    """
+    extracted_dir = None
+    try:
+        # Get base directory and checkpoint path
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        checkpoint_dir = os.path.join(BASE_DIR, 'checkpoints', request.pod_name)
+        checkpoint_name_clean = request.checkpoint_name.replace('.tar', '')
+        checkpoint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name_clean}.tar")
+        fingerprint_file_path = os.path.join(checkpoint_dir, f"{checkpoint_name_clean}_fingerprint.json")
+        
+        logger.info(f"Verifying fingerprint for checkpoint: {checkpoint_file_path}")
+        
+        # Check if checkpoint file exists
+        if not os.path.exists(checkpoint_file_path):
+            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_file_path}")
+        
+        # Check if fingerprint file exists
+        if not os.path.exists(fingerprint_file_path):
+            raise FileNotFoundError(f"Fingerprint file not found: {fingerprint_file_path}. Please generate fingerprint first.")
+        
+        # Check file size to detect potential corruption
+        file_size = os.path.getsize(fingerprint_file_path)
+        if file_size == 0:
+            raise ValueError(f"Fingerprint file is empty: {fingerprint_file_path}. The file may be corrupted. Please regenerate the fingerprint.")
+        
+        # Load stored fingerprint with error handling for corrupted JSON
+        logger.info(f"Loading stored fingerprint from: {fingerprint_file_path}")
+        try:
+            with open(fingerprint_file_path, 'r', encoding='utf-8') as f:
+                stored_fingerprint_data = json.load(f)
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"Fingerprint file is corrupted (invalid JSON): {fingerprint_file_path}. "
+                f"Error at line {e.lineno}, column {e.colno}: {str(e)}. "
+                f"File size: {file_size} bytes. "
+                f"Please regenerate the fingerprint by clicking 'Regenerate' in the fingerprint options."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        except Exception as e:
+            error_msg = (
+                f"Failed to load fingerprint file: {fingerprint_file_path}. "
+                f"Error: {str(e)}. "
+                f"Please regenerate the fingerprint by clicking 'Regenerate' in the fingerprint options."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        stored_fingerprint = stored_fingerprint_data.get('fingerprint', '')
+        stored_hashes = stored_fingerprint_data.get('hashes', {})
+        stored_contents = stored_fingerprint_data.get('contents', {})
+        
+        logger.info(f"Stored fingerprint: {stored_fingerprint[:16]}...")
+        logger.info(f"Stored hashes for {len(stored_hashes)} components")
+        
+        # Re-generate fingerprint (force regeneration)
+        logger.info("Re-processing checkpoint to generate fresh fingerprint...")
+        fingerprint_request = FingerprintCheckpointRequest(
+            pod_name=request.pod_name,
+            checkpoint_name=request.checkpoint_name,
+            keep_extracted_folder=False,
+            force_regenerate=True  # Force regeneration to verify
+        )
+        
+        new_result = await fingerprint_checkpoint_use_case(fingerprint_request)
+        new_fingerprint = new_result.fingerprint
+        new_hashes = new_result.forensic_data.get('hashes', {})
+        # Convert new contents to JSON-serializable format (bytes -> base64) for comparison
+        new_contents = make_json_serializable(new_result.forensic_data.get('contents', {}))
+        
+        logger.info(f"New fingerprint: {new_fingerprint[:16]}...")
+        logger.info(f"New hashes for {len(new_hashes)} components")
+        
+        # Compare fingerprints
+        fingerprint_matches = stored_fingerprint == new_fingerprint
+        
+        # Compare component hashes
+        hash_mismatches = {}
+        all_components = set(list(stored_hashes.keys()) + list(new_hashes.keys()))
+        
+        for component in all_components:
+            stored_hash = stored_hashes.get(component)
+            new_hash = new_hashes.get(component)
+            
+            # Both None - match
+            if stored_hash is None and new_hash is None:
+                continue
+            
+            # One None, other has value - mismatch
+            if stored_hash is None or new_hash is None:
+                hash_mismatches[component] = {
+                    "stored_hash": stored_hash,
+                    "new_hash": new_hash,
+                    "status": "missing_in_one",
+                    "match": False
+                }
+            # Both have values - compare
+            elif stored_hash != new_hash:
+                hash_mismatches[component] = {
+                    "stored_hash": stored_hash,
+                    "new_hash": new_hash,
+                    "status": "hash_mismatch",
+                    "match": False
+                }
+        
+        # Compare component contents (if available)
+        # Normalize stored contents (may have base64 strings from JSON file, or bytes if corrupted)
+        stored_contents_normalized = make_json_serializable(stored_contents)
+        
+        content_mismatches = {}
+        all_content_components = set(list(stored_contents_normalized.keys()) + list(new_contents.keys()))
+        
+        for component in all_content_components:
+            stored_content = stored_contents_normalized.get(component)
+            new_content = new_contents.get(component)
+            
+            # Both None - match
+            if stored_content is None and new_content is None:
+                continue
+            
+            # One None, other has value - mismatch
+            if stored_content is None or new_content is None:
+                content_mismatches[component] = {
+                    "stored_content": stored_content,
+                    "new_content": new_content,
+                    "status": "missing_in_one",
+                    "match": False
+                }
+            else:
+                # Both are already normalized (bytes -> base64), so we can compare directly
+                # Compare canonicalized JSON
+                stored_canonical = canonicalize_json(stored_content)
+                new_canonical = canonicalize_json(new_content)
+                
+                if stored_canonical != new_canonical:
+                    content_mismatches[component] = {
+                        "stored_content": stored_content,
+                        "new_content": new_content,
+                        "stored_canonical": stored_canonical,
+                        "new_canonical": new_canonical,
+                        "status": "content_mismatch",
+                        "match": False
+                    }
+        
+        # Build verification summary
+        total_components = len(all_components)
+        matching_hashes = total_components - len(hash_mismatches)
+        matching_contents = len(all_content_components) - len(content_mismatches)
+        
+        verification_summary = {
+            "fingerprint_match": fingerprint_matches,
+            "total_components": total_components,
+            "matching_hashes": matching_hashes,
+            "mismatching_hashes": len(hash_mismatches),
+            "matching_contents": matching_contents,
+            "mismatching_contents": len(content_mismatches),
+            "verification_passed": fingerprint_matches and len(hash_mismatches) == 0 and len(content_mismatches) == 0
+        }
+        
+        # Build message
+        if verification_summary["verification_passed"]:
+            message = f"Verification passed: Fingerprint and all {total_components} component hashes match."
+        else:
+            issues = []
+            if not fingerprint_matches:
+                issues.append("fingerprint mismatch")
+            if len(hash_mismatches) > 0:
+                issues.append(f"{len(hash_mismatches)} hash mismatch(es)")
+            if len(content_mismatches) > 0:
+                issues.append(f"{len(content_mismatches)} content mismatch(es)")
+            message = f"Verification failed: {', '.join(issues)}"
+        
+        logger.info(f"Verification complete: {message}")
+        
+        return VerifyFingerprintResponse(
+            success=True,
+            fingerprint_matches=fingerprint_matches,
+            hash_mismatches=hash_mismatches,
+            content_mismatches=content_mismatches,
+            verification_summary=verification_summary,
+            message=message
+        )
+        
+    except FileNotFoundError as e:
+        logger.error(f"File not found during verification: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying fingerprint: {str(e)}")
+        raise Exception(f"Failed to verify fingerprint: {str(e)}")

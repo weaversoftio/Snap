@@ -15,6 +15,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useNavigate } from 'react-router-dom';
@@ -49,6 +50,7 @@ const CheckpointsScreen = ({ classes }) => {
   const [isLogsOpen, setLogsOpen] = useState(false);
   const [logs, setLogs] = useState(null);
   const [fingerprintResults, setFingerprintResults] = useState(null);
+  const [verificationResults, setVerificationResults] = useState(null);
   const [keepExtractedFolder, setKeepExtractedFolder] = useState(false);
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPod, setSelectedPod] = useState("all")
@@ -269,6 +271,41 @@ const CheckpointsScreen = ({ classes }) => {
     setDialogType("")
     setKeepExtractedFolder(false)
   }
+
+  const handleVerifyFingerprint = async () => {
+    const { pod_name, checkpoint_name } = currentCheckpoint || {}
+    if (!pod_name || !checkpoint_name) return
+    
+    try {
+      setActionRunning(true)
+      setDialogType("")
+      enqueueSnackbar(`Verifying fingerprint for: ${checkpoint_name}`, { variant: "info" })
+      
+      const checkpoint_name_no_ext = checkpoint_name.replace(".tar", "")
+      const result = await checkpointApi.verifyFingerprintCheckpoint({
+        pod_name,
+        checkpoint_name: checkpoint_name_no_ext
+      })
+      
+      setVerificationResults(result)
+      setDialogType("verifyFingerprint")
+      
+      if (result.verification_summary?.verification_passed) {
+        enqueueSnackbar("Verification passed: Fingerprint matches checkpoint content", { variant: "success" })
+      } else {
+        enqueueSnackbar(`Verification failed: ${result.message}`, { variant: "error" })
+      }
+    } catch (error) {
+      console.error("Failed to verify fingerprint:", error)
+      enqueueSnackbar(`Failed to verify fingerprint: ${error.message || 'Unknown error'}`, { variant: "error" })
+    }
+    setActionRunning(false)
+  }
+
+  const closeVerification = () => {
+    setVerificationResults(null)
+    setDialogType("")
+  }
   const closeLogs = () => {
     setLogsOpen(false);
     setLogs(null);
@@ -284,6 +321,7 @@ const CheckpointsScreen = ({ classes }) => {
     setRegistryUsername("")
     setRegistryPassword("")
     setFingerprintResults(null)
+    setVerificationResults(null)
     setKeepExtractedFolder(false)
   }
 
@@ -415,45 +453,91 @@ const CheckpointsScreen = ({ classes }) => {
             Useful for debugging and detailed analysis.
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2, flexWrap: 'wrap' }}>
             <Button variant="outlined" onClick={handleClearDialog}>
               Cancel
             </Button>
             {hasExistingFingerprint && (
-              <Button 
-                variant="outlined" 
-                color="primary"
-                onClick={async () => {
-                  // Load cached fingerprint
-                  try {
-                    setDialogType("")
-                    setActionRunning(true)
-                    const checkpoint_name_no_ext = currentCheckpoint.checkpoint_name.replace(".tar", "")
-                    const result = await checkpointApi.fingerprintCheckpoint({
-                      pod_name: currentCheckpoint.pod_name,
-                      checkpoint_name: checkpoint_name_no_ext,
-                      keep_extracted_folder: false,
-                      force_regenerate: false
-                    })
-                    setFingerprintResults(result)
-                    setDialogType("fingerprint")
-                    enqueueSnackbar("Loaded cached fingerprint", { variant: "success" })
-                  } catch (error) {
-                    enqueueSnackbar(`Failed to load cached fingerprint: ${error.message}`, { variant: "error" })
-                  }
-                  setActionRunning(false)
-                }}
-              >
-                View Cached
-              </Button>
+              <>
+                <Button 
+                  variant="outlined" 
+                  color="primary"
+                  onClick={async () => {
+                    // Load cached fingerprint
+                    try {
+                      setDialogType("")
+                      setActionRunning(true)
+                      const checkpoint_name_no_ext = currentCheckpoint.checkpoint_name.replace(".tar", "")
+                      const result = await checkpointApi.fingerprintCheckpoint({
+                        pod_name: currentCheckpoint.pod_name,
+                        checkpoint_name: checkpoint_name_no_ext,
+                        keep_extracted_folder: false,
+                        force_regenerate: false
+                      })
+                      setFingerprintResults(result)
+                      setDialogType("fingerprint")
+                      enqueueSnackbar("Loaded cached fingerprint", { variant: "success" })
+                    } catch (error) {
+                      enqueueSnackbar(`Failed to load cached fingerprint: ${error.message}`, { variant: "error" })
+                    }
+                    setActionRunning(false)
+                  }}
+                  disabled={isActionRunning}
+                >
+                  View Cached
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  color="secondary"
+                  onClick={handleVerifyFingerprint}
+                  disabled={isActionRunning}
+                >
+                  Verify
+                </Button>
+              </>
             )}
-            <Button variant="contained" onClick={handleConfirmFingerprint}>
+            <Button 
+              variant="contained" 
+              onClick={handleConfirmFingerprint}
+              disabled={isActionRunning}
+            >
               {hasExistingFingerprint ? "Regenerate" : "Generate Fingerprint"}
             </Button>
           </Box>
         </Box>
       </DialogComponent>
     )
+  }
+
+  const handleDownloadResults = () => {
+    if (!fingerprintResults) return
+    
+    const resultsToDownload = {
+      checkpoint: currentCheckpoint?.checkpoint_name,
+      pod: currentCheckpoint?.pod_name,
+      fingerprint: fingerprintResults.fingerprint,
+      extracted_folder_path: fingerprintResults.extracted_folder_path,
+      components_processed: fingerprintResults.forensic_data?.components_processed,
+      components_total: fingerprintResults.forensic_data?.components_total,
+      forensic_data: fingerprintResults.forensic_data
+    }
+    
+    const formattedResults = JSON.stringify(resultsToDownload, null, 2)
+    const blob = new Blob([formattedResults], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    
+    const checkpointName = currentCheckpoint?.checkpoint_name?.replace('.tar', '') || 'checkpoint'
+    const podName = currentCheckpoint?.pod_name || 'pod'
+    link.download = `fingerprint-results_${podName}_${checkpointName}_${new Date().toISOString().split('T')[0]}.json`
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    enqueueSnackbar('Results downloaded successfully!', { variant: 'success' })
   }
 
   const renderFingerprintResults = () => {
@@ -466,9 +550,19 @@ const CheckpointsScreen = ({ classes }) => {
         paperProps={{ maxWidth: 1000, maxHeight: '90vh' }}
       >
         <Box sx={{ p: 2 }}>
-          <Typography variant="h5" gutterBottom>
-            Forensic Fingerprint Results
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h5">
+              Forensic Fingerprint Results
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadResults}
+              size="small"
+            >
+              Download Results
+            </Button>
+          </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Checkpoint: {currentCheckpoint?.checkpoint_name} | Pod: {currentCheckpoint?.pod_name}
           </Typography>
@@ -513,6 +607,221 @@ const CheckpointsScreen = ({ classes }) => {
               </Box>
             </Box>
           )}
+        </Box>
+      </DialogComponent>
+    )
+  }
+
+  const renderVerificationResults = () => {
+    if (!verificationResults) return null
+    
+    const { verification_summary, hash_mismatches, content_mismatches, fingerprint_matches, message } = verificationResults
+    const passed = verification_summary?.verification_passed || false
+    
+    return (
+      <DialogComponent 
+        open={dialogType === "verifyFingerprint"} 
+        onClose={closeVerification} 
+        paperProps={{ maxWidth: 1000, maxHeight: '90vh' }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h5">
+              Fingerprint Verification Results
+            </Typography>
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Checkpoint: {currentCheckpoint?.checkpoint_name} | Pod: {currentCheckpoint?.pod_name}
+          </Typography>
+          
+          {/* Verification Status */}
+          <Box sx={{ 
+            mb: 2, 
+            p: 2, 
+            bgcolor: passed ? '#e8f5e9' : '#ffebee', 
+            borderRadius: 1,
+            border: `2px solid ${passed ? '#4caf50' : '#f44336'}`
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Typography variant="h6" color={passed ? 'success.main' : 'error.main'}>
+                {passed ? '✓ Verification Passed' : '✗ Verification Failed'}
+              </Typography>
+            </Box>
+            <Typography variant="body1" fontWeight="bold">
+              {message}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Fingerprint Match: {fingerprint_matches ? 'Yes' : 'No'}
+            </Typography>
+          </Box>
+          
+          {/* Summary */}
+          {verification_summary && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="h6" gutterBottom>
+                Verification Summary
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="body2">
+                    <strong>Total Components:</strong> {verification_summary.total_components}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="success.main">
+                    <strong>Matching Hashes:</strong> {verification_summary.matching_hashes}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="error.main">
+                    <strong>Mismatching Hashes:</strong> {verification_summary.mismatching_hashes}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="success.main">
+                    <strong>Matching Contents:</strong> {verification_summary.matching_contents}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="error.main">
+                    <strong>Mismatching Contents:</strong> {verification_summary.mismatching_contents}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+          
+          {/* Hash Mismatches */}
+          {Object.keys(hash_mismatches || {}).length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom color="error.main">
+                Hash Mismatches ({Object.keys(hash_mismatches).length})
+              </Typography>
+              <Box sx={{ 
+                maxHeight: '30vh', 
+                overflowY: 'auto', 
+                border: '1px solid #e0e0e0', 
+                borderRadius: 1,
+                p: 2,
+                bgcolor: '#fff3f3'
+              }}>
+                {Object.entries(hash_mismatches).map(([component, mismatch]) => (
+                  <Box key={component} sx={{ mb: 2, p: 1, bgcolor: '#fff', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" color="error.main">
+                      {component}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      <strong>Stored:</strong> {mismatch.stored_hash || 'None'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      <strong>New:</strong> {mismatch.new_hash || 'None'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Status: {mismatch.status}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+          
+          {/* Content Mismatches */}
+          {Object.keys(content_mismatches || {}).length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" gutterBottom color="error.main">
+                Content Mismatches ({Object.keys(content_mismatches).length})
+              </Typography>
+              <Box sx={{ 
+                maxHeight: '30vh', 
+                overflowY: 'auto', 
+                border: '1px solid #e0e0e0', 
+                borderRadius: 1,
+                p: 2,
+                bgcolor: '#fff3f3'
+              }}>
+                {Object.entries(content_mismatches).map(([component, mismatch]) => (
+                  <Box key={component} sx={{ mb: 2, p: 1, bgcolor: '#fff', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" color="error.main">
+                      {component}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Status: {mismatch.status}
+                    </Typography>
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" fontWeight="bold">Stored Content:</Typography>
+                      <Box sx={{ 
+                        maxHeight: '15vh', 
+                        overflowY: 'auto',
+                        mt: 0.5,
+                        p: 1,
+                        bgcolor: '#fafafa',
+                        borderRadius: 0.5,
+                        border: '1px solid #e0e0e0'
+                      }}>
+                        <ReactJson 
+                          src={mismatch.stored_content} 
+                          theme="rjv-default"
+                          collapsed={2}
+                          displayDataTypes={false}
+                          displayObjectSize={true}
+                          enableClipboard={true}
+                          style={{ fontSize: '12px' }}
+                        />
+                      </Box>
+                    </Box>
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" fontWeight="bold">New Content:</Typography>
+                      <Box sx={{ 
+                        maxHeight: '15vh', 
+                        overflowY: 'auto',
+                        mt: 0.5,
+                        p: 1,
+                        bgcolor: '#fafafa',
+                        borderRadius: 0.5,
+                        border: '1px solid #e0e0e0'
+                      }}>
+                        <ReactJson 
+                          src={mismatch.new_content} 
+                          theme="rjv-default"
+                          collapsed={2}
+                          displayDataTypes={false}
+                          displayObjectSize={true}
+                          enableClipboard={true}
+                          style={{ fontSize: '12px' }}
+                        />
+                      </Box>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+          
+          {/* Full Results JSON */}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Full Verification Results
+            </Typography>
+            <Box sx={{ 
+              maxHeight: '40vh', 
+              overflowY: 'auto', 
+              border: '1px solid #e0e0e0', 
+              borderRadius: 1,
+              p: 2,
+              bgcolor: '#fafafa'
+            }}>
+              <ReactJson 
+                src={verificationResults} 
+                theme="rjv-default"
+                collapsed={1}
+                displayDataTypes={false}
+                displayObjectSize={true}
+                enableClipboard={true}
+                style={{ fontSize: '14px' }}
+              />
+            </Box>
+          </Box>
         </Box>
       </DialogComponent>
     )
@@ -581,6 +890,7 @@ const CheckpointsScreen = ({ classes }) => {
       scanResults: renderScanResults(),
       fingerprintOptions: renderFingerprintOptions(),
       fingerprint: renderFingerprintResults(),
+      verifyFingerprint: renderVerificationResults(),
       deleteConfirm: renderDeleteConfirm()
     }
     return dialogContent[dialogType]
@@ -696,6 +1006,48 @@ const CheckpointsScreen = ({ classes }) => {
                   />
                 </IconButton>
               </Tooltip>
+              {has_fingerprint && (
+                <Tooltip title="Verify Fingerprint">
+                  <IconButton 
+                    onClick={async () => {
+                      setCurrentCheckpoint({ pod_name, checkpoint_name })
+                      try {
+                        setActionRunning(true)
+                        enqueueSnackbar(`Verifying fingerprint for: ${checkpoint_name}`, { variant: "info" })
+                        
+                        const checkpoint_name_no_ext = checkpoint_name.replace(".tar", "")
+                        const result = await checkpointApi.verifyFingerprintCheckpoint({
+                          pod_name,
+                          checkpoint_name: checkpoint_name_no_ext
+                        })
+                        
+                        setVerificationResults(result)
+                        setDialogType("verifyFingerprint")
+                        
+                        if (result.verification_summary?.verification_passed) {
+                          enqueueSnackbar("Verification passed: Fingerprint matches checkpoint content", { variant: "success" })
+                        } else {
+                          enqueueSnackbar(`Verification failed: ${result.message}`, { variant: "error" })
+                        }
+                      } catch (error) {
+                        console.error("Failed to verify fingerprint:", error)
+                        enqueueSnackbar(`Failed to verify fingerprint: ${error.message || 'Unknown error'}`, { variant: "error" })
+                      }
+                      setActionRunning(false)
+                    }}
+                    size="small"
+                    disabled={isActionRunning}
+                    sx={{ 
+                      '&:hover': { bgcolor: 'secondary.light' }
+                    }}
+                  >
+                    <VerifiedUserIcon 
+                      fontSize="small" 
+                      color="secondary" 
+                    />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="Upload Checkpoint">
                 <IconButton 
                   onClick={() => handlePushCheckpoint(pod_name, checkpoint_name)}

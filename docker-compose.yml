@@ -45,7 +45,7 @@ services:
       dockerfile: Dockerfile
 
     container_name: snapui
-    image: docker.io/frenzy669/snapui:${BRANCH_NAME:-main}
+    image: 192.168.33.204:8082/snapui:${BRANCH_NAME:-main}
     ports:
       - "0.0.0.0:8080:8080"
     environment:

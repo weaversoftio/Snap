@@ -152,6 +152,16 @@ const getComponentDiff = async (pod_name_1, checkpoint_name_1, pod_name_2, check
     }
 })
 
+const verifyFingerprintCheckpoint = async (data) => new Promise(async (resolve, reject) => {
+    try {
+        const response = await api.post(`/checkpoint/fingerprint/verify`, data)
+        if( !response.data ) return reject()
+        resolve(response.data)
+    } catch (err) {
+        reject(err)
+    }
+})
+
 export const checkpointApi = {
     getById,
     getList,
@@ -165,6 +175,7 @@ export const checkpointApi = {
     deleteCheckpoint,
     fingerprintCheckpoint,
     compareCheckpointFingerprints,
-    getComponentDiff
+    getComponentDiff,
+    verifyFingerprintCheckpoint
 
 }

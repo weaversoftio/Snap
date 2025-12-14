@@ -1,0 +1,27 @@
+Snap - Kubernetes Pod Checkpoint and Restore Operator
+Copyright (C) 2025 Weaversoft.io
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3 of the License (AGPLv3).
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------
+
+Commercial Licensing Options
+----------------------------
+For organizations that prefer to use Snap under a commercial license
+(without AGPL obligations, or for closed-source integration), Weaversoft.io
+offers a Commercial License with premium features and support.
+
+To inquire about commercial licensing or partnership, contact:
+📧 sales@weaversoft.io
+🌐 https://weaversoft.io/Snap
+

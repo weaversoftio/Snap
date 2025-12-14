@@ -16,8 +16,10 @@ from flows.checkpoint.fingerprint_checkpoint import (
     fingerprint_checkpoint_use_case,
     compare_checkpoints_use_case,
     get_component_diff,
+    verify_fingerprint_checkpoint_use_case,
     FingerprintCheckpointRequest,
-    CompareCheckpointsRequest
+    CompareCheckpointsRequest,
+    VerifyFingerprintRequest
 )
 from middleware.verify_token import verify_token
 from routes.websocket import send_progress
@@ -609,3 +611,60 @@ async def get_component_diff_endpoint(
         })
         logger.error(f"SnapAPI: Failed to get component diff: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get component diff: {str(e)}")
+
+
+@router.post("/fingerprint/verify")
+async def verify_fingerprint_checkpoint(
+    request: VerifyFingerprintRequest,
+    username: str = Depends(verify_token)
+):
+    """
+    Verify the correctness of a fingerprint checkpoint by re-processing the checkpoint
+    and comparing with the stored fingerprint JSON.
+    
+    This endpoint:
+    - Loads the cached fingerprint JSON file
+    - Re-extracts and re-processes the checkpoint
+    - Compares newly generated hashes with stored hashes
+    - Compares newly generated contents with stored contents
+    - Reports any discrepancies
+    
+    Use this to verify that the fingerprint JSON accurately represents the checkpoint content.
+    """
+    try:
+        await send_progress(username, {
+            "progress": 10,
+            "task_name": "Verify Fingerprint",
+            "message": f"Loading stored fingerprint for: {request.checkpoint_name}"
+        })
+        
+        await send_progress(username, {
+            "progress": 30,
+            "task_name": "Verify Fingerprint",
+            "message": "Re-processing checkpoint to generate fresh fingerprint..."
+        })
+        
+        result = await verify_fingerprint_checkpoint_use_case(request)
+        
+        await send_progress(username, {
+            "progress": 100,
+            "task_name": "Verify Fingerprint",
+            "message": result.message
+        })
+        
+        return result
+    except FileNotFoundError as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Verify Fingerprint",
+            "message": f"File not found: {str(e)}"
+        })
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        await send_progress(username, {
+            "progress": "failed",
+            "task_name": "Verify Fingerprint",
+            "message": f"Failed to verify fingerprint: {str(e)}"
+        })
+        logger.error(f"SnapAPI: Failed to verify fingerprint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify fingerprint: {str(e)}")
