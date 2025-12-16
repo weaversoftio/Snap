@@ -7,9 +7,9 @@ replicaCount: 1
 
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
-    repository: 192.168.33.204:8082/snapapi
-    tag: "feature-rootless-oci-builder"
-    pullPolicy: Always
+  repository: weaversoft/snapapi
+  tag: "feature-rootless-oci-builder"
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
 checkpointPath: /opt/checkpoints
 configPath: /opt/config

@@ -59,7 +59,7 @@ def sanitize_command_for_logging(command):
     cmd_str = ' '.join(shlex.quote(str(arg)) for arg in sanitized_cmd)
     return sanitized_cmd, cmd_str
 
-async def run(command, check=True, capture_output=True, text=True):
+async def run(command, check=True, capture_output=True, text=True, timeout=300, stdin_devnull=True):
     print()
     print("┌" + "─" * 58 + "┐")
     print("│" + "  COMMAND START".center(58) + "│")
@@ -74,12 +74,22 @@ async def run(command, check=True, capture_output=True, text=True):
         # This is especially important for oc commands that need authentication
         process = await asyncio.create_subprocess_exec(
             *command,
+            stdin=asyncio.subprocess.DEVNULL if stdin_devnull else None,
             stdout=asyncio.subprocess.PIPE if capture_output else None,
             stderr=asyncio.subprocess.PIPE if capture_output else None,
             env=os.environ.copy()  # Explicitly pass environment variables
         )
         
-        stdout, stderr = await process.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            process.kill()
+            try:
+                await process.communicate()
+            finally:
+                print(f"SnapAPI: DEBUG - Command timed out after {timeout}s, killed process.")
+                _, sanitized_cmd_str = sanitize_command_for_logging(command)
+                raise RuntimeError(f"Command '{sanitized_cmd_str}' timed out after {timeout}s")
         
         if check and process.returncode != 0:
             error_msg = stderr.decode() if stderr else ''
