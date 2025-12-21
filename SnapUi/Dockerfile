@@ -31,6 +31,10 @@ LABEL name="snapui" \
 # Switch to root to perform setup operations
 USER root
 
+# Update all packages to fix security vulnerabilities (CVE-2025-6965, CVE-2025-59375, CVE-2025-8176)
+# This updates sqlite, expat, libtiff and other system packages to their latest patched versions
+RUN dnf update -y && dnf clean all
+
 # Create licenses directory and add license file
 RUN mkdir -p /licenses
 COPY LICENSE /licenses/LICENSE

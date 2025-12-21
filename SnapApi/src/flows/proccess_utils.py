@@ -59,6 +59,9 @@ def sanitize_command_for_logging(command):
     cmd_str = ' '.join(shlex.quote(str(arg)) for arg in sanitized_cmd)
     return sanitized_cmd, cmd_str
 
+# Lock to prevent concurrent oc login operations (prevents kubeconfig file locking issues)
+_oc_login_lock = asyncio.Lock()
+
 async def run(command, check=True, capture_output=True, text=True, timeout=300, stdin_devnull=True):
     print()
     print("┌" + "─" * 58 + "┐")
@@ -68,7 +71,38 @@ async def run(command, check=True, capture_output=True, text=True, timeout=300, 
     _, sanitized_cmd_str = sanitize_command_for_logging(command)
     print(f"{sanitized_cmd_str}")
 
+    # Check if this is an oc login command that needs locking
+    is_oc_login = (
+        len(command) > 0 and 
+        command[0] in ("oc", "kubectl") and 
+        len(command) > 1 and 
+        command[1] == "login"
+    )
     
+    try:
+        # Use lock for oc login commands to prevent concurrent kubeconfig writes
+        if is_oc_login:
+            async with _oc_login_lock:
+                return await _execute_command(
+                    command, check, capture_output, text, timeout, stdin_devnull, sanitized_cmd_str
+                )
+        else:
+            return await _execute_command(
+                command, check, capture_output, text, timeout, stdin_devnull, sanitized_cmd_str
+            )
+    except RuntimeError:
+        # Re-raise RuntimeError as-is (it already has the error message)
+        raise
+    except Exception as e:
+        # Sanitize exception message to mask any tokens
+        sanitized_exception_msg = sanitize_string_for_logging(str(e))
+        print(f"SnapAPI: DEBUG - Exception during command execution: {type(e).__name__}: {sanitized_exception_msg}")
+        # Sanitize command in error message
+        _, sanitized_cmd_str = sanitize_command_for_logging(command)
+        raise RuntimeError(f"Command '{sanitized_cmd_str}' failed with error: {sanitized_exception_msg}")
+
+async def _execute_command(command, check, capture_output, text, timeout, stdin_devnull, sanitized_cmd_str):
+    """Internal function to execute the command."""
     try:
         # Explicitly pass environment to ensure oc/kubectl can find kubeconfig
         # This is especially important for oc commands that need authentication
@@ -119,17 +153,8 @@ async def run(command, check=True, capture_output=True, text=True, timeout=300, 
             stderr,
             sanitized_cmd_str
         )
-        
     except RuntimeError:
-        # Re-raise RuntimeError as-is (it already has the error message)
         raise
-    except Exception as e:
-        # Sanitize exception message to mask any tokens
-        sanitized_exception_msg = sanitize_string_for_logging(str(e))
-        print(f"SnapAPI: DEBUG - Exception during command execution: {type(e).__name__}: {sanitized_exception_msg}")
-        # Sanitize command in error message
-        _, sanitized_cmd_str = sanitize_command_for_logging(command)
-        raise RuntimeError(f"Command '{sanitized_cmd_str}' failed with error: {sanitized_exception_msg}")
 
 class AsyncProcessResult:
     def __init__(self, returncode, stdout, stderr, args):

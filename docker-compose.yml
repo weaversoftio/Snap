@@ -4,7 +4,7 @@ services:
       context: ./SnapApi
       dockerfile: Dockerfile
     container_name: snapapi
-    image: weaversoft/snapapi:${BRANCH_NAME:-main}
+    image: weaversoftio/snapapi:${BRANCH_NAME:-main}
     stop_grace_period: 2s
     ports:
       - "8000:8000"
@@ -45,7 +45,7 @@ services:
       dockerfile: Dockerfile
 
     container_name: snapui
-    image: weaversoft/snapui:${BRANCH_NAME:-main}
+    image: weaversoftio/snapui:${BRANCH_NAME:-main}
     ports:
       - "0.0.0.0:8080:8080"
     environment:

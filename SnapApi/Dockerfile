@@ -19,6 +19,10 @@ LABEL name="1001_1001api" \
 
 USER root
 
+# Update all packages to fix security vulnerabilities (CVE-2025-6965, CVE-2025-59375, CVE-2025-8176)
+# This updates sqlite, expat, libtiff and other system packages to their latest patched versions
+RUN dnf update -y && dnf clean all
+
 # Install system dependencies
 RUN dnf install -y crit wget buildah tar gzip skopeo --allowerasing curl libselinux-utils container-selinux \
     glibc glibc-langpack-en && dnf clean all
