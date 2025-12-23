@@ -499,7 +499,7 @@ const UserScreen = ({ classes }) => {
                   label="AD Server"
                   value={adServer}
                   onChange={(e) => setAdServer(e.target.value)}
-                  placeholder="e.g., 192.168.33.209 or ad.company.com"
+                  placeholder="e.g. ad.company.com"
                   disabled={adConfigLoading}
                   required
                 />

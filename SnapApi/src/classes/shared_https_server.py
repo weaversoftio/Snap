@@ -142,6 +142,39 @@ class SharedHTTPServerManager:
         self.hook_handlers: Dict[str, Any] = {}  # hook_name -> handler info
         self._lock = threading.Lock()
     
+    def _get_webhook_hostname(self) -> str:
+        """
+        Extract webhook hostname from environment variables.
+        Checks SNAP_WEBHOOK_URL first, then falls back to SNAP_API_URL.
+        
+        Returns:
+            str: The webhook hostname (without port or path)
+        """
+        import os
+        
+        # Check if SNAP_WEBHOOK_URL is set (explicit webhook hostname)
+        snap_webhook_url = os.getenv("SNAP_WEBHOOK_URL")
+        if snap_webhook_url:
+            # Extract hostname from URL
+            hostname = snap_webhook_url.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+            logger.info(f'[SharedHTTPS] Using webhook hostname from SNAP_WEBHOOK_URL: {hostname}')
+            return hostname
+        
+        # Fall back to SNAP_API_URL and generate webhook hostname
+        snap_api_url = os.getenv("SNAP_API_URL", "http://localhost:8000")
+        api_host = snap_api_url.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+        
+        # Determine webhook hostname based on whether a port is specified in the URL
+        if ":" in snap_api_url.split("//")[-1]:
+            # Port specified - direct service access, use same host
+            webhook_hostname = api_host
+        else:
+            # No port - using route/ingress, replace "snapapi" with "snapapi-webhook"
+            webhook_hostname = api_host.replace("snapapi", "snapapi-webhook", 1)
+        
+        logger.info(f'[SharedHTTPS] Generated webhook hostname from SNAP_API_URL: {webhook_hostname}')
+        return webhook_hostname
+    
     def generate_shared_certificates(self) -> Dict[str, str]:
         """
         Generate shared self-signed certificates for all hooks.
@@ -162,21 +195,33 @@ class SharedHTTPServerManager:
             key_size=2048,
         )
         
+        # Extract webhook hostname from environment variables dynamically
+        webhook_hostname = self._get_webhook_hostname()
+        logger.info(f'[SharedHTTPS] Generating certificate for webhook hostname: {webhook_hostname}')
+        
         # Create certificate
         subject = issuer = x509.Name([
             x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
             x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "CA"),
             x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, "SnapAPI"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "snaphook.weaversoft.io"),
+            x509.NameAttribute(NameOID.COMMON_NAME, webhook_hostname),
         ])
         
-        # Add Subject Alternative Names
+        # Add Subject Alternative Names - dynamically include webhook hostname
         san_list = [
-            x509.DNSName("snaphook.weaversoft.io"),
+            x509.DNSName(webhook_hostname),
             x509.DNSName("localhost"),
             x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
         ]
+        
+        # Also add service DNS names for internal cluster communication
+        san_list.extend([
+            x509.DNSName("snapapi"),
+            x509.DNSName("snapapi.snap"),
+            x509.DNSName("snapapi.snap.svc"),
+            x509.DNSName("snapapi.snap.svc.cluster.local"),
+        ])
         
         # Dynamically extract IP addresses from SNAP_API_URL environment variable
         ip_addresses = []

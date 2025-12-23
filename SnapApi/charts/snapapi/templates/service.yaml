@@ -7,9 +7,13 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 8000
+    - port: {{ .Values.service.apiPort }}
       targetPort: api
       protocol: TCP
       name: api
+    - port: {{ .Values.service.webhookPort }}
+      targetPort: webhook
+      protocol: TCP
+      name: webhook
   selector:
     {{- include "snapapi.selectorLabels" . | nindent 4 }}

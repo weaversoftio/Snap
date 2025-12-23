@@ -34,41 +34,49 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            privileged: true
-            runAsUser: 0
-            capabilities:
-              add:
-              - SYS_ADMIN
-          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: api
               containerPort: 8000
               protocol: TCP
+            - name: webhook
+              containerPort: 8443
+              protocol: TCP
           env:
-            - name: SNAP_API_URL
-              value: {{ .Values.env.SNAP_API_URL }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- with .Values.volumeMounts }}
           volumeMounts:
-            - name: app-volume
-              mountPath: /app/checkpoints
-            - name: config-volume
-              mountPath: /app/config
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       volumes:
-        - name: app-volume
-          hostPath:
-            path: {{ .Values.checkpointPath }}
-            type: DirectoryOrCreate
+        {{- if .Values.persistence.enabled }}
         - name: config-volume
-          hostPath:
-            path: {{ .Values.configPath }}
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: {{ if .Values.persistence.config.existingClaim }}{{ .Values.persistence.config.existingClaim }}{{ else }}{{ include "snapapi.fullname" . }}-config{{ end }}
+        - name: checkpoints-volume
+          persistentVolumeClaim:
+            claimName: {{ if .Values.persistence.checkpoints.existingClaim }}{{ .Values.persistence.checkpoints.existingClaim }}{{ else }}{{ include "snapapi.fullname" . }}-checkpoints{{ end }}
+        {{- else }}
+        {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

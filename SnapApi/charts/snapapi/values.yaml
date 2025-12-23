@@ -7,15 +7,13 @@ replicaCount: 1
 
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: weaversoft/snapapi
-  tag: "feature-rootless-oci-builder"
+  repository: docker.io/weaversoftio/snapapi
+  tag: "main"
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-checkpointPath: /opt/checkpoints
-configPath: /opt/config
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets:
-  - name: nexus-registry-secret
+  - name: dockerhub
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: ""
@@ -23,14 +21,15 @@ fullnameOverride: ""
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
   # Specifies whether a service account should be created
-  create: true
+  create: false
   # Automatically mount a ServiceAccount's API credentials?
   automount: true
   # Annotations to add to the service account
   annotations: {}
   # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  # If not set and create is false, "default" will be used
+  # Set this to your existing service account name
+  name: "snapapi-serviceaccount"
 
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
@@ -39,16 +38,20 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
-podSecurityContext: {}
-
-securityContext: {}
+# Pod-level security context for OpenShift compatibility
+# Sets fsGroup to ensure mounted volumes are writable by the container
+# OpenShift runs containers with random UIDs but always adds them to group 0
+# For more information: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+podSecurityContext:
+  fsGroup: 0
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
   type: NodePort
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  port: 8000
+  apiPort: 8000
+  webhookPort: 8443
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
@@ -82,12 +85,20 @@ resources: {}
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
   httpGet:
-    path: /
-    port: http
+    path: /docs
+    port: api
+  initialDelaySeconds: 40
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
 readinessProbe:
   httpGet:
-    path: /
-    port: http
+    path: /docs
+    port: api
+  initialDelaySeconds: 40
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
@@ -97,14 +108,23 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
+# Persistent storage configuration
+persistence:
+  enabled: true
+  # Storage class to use for PVCs (leave empty for default storage class)
+  storageClass: ""
+  config:
+    size: 1Gi
+    # Use existing PVC instead of creating a new one
+    existingClaim: ""
+  checkpoints:
+    size: 10Gi
+    # Use existing PVC instead of creating a new one
+    existingClaim: ""
+
 # Additional volumes on the output Deployment definition.
-volumes: 
-# empty dir volume for config directory
-- name: config-volume
-  emptyDir: {}
-# empty dir volume for checkpoints directory
-- name: checkpoints-volume
-  emptyDir: {}
+# Note: When persistence.enabled is true, PVCs will be used instead
+volumes: []
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts: 
@@ -119,13 +139,21 @@ tolerations: []
 
 affinity: {}
 
-# Environment variables for snap registry configuration
+# Environment variables for snap configuration
 env:
-  cluster_cache: "crc"
-  WATCHER_CLUSTER_NAME: "crc"
+  # SnapApi configuration
+  SNAP_ORIGINS: "http://localhost:8080,http://snapui.apps-crc.testing,*"
+  SNAP_API_URL: "http://snapapi.apps-crc.testing"
+  # SSL configuration (set to 'true' to enable SSL verification)
+  KUBE_VERIFY_SSL: "false"
+  # Cluster status check version requirements
+  CRIO_VERSION_REQUIRED: "1.31.2"
+  RUNC_VERSION_REQUIRED: "1.2.4"
+
 
 
 # This block is for setting up OpenShift routes for external access
 route:
   enabled: true
   host: snapapi.apps-crc.testing
+  webhookHost: snapapi-webhook.apps-crc.testing

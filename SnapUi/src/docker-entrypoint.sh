@@ -3,7 +3,6 @@
 # API_URL and WS_URL are optional - if not set or empty, the UI will use relative paths
 # This allows the app to work behind a reverse proxy without configuration
 # For reverse proxy setups, set API_URL="" and WS_URL="" (empty strings)
-# For direct access, set them to the full URLs (e.g., http://192.168.33.209:8000)
 
 # Set defaults to empty if not provided (for reverse proxy mode)
 API_URL=${API_URL:-}

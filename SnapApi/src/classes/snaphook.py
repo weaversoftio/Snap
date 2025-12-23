@@ -79,12 +79,25 @@ class SnapHook:
     
     def _generate_webhook_url(self) -> str:
         """
-        Generate webhook URL from SNAP_API_URL environment variable.
+        Generate webhook URL from SNAP_WEBHOOK_URL or SNAP_API_URL environment variable.
         
         Returns:
             Generated webhook URL
         """
         import os
+        
+        # Check if SNAP_WEBHOOK_URL is explicitly set
+        snap_webhook_url = os.getenv("SNAP_WEBHOOK_URL")
+        if snap_webhook_url:
+            # Ensure it has the /mutate path
+            if not snap_webhook_url.endswith("/mutate"):
+                webhook_url = f"{snap_webhook_url}/mutate"
+            else:
+                webhook_url = snap_webhook_url
+            logger.info(f'[SnapHook] Using explicit webhook URL from SNAP_WEBHOOK_URL: {webhook_url}')
+            return webhook_url
+        
+        # Otherwise, generate from SNAP_API_URL
         snap_api_url = os.getenv("SNAP_API_URL", "http://localhost:8000")
         
         # Extract host and port from SNAP_API_URL
@@ -100,10 +113,17 @@ class SnapHook:
             host, port = host_port.split(":", 1)
         else:
             host = host_port
-            port = "8000"  # Default API port
+            port = None  # No port means using route/ingress
         
-        # Use port 8443 for webhook (SnapHook HTTPS server port)
-        webhook_url = f"https://{host}:8443/mutate"
+        # Determine webhook URL based on whether a port is specified
+        if port is None:
+            # No port specified - using OpenShift route or Kubernetes ingress
+            # Replace "snapapi" with "snapapi-webhook" in the hostname
+            webhook_host = host.replace("snapapi", "snapapi-webhook", 1)
+            webhook_url = f"https://{webhook_host}/mutate"
+        else:
+            # Port specified - direct service access, use port 8443 for webhook
+            webhook_url = f"https://{host}:8443/mutate"
         
         logger.info(f'[SnapHook] Auto-generated webhook URL: {webhook_url}')
         return webhook_url

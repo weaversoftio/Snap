@@ -1,0 +1,40 @@
+{{- if .Values.persistence.enabled }}
+{{- if not .Values.persistence.config.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "snapapi.fullname" . }}-config
+  labels:
+    {{- include "snapapi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.config.size }}
+{{- end }}
+---
+{{- if not .Values.persistence.checkpoints.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "snapapi.fullname" . }}-checkpoints
+  labels:
+    {{- include "snapapi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoints
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.checkpoints.size }}
+{{- end }}
+{{- end }}
+
