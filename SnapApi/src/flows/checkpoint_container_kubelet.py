@@ -347,6 +347,31 @@ async def checkpoint_container_kubelet(request: PodCheckpointRequest, username: 
         if stderr:
             print(f"SnapAPI: Checkpoint API stderr: {stderr[:200]}...")
 
+        # Check for error responses before attempting JSON parsing
+        # Error responses from kubelet/CRI-O are plain text, not JSON
+        stdout_lower = stdout.lower()
+        if ("checkpointing of" in stdout_lower and "failed" in stdout_lower) or \
+           "rpc error" in stdout_lower or \
+           "code = unknown desc =" in stdout_lower:
+            # This is an error response, extract and format the error message
+            error_message = stdout.strip()
+            # Try to extract a more concise error message if possible
+            if "rpc error: code = Unknown desc =" in error_message:
+                # Extract the description part after "desc ="
+                try:
+                    desc_start = error_message.find("desc =") + len("desc =")
+                    error_message = error_message[desc_start:].strip()
+                except:
+                    pass
+            
+            formatted_error = f"Checkpoint failed: {error_message}"
+            await send_progress(username, {
+                "progress": "failed", 
+                "task_name": "Create Checkpoint", 
+                "message": formatted_error
+            })
+            return PodCheckpointResponse(success=False, message=formatted_error)
+
         # Parse kubelet response - match checkpoint_and_push.py logic
         try:
             checkpoint_data = json.loads(stdout)
