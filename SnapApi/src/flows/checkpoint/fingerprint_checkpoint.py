@@ -138,19 +138,36 @@ async def check_crit_available() -> bool:
         return _crit_available_cache
     
     # Use lock to ensure only one check happens at a time
-    async with _crit_check_lock:
-        # Double-check after acquiring lock (another coroutine might have set it)
-        if _crit_available_cache is not None:
-            return _crit_available_cache
-        
-        try:
-            cmd = ['which', 'crit']
-            result = await run(cmd, check=False, capture_output=True, text=True)
-            _crit_available_cache = result.returncode == 0 and result.stdout.strip() != ''
-            return _crit_available_cache
-        except Exception:
-            _crit_available_cache = False
-            return False
+    # Wrap in try/finally to ensure lock is always released even if command hangs
+    try:
+        async with _crit_check_lock:
+            # Double-check after acquiring lock (another coroutine might have set it)
+            if _crit_available_cache is not None:
+                return _crit_available_cache
+            
+            try:
+                # Use short timeout (10s) since 'which' should be instant
+                # This prevents hanging in podman containers where the command might hang
+                cmd = ['which', 'crit']
+                result = await run(cmd, check=False, capture_output=True, text=True, timeout=10)
+                _crit_available_cache = result.returncode == 0 and result.stdout.strip() != ''
+                return _crit_available_cache
+            except RuntimeError as e:
+                # Handle timeout or other runtime errors from the run() function
+                # Log the error but don't fail - just assume crit is not available
+                logger.warning(f"Failed to check crit availability (timeout or error): {str(e)}")
+                _crit_available_cache = False
+                return False
+            except Exception as e:
+                # Handle any other unexpected exceptions
+                logger.warning(f"Unexpected error checking crit availability: {str(e)}")
+                _crit_available_cache = False
+                return False
+    except Exception as e:
+        # If lock acquisition itself fails, log and assume crit is not available
+        logger.error(f"Failed to acquire lock for crit availability check: {str(e)}")
+        _crit_available_cache = False
+        return False
 
 
 async def decode_criu_image(img_path: Path) -> Optional[Dict[str, Any]]:
