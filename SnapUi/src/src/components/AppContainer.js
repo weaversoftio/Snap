@@ -37,7 +37,7 @@ import { useLogs } from './common/LogsContext';
 import HelpDialog from './common/HelpDialog';
 
 const drawerWidth = 240;
-const selectedBackgroundColor = "rgba(36, 143, 231, 1)";
+const selectedBackgroundColor = "#6366f1";
 
 
 const openedMixin = (theme) => ({
@@ -75,7 +75,10 @@ const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== 'open',
 })(({ theme }) => ({
   zIndex: theme.zIndex.drawer + 1,
-  backgroundColor: "rgb(58, 58, 58)",
+  background: theme.palette.mode === 'dark' 
+    ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+    : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  borderRadius: '0 0 16px 16px',
   transition: theme.transitions.create(['width', 'margin'], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
@@ -421,8 +424,8 @@ export default function AppContainer({ children }) {
           <Typography variant='h5'>Cluster management</Typography>
           <Typography variant='h6'>{`Name: ${switchCluster}`}</Typography>
           <Box display={"flex"} width={"100%"} gap={1}>
-            <Button variant="contained" style={{ textTransform: "capitalize" }} fullWidth onClick={() => handleConfirmSelectCluster(switchCluster)}>Switch</Button>
-            <Button variant="contained" style={{ textTransform: "capitalize" }} fullWidth color="error" onClick={handleRemoveCluster}>Remove</Button>
+            <Button variant="contained" fullWidth onClick={() => handleConfirmSelectCluster(switchCluster)}>Switch</Button>
+            <Button variant="contained" fullWidth color="error" onClick={handleRemoveCluster}>Remove</Button>
           </Box>
 
         </Box>
@@ -488,7 +491,7 @@ export default function AppContainer({ children }) {
           {/* RBAC Setup Command - moved before Token */}
           <Button 
             variant="outlined" 
-            style={{ textTransform: "capitalize", marginBottom: "8px" }} 
+            sx={{ marginBottom: "8px" }} 
             startIcon={<ContentCopy />}
             onClick={handleCopyRBACCommand}
             disabled={rbacCommandLoading}
@@ -541,7 +544,6 @@ export default function AppContainer({ children }) {
                   size="small"
                   startIcon={<ContentCopy />}
                   onClick={(event) => handleCopyToClipboard(event)}
-                  sx={{ textTransform: "capitalize" }}
                 >
                   Copy to Clipboard
                 </Button>
@@ -556,7 +558,6 @@ export default function AppContainer({ children }) {
                       enqueueSnackbar("Text selected. Press Ctrl+C (Cmd+C on Mac) to copy.", { variant: "info" });
                     }
                   }}
-                  sx={{ textTransform: "capitalize" }}
                 >
                   Select All
                 </Button>
@@ -567,7 +568,7 @@ export default function AppContainer({ children }) {
           {/* Token input - moved after RBAC command */}
           {renderAuthenticationDetails()}
           
-          <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
+          <Button variant="outlined" component="label" sx={{ width: 200 }} startIcon={<CloudUpload />}>
             Upload SSH Key
             <input
               type="file"
@@ -604,7 +605,7 @@ export default function AppContainer({ children }) {
             />
           )}
           
-          <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleAddCluster}>Submit</Button>
+          <Button variant="contained" onClick={handleAddCluster}>Submit</Button>
         </Box>
       </DialogComponent>
     )
@@ -670,75 +671,244 @@ export default function AppContainer({ children }) {
             marginTop: '48px',
             overflowY: 'auto',
             overflowX: 'hidden',
-            borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+            borderRight: (theme) => theme.palette.mode === 'dark' 
+              ? '1px solid rgba(255, 255, 255, 0.08)' 
+              : '1px solid rgba(0, 0, 0, 0.08)',
+            background: (theme) => theme.palette.mode === 'dark'
+              ? 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)'
+              : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+            boxShadow: (theme) => theme.palette.mode === 'dark'
+              ? '4px 0 12px rgba(0, 0, 0, 0.3)'
+              : '4px 0 12px rgba(0, 0, 0, 0.04)',
           }
         }}
       >
         {/* Section 2: Cluster-dependent menu items */}
         {showClusterNavigation && (
           <>
-            <Box sx={{ px: 2, py: 1, flexShrink: 0 }}>
-              <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
+            <Box 
+              sx={{ 
+                px: 2.5, 
+                py: 1.5, 
+                flexShrink: 0,
+                background: (theme) => theme.palette.mode === 'dark'
+                  ? 'rgba(99, 102, 241, 0.08)'
+                  : 'rgba(99, 102, 241, 0.04)',
+                borderLeft: '3px solid',
+                borderColor: 'primary.main',
+                marginBottom: 1,
+              }}
+            >
+              <Typography 
+                variant="overline" 
+                sx={{ 
+                  fontSize: '0.7rem', 
+                  fontWeight: 700, 
+                  color: 'primary.main', 
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                }}
+              >
                 Cluster Operations
               </Typography>
             </Box>
-            <List sx={{ flexShrink: 0 }}>
-              {clusterMenu.map(({ text, path, Icon }) => (
-                <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
-                  <ListItemButton
-                    onClick={() => navigate(path)}
-                    sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
-                    <ListItemIcon
-                      sx={[{ minWidth: 0, justifyContent: 'center' }, open ? { mr: 3 } : { mr: 'auto' }]}>
-                      <Icon sx={{ color: isSelected(path) ? "white" : "inherit" }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={text}
-                      sx={[{ opacity: open ? 1 : 0 }, isSelected(path) && { color: "white", fontWeight: "bold" }]} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
+            <List sx={{ flexShrink: 0, px: 1.5, py: 0.5 }}>
+              {clusterMenu.map(({ text, path, Icon }) => {
+                const selected = isSelected(path);
+                return (
+                  <ListItem key={text} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => navigate(path)}
+                      selected={selected}
+                      sx={{
+                        minHeight: 44,
+                        px: 2,
+                        py: 1,
+                        borderRadius: 2,
+                        position: 'relative',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
+                        ...(selected ? {
+                          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                          color: 'white',
+                          boxShadow: '0px 2px 8px rgba(99, 102, 241, 0.3)',
+                        } : {
+                          '&:hover': {
+                            background: (theme) => theme.palette.mode === 'dark'
+                              ? 'rgba(99, 102, 241, 0.15)'
+                              : 'rgba(99, 102, 241, 0.08)',
+                            transform: 'translateX(4px)',
+                            boxShadow: '0px 2px 4px rgba(99, 102, 241, 0.1)',
+                          },
+                        }),
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          justifyContent: 'center',
+                          ...(open ? { mr: 2.5 } : { mr: 'auto' }),
+                          color: selected ? 'white' : 'inherit',
+                          transition: 'color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        }}
+                      >
+                        <Icon sx={{ fontSize: '1.4rem' }} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={text}
+                        sx={{
+                          opacity: open ? 1 : 0,
+                          transition: 'opacity 0.2s',
+                          '& .MuiTypography-root': {
+                            fontWeight: selected ? 600 : 500,
+                            fontSize: '0.9375rem',
+                            letterSpacing: '0.01em',
+                          },
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
             </List>
-            <Divider />
           </>
         )}
         
         {/* Section 3: App-level menu items */}
-        <Box sx={{ px: 2, py: 1, flexShrink: 0 }}>
-          <Typography variant="overline" sx={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'text.secondary', letterSpacing: '0.05em' }}>
+        <Box 
+          sx={{ 
+            px: 2.5, 
+            py: 1.5, 
+            flexShrink: 0,
+            background: (theme) => theme.palette.mode === 'dark'
+              ? 'rgba(99, 102, 241, 0.08)'
+              : 'rgba(99, 102, 241, 0.04)',
+            borderLeft: '3px solid',
+            borderColor: 'primary.main',
+            marginTop: showClusterNavigation ? 2 : 0,
+            marginBottom: 1,
+          }}
+        >
+          <Typography 
+            variant="overline" 
+            sx={{ 
+              fontSize: '0.7rem', 
+              fontWeight: 700, 
+              color: 'primary.main', 
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}
+          >
             Application
           </Typography>
         </Box>
-        <List sx={{ flexGrow: 1, overflowY: 'auto' }}>
-          {appMenu.map(({ text, path, Icon }) => (
-            <ListItem key={text} disablePadding sx={{ display: 'block', backgroundColor: isSelected(path) ? selectedBackgroundColor : "transparent" }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflow: 'hidden' }}>
+          <List sx={{ flexGrow: 1, overflowY: 'auto', px: 1.5, py: 0.5 }}>
+            {appMenu.map(({ text, path, Icon }) => {
+              const selected = isSelected(path);
+              return (
+                <ListItem key={text} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+                  <ListItemButton
+                    onClick={() => navigate(path)}
+                    selected={selected}
+                    sx={{
+                      minHeight: 44,
+                      px: 2,
+                      py: 1,
+                      borderRadius: 2,
+                      position: 'relative',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
+                      ...(selected ? {
+                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                        color: 'white',
+                        boxShadow: '0px 2px 8px rgba(99, 102, 241, 0.3)',
+                      } : {
+                        '&:hover': {
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'rgba(99, 102, 241, 0.15)'
+                            : 'rgba(99, 102, 241, 0.08)',
+                          transform: 'translateX(4px)',
+                          boxShadow: '0px 2px 4px rgba(99, 102, 241, 0.1)',
+                        },
+                      }),
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: 0,
+                        justifyContent: 'center',
+                        ...(open ? { mr: 2.5 } : { mr: 'auto' }),
+                        color: selected ? 'white' : 'inherit',
+                        transition: 'color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      }}
+                    >
+                      <Icon sx={{ fontSize: '1.4rem' }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={text}
+                      sx={{
+                        opacity: open ? 1 : 0,
+                        transition: 'opacity 0.2s',
+                        '& .MuiTypography-root': {
+                          fontWeight: selected ? 600 : 500,
+                          fontSize: '0.9375rem',
+                          letterSpacing: '0.01em',
+                        },
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+          <Box sx={{ pt: 2, pb: 1.5, px: 1.5, borderTop: (theme) => theme.palette.mode === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)' }}>
+            <ListItem key={"Logout"} disablePadding sx={{ display: 'block' }} onClick={handleLogout}>
               <ListItemButton
-                onClick={() => navigate(path)}
-                sx={[{ minHeight: 48, px: 2.5 }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' }]} >
-                <ListItemIcon
-                  sx={[{ minWidth: 0, justifyContent: 'center' }, open ? { mr: 3 } : { mr: 'auto' }]}>
-                  <Icon sx={{ color: isSelected(path) ? "white" : "inherit" }} />
+                sx={{
+                  minHeight: 44,
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
+                  color: (theme) => theme.palette.mode === 'dark' ? '#ef4444' : '#dc2626',
+                  '&:hover': {
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'rgba(239, 68, 68, 0.15)'
+                      : 'rgba(220, 38, 38, 0.08)',
+                    transform: 'translateX(4px)',
+                    boxShadow: '0px 2px 4px rgba(220, 38, 38, 0.1)',
+                  },
+                }}
+              >
+                <ListItemIcon 
+                  sx={{
+                    minWidth: 0,
+                    justifyContent: 'center',
+                    ...(open ? { mr: 2.5 } : { mr: 'auto' }),
+                    color: 'inherit',
+                    transition: 'color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  <MeetingRoomIcon sx={{ fontSize: '1.4rem' }} />
                 </ListItemIcon>
                 <ListItemText
-                  primary={text}
-                  sx={[{ opacity: open ? 1 : 0 }, isSelected(path) && { color: "white", fontWeight: "bold" }]} />
+                  primary={"Logout"}
+                  sx={{
+                    opacity: open ? 1 : 0,
+                    transition: 'opacity 0.2s',
+                    '& .MuiTypography-root': {
+                      fontWeight: 600,
+                      fontSize: '0.9375rem',
+                      letterSpacing: '0.01em',
+                    },
+                  }}
+                />
               </ListItemButton>
             </ListItem>
-          ))}
-          <ListItem key={"Logout"} disablePadding sx={{ display: 'block' }} onClick={handleLogout}>
-            <ListItemButton
-              sx={[{ minHeight: 48, px: 2.5, }, open ? { justifyContent: 'initial' } : { justifyContent: 'center' },]} >
-              <ListItemIcon sx={[{ minWidth: 0, justifyContent: 'center', }, open ? { mr: 3, } : { mr: 'auto', },]} >
-                <MeetingRoomIcon />
-              </ListItemIcon>
-              <ListItemText
-                primary={"Logout"}
-                sx={[open ? { opacity: 1 } : { opacity: 0 }
-                ]}
-              />
-            </ListItemButton>
-          </ListItem>
-        </List>
+          </Box>
+        </Box>
       </Drawer>
     )
   }
@@ -756,13 +926,27 @@ export default function AppContainer({ children }) {
                 <Box
                   component="img"
                   sx={{
-                    height: 32,
+                    height: 36,
                     filter: 'brightness(0) invert(1)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
                   }}
-                  alt="SNAP logo."
+                  alt="SNAP logo"
                   src="/logo.png"
                 />
-                <Typography variant="h6" noWrap component="div" sx={{ fontSize: '1.1rem', fontWeight: 500 }}>
+                <Typography 
+                  variant="h6" 
+                  noWrap 
+                  component="div" 
+                  sx={{ 
+                    fontSize: '1.1rem', 
+                    fontWeight: 600,
+                    color: 'white',
+                    letterSpacing: '0.01em',
+                  }}
+                >
                   Dashboard
                 </Typography>
                 {authenticated && user && (
@@ -835,7 +1019,13 @@ export default function AppContainer({ children }) {
                   color="inherit"
                   onClick={() => setHelpDialogOpen(true)}
                   startIcon={<HelpIcon />}
-                  sx={{ textTransform: "capitalize", fontSize: '0.875rem' }}
+                  sx={{ 
+                    fontSize: '0.875rem',
+                    color: 'white',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    },
+                  }}
                   size="small"
                 >
                   Help

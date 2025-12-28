@@ -165,6 +165,7 @@ const LogsSection = () => {
         zIndex: 1300, // Higher than Material-UI drawer (1200)
         backgroundColor: 'rgb(58, 58, 58)',
         borderTop: '2px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '16px 16px 0 0',
         maxHeight: isOpen ? '300px' : '60px',
         transition: 'max-height 0.3s ease-in-out',
         overflow: 'hidden'
@@ -187,7 +188,7 @@ const LogsSection = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Terminal sx={{ color: 'white' }} />
           <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'white' }}>
-            Container Logs
+            Logs
           </Typography>
           {logs.length > 0 && (
             <Chip 

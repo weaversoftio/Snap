@@ -656,7 +656,7 @@ const ClusterScreen = () => {
           {/* Token input - moved after RBAC command */}
           {renderAuthenticationDetails()}
           
-          <Button variant="outlined" component="label" style={{ width: 200, textTransform: "capitalize" }} startIcon={<CloudUpload />}>
+          <Button variant="outlined" component="label" sx={{ width: 200 }} startIcon={<CloudUpload />}>
             Upload SSH Key
             <input
               type="file"
@@ -693,7 +693,7 @@ const ClusterScreen = () => {
             />
           )}
           
-          <Button variant="contained" style={{ textTransform: "capitalize" }} onClick={handleSubmitCluster}>Submit</Button>
+          <Button variant="contained" onClick={handleSubmitCluster}>Submit</Button>
         </Box>
       </DialogComponent>
     )
@@ -1350,40 +1350,6 @@ const ClusterScreen = () => {
                     Delete Cluster
                   </Button>
                 </Box>
-              </Paper>
-
-              {/* Important Notice */}
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'warning.light', borderRadius: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <WarningIcon color="warning" sx={{ mr: 1 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.contrastText' }}>
-                    Important Notice: Deprecated Features
-                  </Typography>
-                </Box>
-                <Typography variant="body2" sx={{ color: 'warning.contrastText', mb: 2 }}>
-                  The following cluster management features have been deprecated and are now handled automatically by the DaemonSet:
-                </Typography>
-                <Box component="ul" sx={{ pl: 2, mb: 2 }}>
-                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
-                    Cluster Verification - Now monitored automatically
-                  </Typography>
-                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
-                    Checkpointing Enablement - Now configured automatically
-                  </Typography>
-                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
-                    runc Installation - Now managed automatically
-                  </Typography>
-                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
-                    Node Configuration - Now handled automatically
-                  </Typography>
-                  <Typography component="li" variant="body2" sx={{ color: 'warning.contrastText' }}>
-                    Playbook Configurations - Now integrated into DaemonSet
-                  </Typography>
-                </Box>
-                <Typography variant="body2" sx={{ color: 'warning.contrastText', fontStyle: 'italic' }}>
-                  These features are no longer available in the UI as they are now handled automatically by the DaemonSet. 
-                  The DaemonSet automatically handles all cluster setup and monitoring tasks.
-                </Typography>
               </Paper>
                 </Stack>
             </Box>

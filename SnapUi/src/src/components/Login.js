@@ -72,7 +72,7 @@ const Login = () => {
           left: 0,
           width: '100%',
           height: '60px',
-          background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
           '&::after': {
             content: '""',
             position: 'absolute',
@@ -82,7 +82,8 @@ const Login = () => {
             height: '65px',
             background: 'inherit',
             transform: 'scale(2)',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            opacity: 0.1,
           }
         }}
       />
@@ -111,9 +112,15 @@ const Login = () => {
         <Box
           component="img"
           sx={{
-            height: 40,
-            borderLeft: "1px solid white",
-            paddingLeft: 1,
+            height: 44,
+            borderLeft: "1px solid rgba(255, 255, 255, 0.3)",
+            paddingLeft: 1.5,
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15))',
+            },
           }}
           alt="SNAP logo"
           src="/weaver_06.svg"
@@ -134,10 +141,12 @@ const Login = () => {
         <Typography
           variant="h4"
           sx={{
-            fontWeight: 500,
-            background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+            fontWeight: 600,
+            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
             backgroundClip: 'text',
-            textFillColor: 'transparent'
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.01em',
           }}
         >
           Sign In
@@ -203,8 +212,19 @@ const Login = () => {
               disabled={loading}
               sx={{
                 height: 48,
-                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
+                fontSize: '1rem',
+                fontWeight: 600,
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                boxShadow: '0px 4px 12px rgba(99, 102, 241, 0.4)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                  boxShadow: '0px 6px 20px rgba(99, 102, 241, 0.5)',
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0px)',
+                },
               }}
             >
               {loading ? <CircularProgress size={24} style={{ color: "white" }} /> : 'Sign In'}
