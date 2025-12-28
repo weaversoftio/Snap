@@ -160,13 +160,13 @@ const LogsSection = () => {
       sx={{
         position: 'fixed',
         bottom: 0,
-        left: 0,
+        left: '240px', // Start after the sidebar drawer
         right: 0,
         zIndex: 1300, // Higher than Material-UI drawer (1200)
-        backgroundColor: 'rgb(58, 58, 58)',
-        borderTop: '2px solid rgba(255, 255, 255, 0.1)',
+        backgroundColor: '#e5e7eb',
+        borderTop: '2px solid rgba(0, 0, 0, 0.1)',
         borderRadius: '16px 16px 0 0',
-        maxHeight: isOpen ? '300px' : '60px',
+        maxHeight: isOpen ? '300px' : '44px',
         transition: 'max-height 0.3s ease-in-out',
         overflow: 'hidden'
       }}
@@ -178,16 +178,17 @@ const LogsSection = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           p: 1,
-          backgroundColor: 'rgb(58, 58, 58)',
-          borderBottom: isOpen ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
+          backgroundColor: '#e5e7eb',
+          borderBottom: isOpen ? '1px solid rgba(0, 0, 0, 0.1)' : 'none',
           cursor: 'pointer',
-          minHeight: '48px'
+          minHeight: '44px',
+          height: '44px'
         }}
         onClick={toggleLogs}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Terminal sx={{ color: 'white' }} />
-          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'white' }}>
+          <Terminal sx={{ color: '#374151' }} />
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#111827' }}>
             Logs
           </Typography>
           {logs.length > 0 && (
@@ -196,7 +197,7 @@ const LogsSection = () => {
               size="small" 
               color="primary" 
               variant="outlined"
-              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
+              sx={{ borderColor: 'rgba(0, 0, 0, 0.2)', color: '#374151' }}
             />
           )}
           {loading && (
@@ -206,7 +207,7 @@ const LogsSection = () => {
               size="small" 
               color="success" 
               variant="outlined"
-              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
+              sx={{ borderColor: 'rgba(0, 0, 0, 0.2)', color: '#374151' }}
             />
           )}
           {!shouldAutoScroll && (
@@ -215,7 +216,7 @@ const LogsSection = () => {
               size="small" 
               color="warning" 
               variant="outlined"
-              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
+              sx={{ borderColor: 'rgba(0, 0, 0, 0.2)', color: '#374151' }}
             />
           )}
         </Box>
@@ -225,7 +226,7 @@ const LogsSection = () => {
             size="small"
             startIcon={<Download />}
             onClick={handleDownloadLogs}
-            sx={{ textTransform: 'none', color: 'white' }}
+            sx={{ textTransform: 'none', color: '#374151' }}
             title="Download last 10 browser console logs and 10 SnapApi logs"
           >
             Download Logs
@@ -238,7 +239,7 @@ const LogsSection = () => {
                 e.stopPropagation();
                 clearLogs();
               }}
-              sx={{ textTransform: 'none', color: 'white' }}
+              sx={{ textTransform: 'none', color: '#374151' }}
             >
               Clear
             </Button>
@@ -254,12 +255,12 @@ const LogsSection = () => {
                   logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
                 }
               }}
-              sx={{ textTransform: 'none', color: 'white' }}
+              sx={{ textTransform: 'none', color: '#374151' }}
             >
               Scroll to Bottom
             </Button>
           )}
-          <IconButton size="small" sx={{ color: 'white' }}>
+          <IconButton size="small" sx={{ color: '#374151' }}>
             {isOpen ? <ExpandMore /> : <ExpandLess />}
           </IconButton>
         </Box>
@@ -299,7 +300,7 @@ const LogsSection = () => {
                   >
                     <Box
                       sx={{
-                        color: '#ffffff',
+                        color: 'white',
                         minWidth: '140px',
                         mr: 1,
                         flexShrink: 0

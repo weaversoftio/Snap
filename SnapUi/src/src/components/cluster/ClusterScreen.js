@@ -1330,13 +1330,13 @@ const ClusterScreen = () => {
               </Paper>
 
               {/* Danger Zone */}
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'error.light', borderRadius: 2 }}>
+              <Paper elevation={0} sx={{ p: 3, border: '2px solid', borderColor: 'error.main', borderRadius: 2, bgcolor: 'transparent' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>
                       Danger Zone
                     </Typography>
-                    <Typography variant="body2" sx={{ color: 'error.contrastText' }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Irreversible and destructive actions
                     </Typography>
                   </Box>

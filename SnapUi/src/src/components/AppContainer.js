@@ -644,10 +644,10 @@ export default function AppContainer({ children }) {
     const clusterMenu = [
       { text: "Pods", path: "/pods", Icon: ImageIcon },
       { text: "Checkpoints", path: "/checkpoints", Icon: CheckpointIcon },
-      { text: "Compare Fingerprints", path: "/checkpoints/compare", Icon: CompareArrows },
+      { text: "Compare CP", path: "/checkpoints/compare", Icon: CompareArrows },
       { text: "Secrets", path: "/secrets", Icon: SecurityIcon },
-      { text: "SnapWatcher", path: "/snapwatcher", Icon: WatchersIcon },
-      { text: "SnapHook", path: "/snaphook", Icon: SnapHookIcon },
+      { text: "Watchers", path: "/snapwatcher", Icon: WatchersIcon },
+      { text: "Hooks", path: "/snaphook", Icon: SnapHookIcon },
     ]
 
     // Section 3: App-level menu items (always show when authenticated)
