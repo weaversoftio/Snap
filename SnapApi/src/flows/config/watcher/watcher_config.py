@@ -6,10 +6,32 @@ Handles saving, loading, and managing watcher configurations.
 import os
 import json
 import logging
+import asyncio
+import threading
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 logger = logging.getLogger("automation_api")
+
+# File locks to prevent concurrent access to config files
+_file_locks: Dict[str, threading.Lock] = {}
+_locks_lock = threading.Lock()  # Lock to protect the _file_locks dictionary
+
+
+def _get_file_lock(file_path: str) -> threading.Lock:
+    """
+    Get or create a lock for a specific file path.
+    
+    Args:
+        file_path: Path to the config file
+        
+    Returns:
+        threading.Lock: Lock for the file
+    """
+    with _locks_lock:
+        if file_path not in _file_locks:
+            _file_locks[file_path] = threading.Lock()
+        return _file_locks[file_path]
 
 class WatcherConfig:
     """Watcher configuration model."""
@@ -82,9 +104,12 @@ def save_watcher_config(watcher_config: WatcherConfig) -> bool:
         # Update timestamp
         watcher_config.updated_at = datetime.now().isoformat()
         
-        # Save to file
-        with open(config_file, "w") as f:
-            json.dump(watcher_config.to_dict(), f, indent=4)
+        # Use file lock to prevent concurrent access
+        file_lock = _get_file_lock(config_file)
+        with file_lock:
+            # Save to file
+            with open(config_file, "w") as f:
+                json.dump(watcher_config.to_dict(), f, indent=4)
         
         logger.info(f"Watcher config saved: {watcher_config.name}")
         return True
@@ -111,8 +136,11 @@ def load_watcher_config(watcher_name: str) -> Optional[WatcherConfig]:
             logger.warning(f"Watcher config not found: {watcher_name}")
             return None
         
-        with open(config_file, "r") as f:
-            data = json.load(f)
+        # Use file lock to prevent concurrent access
+        file_lock = _get_file_lock(config_file)
+        with file_lock:
+            with open(config_file, "r") as f:
+                data = json.load(f)
         
         watcher_config = WatcherConfig.from_dict(data)
         logger.info(f"Watcher config loaded: {watcher_name}")
@@ -120,6 +148,25 @@ def load_watcher_config(watcher_name: str) -> Optional[WatcherConfig]:
         
     except Exception as e:
         logger.error(f"Failed to load watcher config {watcher_name}: {e}")
+        return None
+
+
+async def async_load_watcher_config(watcher_name: str) -> Optional[WatcherConfig]:
+    """
+    Async wrapper for load_watcher_config.
+    Runs the blocking file I/O operation in a thread pool to avoid blocking the event loop.
+    
+    Args:
+        watcher_name: Name of the watcher config to load
+        
+    Returns:
+        WatcherConfig instance if found, None otherwise
+    """
+    try:
+        # Use asyncio.to_thread() to run blocking operation in thread pool
+        return await asyncio.to_thread(load_watcher_config, watcher_name)
+    except Exception as e:
+        logger.error(f"Failed to async load watcher config {watcher_name}: {e}")
         return None
 
 
@@ -202,6 +249,26 @@ def update_watcher_status(watcher_name: str, status: str) -> bool:
         
     except Exception as e:
         logger.error(f"Failed to update watcher status {watcher_name}: {e}")
+        return False
+
+
+async def async_update_watcher_status(watcher_name: str, status: str) -> bool:
+    """
+    Async wrapper for update_watcher_status.
+    Runs the blocking file I/O operation in a thread pool to avoid blocking the event loop.
+    
+    Args:
+        watcher_name: Name of the watcher config to update
+        status: New status (running, stopped, error)
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Use asyncio.to_thread() to run blocking operation in thread pool
+        return await asyncio.to_thread(update_watcher_status, watcher_name, status)
+    except Exception as e:
+        logger.error(f"Failed to async update watcher status {watcher_name}: {e}")
         return False
 
 

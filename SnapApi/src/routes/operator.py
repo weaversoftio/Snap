@@ -14,7 +14,8 @@ from classes.websocket_log_handler import log_info, log_error, log_warning, log_
 from flows.config.watcher.watcher_config import (
     WatcherConfig, save_watcher_config, load_watcher_config, 
     list_watcher_configs, delete_watcher_config, update_watcher_status,
-    load_watcher_configs_on_startup
+    load_watcher_configs_on_startup, async_load_watcher_config,
+    async_update_watcher_status
 )
 
 logger = logging.getLogger("automation_api")
@@ -561,7 +562,8 @@ async def get_snapwatcher_status(watcher_name: str):
         SnapWatcherResponse: SnapWatcher configuration with current status
     """
     try:
-        config = load_watcher_config(watcher_name)
+        # Use async version to avoid blocking the event loop
+        config = await async_load_watcher_config(watcher_name)
         if not config:
             raise HTTPException(
                 status_code=404,
@@ -582,7 +584,8 @@ async def get_snapwatcher_status(watcher_name: str):
         
         # Update stored status if it doesn't match actual status
         if config.status != actual_status:
-            update_watcher_status(watcher_name, actual_status)
+            # Use async version to avoid blocking the event loop
+            await async_update_watcher_status(watcher_name, actual_status)
             config.status = actual_status
         
         config_dict = config.to_dict()
