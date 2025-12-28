@@ -36,7 +36,7 @@ const LogsSection = () => {
       case 'success':
         return '#4caf50';
       default:
-        return '#666666';
+        return '#ffffff';
     }
   };
 
@@ -63,7 +63,7 @@ const LogsSection = () => {
       case 'SnapHook':
         return '#ff9800'; // Orange
       default:
-        return '#666666'; // Gray
+        return '#ffffff'; // White
     }
   };
 
@@ -163,8 +163,8 @@ const LogsSection = () => {
         left: 0,
         right: 0,
         zIndex: 1300, // Higher than Material-UI drawer (1200)
-        backgroundColor: '#f5f5f5',
-        borderTop: '2px solid #e0e0e0',
+        backgroundColor: 'rgb(58, 58, 58)',
+        borderTop: '2px solid rgba(255, 255, 255, 0.1)',
         maxHeight: isOpen ? '300px' : '60px',
         transition: 'max-height 0.3s ease-in-out',
         overflow: 'hidden'
@@ -177,16 +177,16 @@ const LogsSection = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           p: 1,
-          backgroundColor: '#e3f2fd',
-          borderBottom: isOpen ? '1px solid #ddd' : 'none',
+          backgroundColor: 'rgb(58, 58, 58)',
+          borderBottom: isOpen ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
           cursor: 'pointer',
           minHeight: '48px'
         }}
         onClick={toggleLogs}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Terminal color="primary" />
-          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+          <Terminal sx={{ color: 'white' }} />
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'white' }}>
             Container Logs
           </Typography>
           {logs.length > 0 && (
@@ -195,6 +195,7 @@ const LogsSection = () => {
               size="small" 
               color="primary" 
               variant="outlined"
+              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
             />
           )}
           {loading && (
@@ -204,6 +205,7 @@ const LogsSection = () => {
               size="small" 
               color="success" 
               variant="outlined"
+              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
             />
           )}
           {!shouldAutoScroll && (
@@ -212,6 +214,7 @@ const LogsSection = () => {
               size="small" 
               color="warning" 
               variant="outlined"
+              sx={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: 'white' }}
             />
           )}
         </Box>
@@ -221,7 +224,7 @@ const LogsSection = () => {
             size="small"
             startIcon={<Download />}
             onClick={handleDownloadLogs}
-            sx={{ textTransform: 'none' }}
+            sx={{ textTransform: 'none', color: 'white' }}
             title="Download last 10 browser console logs and 10 SnapApi logs"
           >
             Download Logs
@@ -234,7 +237,7 @@ const LogsSection = () => {
                 e.stopPropagation();
                 clearLogs();
               }}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', color: 'white' }}
             >
               Clear
             </Button>
@@ -250,12 +253,12 @@ const LogsSection = () => {
                   logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
                 }
               }}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none', color: 'white' }}
             >
               Scroll to Bottom
             </Button>
           )}
-          <IconButton size="small">
+          <IconButton size="small" sx={{ color: 'white' }}>
             {isOpen ? <ExpandMore /> : <ExpandLess />}
           </IconButton>
         </Box>
@@ -295,7 +298,7 @@ const LogsSection = () => {
                   >
                     <Box
                       sx={{
-                        color: '#888',
+                        color: '#ffffff',
                         minWidth: '140px',
                         mr: 1,
                         flexShrink: 0
@@ -332,7 +335,7 @@ const LogsSection = () => {
               sx={{
                 p: 3,
                 textAlign: 'center',
-                color: '#888'
+                color: '#ffffff'
               }}
             >
               <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
