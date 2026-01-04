@@ -19,6 +19,9 @@ spec:
         {{- end }}
       labels:
         {{- include "demo-app.selectorLabels" . | nindent 8 }}
+        {{- if .Values.snap.enabled }}
+        snap.weaversoft.io/snap: "true"
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

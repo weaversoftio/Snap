@@ -20,10 +20,13 @@ serviceAccount:
   # The name of the service account to use.
   name: ""
 
-podAnnotations:
-  snap.weaversoft.io/snap: "true"
+podAnnotations: {}
 
 podSecurityContext: {}
+
+# Snap configuration - enables snap checkpointing for this application
+snap:
+  enabled: true
   # fsGroup: 2000
 
 securityContext: {}
