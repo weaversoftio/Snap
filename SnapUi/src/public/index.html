@@ -19,11 +19,13 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <script>
       // Inject environment variables into window object
-      // These will be replaced at runtime by docker-entrypoint.sh
+      // These are fallback values - will be overridden by runtime-config.js if it loads
       // For reverse proxy: set API_URL="" and WS_URL="" (empty strings) to use relative paths
-      window.API_URL = '%REACT_APP_API_URL%';
-      window.WS_URL = '%REACT_APP_WS_URL%';
+      window.API_URL = 'http://192.168.33.209:8000';
+      window.WS_URL = 'ws://192.168.33.209:8000';
     </script>
+    <!-- Runtime configuration - generated at container startup, loads before config.js -->
+    <script src="%PUBLIC_URL%/runtime-config.js"></script>
     <script src="%PUBLIC_URL%/config.js"></script>
 
     <!--

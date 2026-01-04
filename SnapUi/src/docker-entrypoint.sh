@@ -55,67 +55,58 @@ if [ -f /app/public/config.js ]; then
     sed -i "s|\${WS_URL}|$WS_URL|g" /app/public/config.js
 fi
 
-# Replace REACT_APP_API_URL and REACT_APP_WS_URL in index.html (production)
-if [ -f /opt/app-root/src/index.html ]; then
-    echo "docker-entrypoint.sh: Replacing placeholders in /opt/app-root/src/index.html"
-    API_URL_VALUE="${API_URL:-}"
-    WS_URL_VALUE="${WS_URL:-}"
-    
-    # Replace placeholders - try multiple patterns to handle different cases
-    # Pattern 1: Direct placeholder replacement
-    if [ -z "$API_URL_VALUE" ]; then
-        # Empty string - replace with empty string (multiple patterns)
-        sed -i "s|'%REACT_APP_API_URL%'|''|g" /opt/app-root/src/index.html
-        sed -i "s|\"%REACT_APP_API_URL%\"|\"\"|g" /opt/app-root/src/index.html
-        sed -i "s|%REACT_APP_API_URL%||g" /opt/app-root/src/index.html
+# Generate runtime-config.js from template
+# This approach avoids modifying source files (index.html) which are mounted as volumes in dev mode
+API_URL_VALUE="${API_URL:-}"
+WS_URL_VALUE="${WS_URL:-}"
+
+# Escape values for JavaScript double-quoted string literals
+# Must escape backslashes first, then double quotes
+escape_js_string() {
+    if [ -z "$1" ]; then
+        echo ""
     else
-        # Has value - replace placeholder (escape special chars for sed)
-        ESCAPED_API_URL=$(echo "$API_URL_VALUE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-        sed -i "s|%REACT_APP_API_URL%|$ESCAPED_API_URL|g" /opt/app-root/src/index.html
+        # Use printf %q for safe escaping, then manually handle for JS strings
+        # First escape backslashes, then escape double quotes
+        printf '%s' "$1" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g'
     fi
-    
-    if [ -z "$WS_URL_VALUE" ]; then
-        # Empty string - replace with empty string (multiple patterns)
-        sed -i "s|'%REACT_APP_WS_URL%'|''|g" /opt/app-root/src/index.html
-        sed -i "s|\"%REACT_APP_WS_URL%\"|\"\"|g" /opt/app-root/src/index.html
-        sed -i "s|%REACT_APP_WS_URL%||g" /opt/app-root/src/index.html
-    else
-        # Has value - replace placeholder (escape special chars for sed)
-        ESCAPED_WS_URL=$(echo "$WS_URL_VALUE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-        sed -i "s|%REACT_APP_WS_URL%|$ESCAPED_WS_URL|g" /opt/app-root/src/index.html
-    fi
-    
-    echo "docker-entrypoint.sh: Placeholder replacement complete"
+}
+
+ESCAPED_API_URL=$(escape_js_string "$API_URL_VALUE")
+ESCAPED_WS_URL=$(escape_js_string "$WS_URL_VALUE")
+
+# Escape for sed replacement (escape & and backslashes in replacement string)
+escape_sed_replacement() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g' | sed 's/&/\\&/g'
+}
+
+SED_ESCAPED_API_URL=$(escape_sed_replacement "$ESCAPED_API_URL")
+SED_ESCAPED_WS_URL=$(escape_sed_replacement "$ESCAPED_WS_URL")
+
+# Generate runtime-config.js for development (in public folder)
+if [ -f /app/public/runtime-config.template.js ]; then
+    echo "docker-entrypoint.sh: Generating runtime-config.js from template (development)"
+    sed "s|\${API_URL}|$SED_ESCAPED_API_URL|g" /app/public/runtime-config.template.js | \
+    sed "s|\${WS_URL}|$SED_ESCAPED_WS_URL|g" > /app/public/runtime-config.js
+    echo "docker-entrypoint.sh: runtime-config.js generated successfully"
 fi
 
-# Replace REACT_APP_API_URL and REACT_APP_WS_URL in index.html (development)
-if [ -f /app/public/index.html ]; then
-    echo "docker-entrypoint.sh: Replacing placeholders in /app/public/index.html"
-    API_URL_VALUE="${API_URL:-}"
-    WS_URL_VALUE="${WS_URL:-}"
-    
-    # Replace placeholders - try multiple patterns to handle different cases
-    if [ -z "$API_URL_VALUE" ]; then
-        # Empty string - replace with empty string (multiple patterns)
-        sed -i "s|'%REACT_APP_API_URL%'|''|g" /app/public/index.html
-        sed -i "s|\"%REACT_APP_API_URL%\"|\"\"|g" /app/public/index.html
-        sed -i "s|%REACT_APP_API_URL%||g" /app/public/index.html
-    else
-        # Has value - replace placeholder (escape special chars for sed)
-        ESCAPED_API_URL=$(echo "$API_URL_VALUE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-        sed -i "s|%REACT_APP_API_URL%|$ESCAPED_API_URL|g" /app/public/index.html
-    fi
-    
-    if [ -z "$WS_URL_VALUE" ]; then
-        # Empty string - replace with empty string (multiple patterns)
-        sed -i "s|'%REACT_APP_WS_URL%'|''|g" /app/public/index.html
-        sed -i "s|\"%REACT_APP_WS_URL%\"|\"\"|g" /app/public/index.html
-        sed -i "s|%REACT_APP_WS_URL%||g" /app/public/index.html
-    else
-        # Has value - replace placeholder (escape special chars for sed)
-        ESCAPED_WS_URL=$(echo "$WS_URL_VALUE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-        sed -i "s|%REACT_APP_WS_URL%|$ESCAPED_WS_URL|g" /app/public/index.html
-    fi
+# Generate runtime-config.js for production (in /opt/app-root/src)
+if [ -f /opt/app-root/src/runtime-config.template.js ]; then
+    echo "docker-entrypoint.sh: Generating runtime-config.js from template (production)"
+    sed "s|\${API_URL}|$SED_ESCAPED_API_URL|g" /opt/app-root/src/runtime-config.template.js | \
+    sed "s|\${WS_URL}|$SED_ESCAPED_WS_URL|g" > /opt/app-root/src/runtime-config.js
+    chmod 666 /opt/app-root/src/runtime-config.js
+    echo "docker-entrypoint.sh: runtime-config.js generated successfully"
+fi
+
+# Also generate in /tmp for production (as fallback)
+if [ -f /tmp/runtime-config.template.js ]; then
+    echo "docker-entrypoint.sh: Generating runtime-config.js from template (production /tmp)"
+    sed "s|\${API_URL}|$SED_ESCAPED_API_URL|g" /tmp/runtime-config.template.js | \
+    sed "s|\${WS_URL}|$SED_ESCAPED_WS_URL|g" > /tmp/runtime-config.js
+    chmod 666 /tmp/runtime-config.js
+    echo "docker-entrypoint.sh: runtime-config.js generated successfully in /tmp"
 fi
 
 # Execute CMD

@@ -3,3 +3,5 @@
 /SnapApi/snapapi-config.json
 /Others/CRC-Cluster-Setup
 /Others/AD
+# Generated runtime config (do not commit - contains environment-specific values)
+/SnapUi/src/public/runtime-config.js

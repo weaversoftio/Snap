@@ -27,6 +27,9 @@ COPY src/. .
 COPY src/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+# Copy runtime-config template (will be used to generate runtime-config.js at startup)
+COPY src/public/runtime-config.template.js /app/public/runtime-config.template.js
+
 # Expose port 8080 for development server (matching docker-compose)
 EXPOSE 8080
 

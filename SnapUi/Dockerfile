@@ -49,6 +49,10 @@ COPY --from=build /app/build /opt/app-root/src
 # Copy config.js separately and set permissions
 COPY src/public/config.js /opt/app-root/src/config.js
 
+# Copy runtime-config template (will be used to generate runtime-config.js at startup)
+COPY src/public/runtime-config.template.js /opt/app-root/src/runtime-config.template.js
+COPY src/public/runtime-config.template.js /tmp/runtime-config.template.js
+
 # Add entrypoint script
 COPY src/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
