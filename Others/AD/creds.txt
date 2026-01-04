@@ -1,5 +1,0 @@
-192.168.33.209
-1389
-dc=mycompany,dc=local
-cn=admin,dc=mycompany,dc=local
-Admin123!
