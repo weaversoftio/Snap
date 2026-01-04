@@ -1,0 +1,13 @@
+apiVersion: v2
+name: demo-app
+description: A Helm chart for a sample demo application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - demo
+  - sample
+  - application
+maintainers:
+  - name: Demo Team
+
