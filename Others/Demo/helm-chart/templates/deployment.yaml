@@ -56,7 +56,7 @@ spec:
             command:
             - /bin/sh
             - -c
-            - "ps aux | grep -v grep | grep -q '{{ .Values.app.command | last }}' || exit 1"
+            - "test -f /tmp/app-ready || ps | grep -q '[s]h -c'"
           initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
           periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
           timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
@@ -68,7 +68,7 @@ spec:
             command:
             - /bin/sh
             - -c
-            - "ps aux | grep -v grep | grep -q '{{ .Values.app.command | last }}' || exit 1"
+            - "test -f /tmp/app-ready || ps | grep -q '[s]h -c'"
           initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
           periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
           timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
@@ -80,7 +80,7 @@ spec:
             command:
             - /bin/sh
             - -c
-            - "ps aux | grep -v grep | grep -q '{{ .Values.app.command | last }}' || exit 1"
+            - "test -f /tmp/app-ready || ps | grep -q '[s]h -c'"
           initialDelaySeconds: {{ .Values.probes.startup.initialDelaySeconds }}
           periodSeconds: {{ .Values.probes.startup.periodSeconds }}
           timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
