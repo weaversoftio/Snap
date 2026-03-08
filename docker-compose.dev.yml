@@ -12,7 +12,7 @@ services:
     environment:
       # SnapApi configuration
       - SNAP_ORIGINS=http://localhost:8080,*
-      - SNAP_API_URL=http://192.168.33.209:8000
+      - SNAP_API_URL=http://192.168.33.245:8000
       # SSL configuration (set to 'true' to enable SSL verification)
       - KUBE_VERIFY_SSL=false
       # Cluster status check version requirements
@@ -56,8 +56,8 @@ services:
       # The API_URL should be the external URL that browsers can access (e.g., http://localhost:8000 or http://<host-ip>:8000)
       # The WS_URL should be the WebSocket URL (e.g., ws://localhost:8000 or ws://<host-ip>:8000)
       # Defaults to localhost for local development - override if accessing from remote hosts
-      - API_URL=${API_URL:-http://192.168.33.209:8000}
-      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
+      - API_URL=${API_URL:-http://192.168.33.245:8000}
+      - WS_URL=${WS_URL:-ws://192.168.33.245:8000}
     volumes:
       # Mount src folder for hot reload
       - ./SnapUi/src:/app:Z

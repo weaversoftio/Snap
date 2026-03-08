@@ -535,7 +535,10 @@ export default function AppContainer({ children }) {
                 }}
                 onClick={(e) => {
                   // Select all text when clicked
-                  e.target.select();
+                  const input = e.currentTarget.querySelector('textarea, input');
+                  if (input && typeof input.select === 'function') {
+                    input.select();
+                  }
                 }}
               />
               <Box sx={{ display: 'flex', gap: 1 }}>
