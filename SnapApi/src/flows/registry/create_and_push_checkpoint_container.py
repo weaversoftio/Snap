@@ -3,6 +3,7 @@ from flows.proccess_utils import run
 import uuid
 import os
 import json
+from datetime import datetime, timezone
 from classes.registryconfig import RegistryConfigDetails, RegistryConfig, login_to_registry, get_registry
 from flows.checkpoint.checkpoint_config import CheckpointConfig
 from flows.config.configLoder import load_config
@@ -225,6 +226,14 @@ async def create_and_push_checkpoint_container(container_name: str, username: st
         except RuntimeError as e:
             print(f"SnapAPI: Buildah push failed: {str(e)}")
             raise
+
+        # Persist the uploaded image tag into checkpoint metadata so UI can retrieve it later.
+        metadata.setdefault("image_info", {})
+        metadata["image_info"]["image_tag"] = full_registry_image_tag
+        metadata["image_info"]["uploaded_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["image_info"]["pushed_to_registry"] = True
+        with open(json_file_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
 
         await send_progress(loggeduser, {"progress": 100,"task_name": "Create and Push Checkpoint Container", "message": f"Checkpoint image successfully committed and pushed"})
         return {"message": "Checkpoint image successfully committed and pushed", "image_tag": full_registry_image_tag}

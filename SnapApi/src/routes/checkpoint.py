@@ -106,6 +106,17 @@ async def checkpoints_list():
                             # Check for metadata file (.json contains metadata for image creation)
                             metadata_result = f"{checkpoint_name}.json"
                             metadata_result_path = os.path.join(pod_path, metadata_result)
+                            uploaded_image_tag = None
+                            is_uploaded_to_registry = False
+                            if os.path.exists(metadata_result_path):
+                                try:
+                                    with open(metadata_result_path, 'r') as metadata_file:
+                                        metadata_content = json.load(metadata_file)
+                                        image_info = metadata_content.get("image_info", {})
+                                        is_uploaded_to_registry = bool(image_info.get("pushed_to_registry"))
+                                        uploaded_image_tag = image_info.get("image_tag") if is_uploaded_to_registry else None
+                                except Exception as metadata_error:
+                                    logger.warning(f"SnapAPI: Failed to parse checkpoint metadata {metadata_result_path}: {str(metadata_error)}")
                             
                             # Check for volatility analysis
                             volatility_analysis_file = os.path.join(pod_path, f"{checkpoint_name}_volatility_analysis.txt")
@@ -125,7 +136,9 @@ async def checkpoints_list():
                                 "analysis_result": analysis_file if has_analysis else None,
                                 "scan_result": os.path.exists(volatility_analysis_file),
                                 "has_analysis": has_analysis,
-                                "has_fingerprint": has_fingerprint
+                                "has_fingerprint": has_fingerprint,
+                                "uploaded_image_tag": uploaded_image_tag,
+                                "is_uploaded_to_registry": is_uploaded_to_registry
                             })
 
                         

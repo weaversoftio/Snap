@@ -16,6 +16,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useNavigate } from 'react-router-dom';
@@ -113,6 +115,7 @@ const CheckpointsScreen = ({ classes }) => {
       if (!result.message) {
         enqueueSnackbar(`Creating and pushing checkpoint: ${checkpoint_name} failed`, { variant: "error" })
       } else {
+        await handleGetCheckpoints()
         enqueueSnackbar(`Creating and pushing checkpoint: ${checkpoint_name} successful`, { variant: "success" });
       }
       setActionRunning(false)
@@ -313,6 +316,26 @@ const CheckpointsScreen = ({ classes }) => {
 
   const handleCompareCheckpoints = () => {
     navigate('/checkpoints/compare')
+  }
+
+  const handleShowUploadedUrl = (row) => {
+    setCurrentCheckpoint({
+      pod_name: row.pod_name,
+      checkpoint_name: row.checkpoint_name,
+      uploaded_image_tag: row.uploaded_image_tag,
+      is_uploaded_to_registry: row.is_uploaded_to_registry
+    })
+    setDialogType("uploadedUrl")
+  }
+
+  const handleCopyUploadedUrl = async (uploadedImageTag) => {
+    if (!uploadedImageTag) return
+    try {
+      await navigator.clipboard.writeText(uploadedImageTag)
+      enqueueSnackbar("Uploaded checkpoint URL copied to clipboard", { variant: "success" })
+    } catch (error) {
+      enqueueSnackbar("Failed to copy URL", { variant: "error" })
+    }
   }
 
   const handleClearDialog = () => {
@@ -875,6 +898,50 @@ const CheckpointsScreen = ({ classes }) => {
     )
   }
 
+  const renderUploadedUrlDialog = () => {
+    if (dialogType !== "uploadedUrl") return null
+
+    const uploadedImageTag = currentCheckpoint?.uploaded_image_tag
+    const isUploaded = !!currentCheckpoint?.is_uploaded_to_registry
+
+    return (
+      <DialogComponent
+        open
+        onClose={handleClearDialog}
+        paperProps={{ maxWidth: 700 }}
+      >
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="h5" gutterBottom>
+            Uploaded Checkpoint URL
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Pod: {currentCheckpoint?.pod_name} | Checkpoint: {currentCheckpoint?.checkpoint_name}
+          </Typography>
+          <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+            <Typography sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              {isUploaded && uploadedImageTag
+                ? uploadedImageTag
+                : "Checkpoint image is not uploaded to registry yet."}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button variant="outlined" onClick={handleClearDialog}>
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<ContentCopyIcon />}
+              onClick={() => handleCopyUploadedUrl(uploadedImageTag)}
+              disabled={!isUploaded || !uploadedImageTag}
+            >
+              Copy
+            </Button>
+          </Box>
+        </Box>
+      </DialogComponent>
+    )
+  }
+
   const renderDialog = () => {
     const dialogContent = {
       log: (
@@ -891,7 +958,8 @@ const CheckpointsScreen = ({ classes }) => {
       fingerprintOptions: renderFingerprintOptions(),
       fingerprint: renderFingerprintResults(),
       verifyFingerprint: renderVerificationResults(),
-      deleteConfirm: renderDeleteConfirm()
+      deleteConfirm: renderDeleteConfirm(),
+      uploadedUrl: renderUploadedUrlDialog()
     }
     return dialogContent[dialogType]
   }
@@ -913,7 +981,7 @@ const CheckpointsScreen = ({ classes }) => {
   )
 
   const renderTableRow = (row) => {
-    const { pod_name, checkpoint_name, analysis_result, has_fingerprint } = row
+    const { pod_name, checkpoint_name, analysis_result, has_fingerprint, uploaded_image_tag, is_uploaded_to_registry } = row
     const isRunning = isActionRunning && currentCheckpoint?.checkpoint_name === checkpoint_name
 
     return (
@@ -1057,6 +1125,23 @@ const CheckpointsScreen = ({ classes }) => {
                   }}
                 >
                   <FileUploadIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={is_uploaded_to_registry ? "Uploaded URL (pushed)" : "Not uploaded to registry"}>
+                <IconButton
+                  onClick={() => handleShowUploadedUrl(row)}
+                  size="small"
+                  sx={{
+                    '&:hover': {
+                      bgcolor: is_uploaded_to_registry ? 'success.light' : 'error.light',
+                      color: is_uploaded_to_registry ? 'success.contrastText' : 'error.contrastText'
+                    }
+                  }}
+                >
+                  <LinkRoundedIcon
+                    fontSize="small"
+                    color={is_uploaded_to_registry ? "success" : "error"}
+                  />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Download Checkpoint">

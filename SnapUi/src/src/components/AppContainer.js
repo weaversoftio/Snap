@@ -37,7 +37,8 @@ import { useLogs } from './common/LogsContext';
 import HelpDialog from './common/HelpDialog';
 
 const drawerWidth = 240;
-const selectedBackgroundColor = "#6366f1";
+const selectedBackgroundColor = "#0b4f9f";
+const topBarBlue = "#1565c0";
 
 
 const openedMixin = (theme) => ({
@@ -75,10 +76,8 @@ const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== 'open',
 })(({ theme }) => ({
   zIndex: theme.zIndex.drawer + 1,
-  background: theme.palette.mode === 'dark' 
-    ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
-    : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  borderRadius: '0 0 16px 16px',
+  background: topBarBlue,
+  borderRadius: 0,
   transition: theme.transitions.create(['width', 'margin'], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
@@ -674,15 +673,11 @@ export default function AppContainer({ children }) {
             marginTop: '48px',
             overflowY: 'auto',
             overflowX: 'hidden',
-            borderRight: (theme) => theme.palette.mode === 'dark' 
-              ? '1px solid rgba(255, 255, 255, 0.08)' 
-              : '1px solid rgba(0, 0, 0, 0.08)',
-            background: (theme) => theme.palette.mode === 'dark'
-              ? 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)'
-              : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '4px 0 12px rgba(0, 0, 0, 0.3)'
-              : '4px 0 12px rgba(0, 0, 0, 0.04)',
+            borderRadius: 0,
+            borderRight: `1px solid ${topBarBlue}`,
+            background: '#2f343a',
+            boxShadow: '4px 0 12px rgba(0, 0, 0, 0.25)',
+            color: '#ffffff',
           }
         }}
       >
@@ -694,11 +689,9 @@ export default function AppContainer({ children }) {
                 px: 2.5, 
                 py: 1.5, 
                 flexShrink: 0,
-                background: (theme) => theme.palette.mode === 'dark'
-                  ? 'rgba(99, 102, 241, 0.08)'
-                  : 'rgba(99, 102, 241, 0.04)',
+                background: 'rgba(255, 255, 255, 0.04)',
                 borderLeft: '3px solid',
-                borderColor: 'primary.main',
+                borderColor: topBarBlue,
                 marginBottom: 1,
               }}
             >
@@ -707,7 +700,7 @@ export default function AppContainer({ children }) {
                 sx={{ 
                   fontSize: '0.7rem', 
                   fontWeight: 700, 
-                  color: 'primary.main', 
+                  color: '#ffffff',
                   letterSpacing: '0.1em',
                   textTransform: 'uppercase',
                 }}
@@ -727,21 +720,19 @@ export default function AppContainer({ children }) {
                         minHeight: 44,
                         px: 2,
                         py: 1,
-                        borderRadius: 2,
+                        borderRadius: 0,
                         position: 'relative',
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                         ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
                         ...(selected ? {
-                          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                          background: topBarBlue,
                           color: 'white',
-                          boxShadow: '0px 2px 8px rgba(99, 102, 241, 0.3)',
+                          boxShadow: '0px 2px 8px rgba(21, 101, 192, 0.35)',
                         } : {
                           '&:hover': {
-                            background: (theme) => theme.palette.mode === 'dark'
-                              ? 'rgba(99, 102, 241, 0.15)'
-                              : 'rgba(99, 102, 241, 0.08)',
+                            background: 'rgba(21, 101, 192, 0.18)',
                             transform: 'translateX(4px)',
-                            boxShadow: '0px 2px 4px rgba(99, 102, 241, 0.1)',
+                            boxShadow: '0px 2px 4px rgba(21, 101, 192, 0.2)',
                           },
                         }),
                       }}
@@ -783,11 +774,9 @@ export default function AppContainer({ children }) {
             px: 2.5, 
             py: 1.5, 
             flexShrink: 0,
-            background: (theme) => theme.palette.mode === 'dark'
-              ? 'rgba(99, 102, 241, 0.08)'
-              : 'rgba(99, 102, 241, 0.04)',
+            background: 'rgba(255, 255, 255, 0.04)',
             borderLeft: '3px solid',
-            borderColor: 'primary.main',
+            borderColor: topBarBlue,
             marginTop: showClusterNavigation ? 2 : 0,
             marginBottom: 1,
           }}
@@ -797,7 +786,7 @@ export default function AppContainer({ children }) {
             sx={{ 
               fontSize: '0.7rem', 
               fontWeight: 700, 
-              color: 'primary.main', 
+              color: '#ffffff',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
             }}
@@ -818,21 +807,19 @@ export default function AppContainer({ children }) {
                       minHeight: 44,
                       px: 2,
                       py: 1,
-                      borderRadius: 2,
+                      borderRadius: 0,
                       position: 'relative',
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
                       ...(selected ? {
-                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                        background: topBarBlue,
                         color: 'white',
-                        boxShadow: '0px 2px 8px rgba(99, 102, 241, 0.3)',
+                        boxShadow: '0px 2px 8px rgba(21, 101, 192, 0.35)',
                       } : {
                         '&:hover': {
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'rgba(99, 102, 241, 0.15)'
-                            : 'rgba(99, 102, 241, 0.08)',
+                          background: 'rgba(21, 101, 192, 0.18)',
                           transform: 'translateX(4px)',
-                          boxShadow: '0px 2px 4px rgba(99, 102, 241, 0.1)',
+                          boxShadow: '0px 2px 4px rgba(21, 101, 192, 0.2)',
                         },
                       }),
                     }}
@@ -865,14 +852,14 @@ export default function AppContainer({ children }) {
               );
             })}
           </List>
-          <Box sx={{ pt: 2, pb: 1.5, px: 1.5, borderTop: (theme) => theme.palette.mode === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)' }}>
+          <Box sx={{ pt: 2, pb: 1.5, px: 1.5, borderTop: `1px solid ${topBarBlue}` }}>
             <ListItem key={"Logout"} disablePadding sx={{ display: 'block' }} onClick={handleLogout}>
               <ListItemButton
                 sx={{
                   minHeight: 44,
                   px: 2,
                   py: 1,
-                  borderRadius: 2,
+                  borderRadius: 0,
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   ...(open ? { justifyContent: 'initial' } : { justifyContent: 'center' }),
                   color: (theme) => theme.palette.mode === 'dark' ? '#ef4444' : '#dc2626',
@@ -1038,7 +1025,7 @@ export default function AppContainer({ children }) {
           </Toolbar>
         </AppBar>}
         {renderDrawer()}
-        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.default : "#f5f5f5", position: "relative", paddingBottom: "80px" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
+        <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: '#ffffff', position: "relative", paddingBottom: "80px" }} width={"100%"} height={"100%"} minHeight={"100vh"}>
           <DrawerHeader />
           {children}
         </Box>
