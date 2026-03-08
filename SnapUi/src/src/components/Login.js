@@ -1,9 +1,9 @@
 import { AccountCircle, Key } from "@mui/icons-material";
-import { Button, Grid2 as Grid, InputAdornment, TextField, Typography, CircularProgress, Stack, Box, ToggleButtonGroup, ToggleButton } from "@mui/material"
+import { Button, InputAdornment, TextField, Typography, CircularProgress, Stack, Box, ToggleButtonGroup, ToggleButton } from "@mui/material"
 import { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from "react-redux";
-import { authActions, authSlice } from "../features/auth/authSlice";
+import { authActions } from "../features/auth/authSlice";
 import { getCookie } from "../utils/cookies";
 
 const Login = () => {
@@ -13,7 +13,7 @@ const Login = () => {
   const [password, setPassword] = useState('')
   const [authMethod, setAuthMethod] = useState('local') // 'ad' or 'local'
   const [error, setError] = useState('')
-  const { authenticated = false, error: authError, loading = false, user } = useSelector(state => state.auth)
+  const { authenticated = false, error: authError, loading = false } = useSelector(state => state.auth)
   const token = getCookie("token")
 
   const handleLogin = (e) => {
@@ -42,10 +42,11 @@ const Login = () => {
   }, [authenticated])
 
   const renderError = () => {
+    if (!error && !authError) return null
     return (
-      <Grid size={4}>
-        <Typography color="error">{error || (authError && "Invalid username or password")}</Typography>
-      </Grid>
+      <Box sx={{ width: "100%" }}>
+        <Typography color="error" variant="body2">{error || (authError && "Invalid username or password")}</Typography>
+      </Box>
     )
   }
 
@@ -59,8 +60,9 @@ const Login = () => {
         alignItems: 'center',
         margin: '0 auto',
         backgroundColor: 'background.paper',
-        borderRadius: 2,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+        borderRadius: 0,
+        border: '1px solid #d1d5db',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
         position: 'relative',
         overflow: 'hidden'
       }}
@@ -71,20 +73,8 @@ const Login = () => {
           top: 0,
           left: 0,
           width: '100%',
-          height: '60px',
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            width: '100%',
-            height: '65px',
-            background: 'inherit',
-            transform: 'scale(2)',
-            borderRadius: '50%',
-            opacity: 0.1,
-          }
+          height: '72px',
+          background: '#1565c0',
         }}
       />
       <Stack 
@@ -92,7 +82,7 @@ const Login = () => {
         spacing={2} 
         alignItems="center" 
         sx={{ 
-          padding: 4,
+          padding: '18px 24px 12px 24px',
           width: "100%",
           position: 'relative',
           zIndex: 1
@@ -103,7 +93,8 @@ const Login = () => {
           variant="h6"
           sx={{
             color: "white",
-            marginBottom: "-15px!important",
+            marginBottom: 0,
+            letterSpacing: "0.03em",
           }}
         >
           SNAP
@@ -112,14 +103,14 @@ const Login = () => {
         <Box
           component="img"
           sx={{
-            height: 44,
-            borderLeft: "1px solid rgba(255, 255, 255, 0.3)",
+            height: 34,
+            borderLeft: "1px solid rgba(255, 255, 255, 0.45)",
             paddingLeft: 1.5,
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))',
+            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18))',
             '&:hover': {
               transform: 'scale(1.05)',
-              filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15))',
+              filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.22))',
             },
           }}
           alt="SNAP logo"
@@ -142,10 +133,7 @@ const Login = () => {
           variant="h4"
           sx={{
             fontWeight: 600,
-            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            color: '#1565c0',
             letterSpacing: '-0.01em',
           }}
         >
@@ -164,7 +152,13 @@ const Login = () => {
               onChange={handleAuthMethodChange}
               fullWidth
               size="small"
-              sx={{ mb: -1 }}
+              sx={{
+                mb: -1,
+                borderRadius: 0,
+                '& .MuiToggleButtonGroup-grouped': {
+                  borderRadius: 0,
+                }
+              }}
             >
               <ToggleButton value="ad" aria-label="active directory" sx={{ py: 0.75 }}>
                 <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>AD</Typography>
@@ -214,12 +208,12 @@ const Login = () => {
                 height: 48,
                 fontSize: '1rem',
                 fontWeight: 600,
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                boxShadow: '0px 4px 12px rgba(99, 102, 241, 0.4)',
+                borderRadius: 0,
+                background: '#1565c0',
+                boxShadow: '0px 4px 12px rgba(21, 101, 192, 0.35)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
-                  boxShadow: '0px 6px 20px rgba(99, 102, 241, 0.5)',
+                  background: '#1e88e5',
+                  boxShadow: '0px 6px 20px rgba(21, 101, 192, 0.42)',
                   transform: 'translateY(-1px)',
                 },
                 '&:active': {

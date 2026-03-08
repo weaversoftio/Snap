@@ -154,6 +154,7 @@ async def stream_logs(request: Request):
                 # Then stream new logs
                 while True:
                     try:
+                        payloads = []
                         with log_buffer_lock:
                             current_log_count = len(recent_logs)
                             
@@ -161,16 +162,19 @@ async def stream_logs(request: Request):
                                 # New logs available
                                 new_logs = recent_logs[last_log_count:]
                                 last_log_count = current_log_count
-                                
+
                                 for log in new_logs:
                                     try:
-                                        log_str = json.dumps(log)
-                                        yield f"data: {log_str}\n\n"
-                                    except Exception as e:
+                                        payloads.append(f"data: {json.dumps(log)}\n\n")
+                                    except Exception:
                                         continue
                             else:
                                 # No new logs, send keep-alive
-                                yield f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat()})}\n\n"
+                                payloads.append(f"data: {json.dumps({'type': 'keepalive', 'timestamp': datetime.now().isoformat()})}\n\n")
+
+                        # Never yield while holding log_buffer_lock.
+                        for payload in payloads:
+                            yield payload
                         
                         await asyncio.sleep(1)  # Check every second
                     except asyncio.CancelledError:
