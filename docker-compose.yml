@@ -6,26 +6,24 @@ services:
     container_name: snapapi
     image: weaversoftio/snapapi:${BRANCH_NAME:-main}
     stop_grace_period: 2s
-    ports:
-      - "8000:8000"
-      - "8443:8443"  # SnapHook webhook port
+    network_mode: host
     environment:
       # SnapApi configuration
       - SNAP_ORIGINS=http://localhost:8080,*
-      - SNAP_API_URL=http://192.168.33.209:8000
+      - SNAP_API_URL=http://192.168.33.245:8000
+      # Webhook URL must be reachable by the Kubernetes API server
+      - SNAP_WEBHOOK_URL=https://192.168.33.245:8443/mutate
       # SSL configuration (set to 'true' to enable SSL verification)
       - KUBE_VERIFY_SSL=false
       # Cluster status check version requirements
-      - CRIO_VERSION_REQUIRED=${CRIO_VERSION_REQUIRED:-1.31.2}
-      - RUNC_VERSION_REQUIRED=${RUNC_VERSION_REQUIRED:-1.2.4}
+      - CRIO_VERSION_REQUIRED=${CRIO_VERSION_REQUIRED:-1.34.5}
+      - RUNC_VERSION_REQUIRED=${RUNC_VERSION_REQUIRED:-1.2.5}
 
     volumes:
       # Mount config folder for persistence
       - snapapi-config:/app/config
       # Mount checkpoint storage
       - snapapi-checkpoints:/app/checkpoints
-    networks:
-      - snap-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
@@ -53,8 +51,8 @@ services:
       # The API_URL should be the external URL that browsers can access (e.g., http://localhost:8000 or http://<host-ip>:8000)
       # The WS_URL should be the WebSocket URL (e.g., ws://localhost:8000 or ws://<host-ip>:8000)
       # Defaults to localhost for local development - override if accessing from remote hosts
-      - API_URL=${API_URL:-http://192.168.33.209:8000}
-      - WS_URL=${WS_URL:-ws://192.168.33.209:8000}
+      - API_URL=${API_URL:-http://192.168.33.245:8000}
+      - WS_URL=${WS_URL:-ws://192.168.33.245:8000}
     networks:
       - snap-network
     restart: unless-stopped

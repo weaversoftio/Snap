@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-deployment-restore
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "simple-deployment-restore"
+  template:
+    metadata:
+      labels:
+        app: "simple-deployment-restore"
+        snap.weaversoft.io/snap: "true"
+    spec:
+      runtimeClassName: runc
+      containers:
+      - name: time-loop
+        image: 192.168.33.204:8082/snap_images/crc-snap-simple-deployment:b9598f8c98e2-77d4757848
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true;  do     date;   sleep       1 ; done
+        imagePullSecrets:
+        - name: regcred

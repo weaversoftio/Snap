@@ -12,6 +12,8 @@ import tempfile
 import threading
 import asyncio
 import warnings
+import re
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -76,6 +78,33 @@ class SnapHook:
         # Kubernetes client
         self.kube_client = None
         self._setup_kubernetes_config()
+
+    def _normalize_k8s_name(self, value: str, max_length: int = 253) -> str:
+        """Normalize text into a DNS-1123 subdomain compatible value."""
+        lowered = (value or "").lower()
+        replaced = re.sub(r"[^a-z0-9.-]+", "-", lowered)
+        collapsed = re.sub(r"-{2,}", "-", replaced)
+        trimmed = collapsed.strip("-.")
+        return trimmed[:max_length]
+
+    def _build_webhook_config_name(self) -> str:
+        """Build Kubernetes-safe MutatingWebhookConfiguration metadata.name."""
+        safe_hook = self._normalize_k8s_name(self.name, max_length=110) or "hook"
+        safe_cluster = self._normalize_k8s_name(self.cluster_name, max_length=110) or "cluster"
+        return self._normalize_k8s_name(f"snaphook-{safe_hook}-{safe_cluster}", max_length=253)
+
+    def _build_webhook_entry_name(self) -> str:
+        """Build Kubernetes-safe webhook entry name (must be a fully-qualified domain)."""
+        safe_hook = self._normalize_k8s_name(self.name, max_length=180) or "hook"
+        return self._normalize_k8s_name(f"snaphook-{safe_hook}.weaversoft.io", max_length=253)
+
+    def _log_k8s_api_exception(self, context: str, exception: ApiException, webhook_name: str) -> None:
+        """Log Kubernetes API failures with full response context for UI logs."""
+        logger.error(
+            f"[SnapHook] {context} for '{webhook_name}': "
+            f"status={exception.status}, reason={exception.reason}, "
+            f"headers={getattr(exception, 'headers', None)}, body={getattr(exception, 'body', None)}"
+        )
     
     def _generate_webhook_url(self) -> str:
         """
@@ -127,6 +156,15 @@ class SnapHook:
         
         logger.info(f'[SnapHook] Auto-generated webhook URL: {webhook_url}')
         return webhook_url
+
+    def _is_cluster_service_webhook_url(self, webhook_url: str) -> bool:
+        """Detect in-cluster service webhook URLs."""
+        try:
+            parsed = urlparse(webhook_url or "")
+            hostname = (parsed.hostname or "").lower()
+            return hostname.endswith(".svc") or hostname.endswith(".svc.cluster.local")
+        except Exception:
+            return False
     
     def _setup_kubernetes_config(self) -> None:
         """Setup Kubernetes client configuration."""
@@ -326,8 +364,8 @@ subjectAltName = @alt_names
         Returns:
             V1MutatingWebhookConfiguration object
         """
-        # Use unique webhook name based on hook name and cluster
-        webhook_name = f"snaphook-{self.name}-{self.cluster_name}"
+        webhook_name = self._build_webhook_config_name()
+        webhook_entry_name = self._build_webhook_entry_name()
         
         webhook_config = client.V1MutatingWebhookConfiguration(
             api_version="admissionregistration.k8s.io/v1",
@@ -344,7 +382,7 @@ subjectAltName = @alt_names
             ),
             webhooks=[
                 client.V1MutatingWebhook(
-                    name=f"snaphook-{self.name}.weaversoft.io",
+                    name=webhook_entry_name,
                     admission_review_versions=["v1"],
                     side_effects="None",
                     client_config=client.AdmissionregistrationV1WebhookClientConfig(
@@ -374,7 +412,6 @@ subjectAltName = @alt_names
                 )
             ]
         )
-        
         return webhook_config
     
     def _create_webhook_handler(self):
@@ -847,6 +884,20 @@ subjectAltName = @alt_names
                     return True
                 
                 logger.info(f'[SnapHook] Starting SnapHook \'{self.name}\' for cluster {self.cluster_name}')
+
+                # Recompute webhook URL in two situations:
+                # 1) SNAP_WEBHOOK_URL is explicitly configured (authoritative)
+                # 2) Stored URL points to cluster service DNS but SnapAPI runs externally
+                explicit_webhook_url = os.getenv("SNAP_WEBHOOK_URL")
+                should_refresh_webhook_url = bool(explicit_webhook_url) or self._is_cluster_service_webhook_url(self.webhook_url)
+                if should_refresh_webhook_url:
+                    refreshed_webhook_url = self._generate_webhook_url()
+                    if refreshed_webhook_url != self.webhook_url:
+                        logger.warning(
+                            f"[SnapHook] Updating webhook URL from '{self.webhook_url}' "
+                            f"to '{refreshed_webhook_url}'"
+                        )
+                        self.webhook_url = refreshed_webhook_url
             
                 # Step 1: Ensure shared HTTPS server is running
                 if not shared_https_server.is_running:
@@ -862,7 +913,7 @@ subjectAltName = @alt_names
                 
                 # Step 3: Create MutatingWebhookConfiguration with unique name
                 webhook_config = self._create_mutating_webhook_configuration()
-                webhook_name = f"snaphook-{self.name}-{self.cluster_name}"
+                webhook_name = webhook_config.metadata.name
                 
                 # Step 4: Deploy webhook configuration to Kubernetes
                 admission_v1 = client.AdmissionregistrationV1Api(self.kube_client)
@@ -879,7 +930,7 @@ subjectAltName = @alt_names
                         webhook_exists = False
                         logger.info(f'[SnapHook] Webhook configuration \'{webhook_name}\' does not exist, creating new...')
                     else:
-                        logger.error(f'[SnapHook] Error checking for existing webhook: {e}')
+                        self._log_k8s_api_exception("Error checking for existing webhook", e, webhook_name)
                         raise
                 
                 if webhook_exists:
@@ -899,7 +950,7 @@ subjectAltName = @alt_names
                         )
                         logger.info(f'[SnapHook] Webhook configuration updated successfully')
                     except ApiException as e:
-                        logger.error(f'[SnapHook] Failed to update webhook configuration: {e}')
+                        self._log_k8s_api_exception("Failed to update webhook configuration", e, webhook_name)
                         raise
                 else:
                     # Create new webhook configuration
@@ -926,7 +977,7 @@ subjectAltName = @alt_names
                             )
                             logger.info(f'[SnapHook] Webhook configuration updated successfully')
                         else:
-                            logger.error(f'[SnapHook] Failed to create webhook configuration: {e}')
+                            self._log_k8s_api_exception("Failed to create webhook configuration", e, webhook_name)
                             raise
                 
                 # Step 5: Register this hook with the shared server
@@ -1038,7 +1089,7 @@ subjectAltName = @alt_names
                 # Delete webhook configuration
                 if self.kube_client:
                     admission_v1 = client.AdmissionregistrationV1Api(self.kube_client)
-                    webhook_name = f"snaphook-{self.name}-{self.cluster_name}"
+                    webhook_name = self._build_webhook_config_name()
                     try:
                         admission_v1.delete_mutating_webhook_configuration(name=webhook_name)
                         logger.info(f'[SnapHook] Webhook configuration \'{webhook_name}\' deleted')
@@ -1046,6 +1097,7 @@ subjectAltName = @alt_names
                         if e.status == 404:
                             logger.info(f'[SnapHook] Webhook configuration not found, already cleaned up')
                         else:
+                            self._log_k8s_api_exception("Failed to delete webhook configuration", e, webhook_name)
                             raise
                 
                 logger.info(f'[SnapHook] Successfully stopped \'{self.name}\' for cluster {self.cluster_name}')
