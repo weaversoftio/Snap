@@ -15,8 +15,9 @@ spec:
         app: tcp-demo-2
         snap.weaversoft.io/snap: "true"
     spec:
+      runtimeClassName: runc
       imagePullSecrets:
-        - name: nexus-registry-secret
+        - name: regcred
       containers:
       - name: tcp-server
         image: python:3.11-slim

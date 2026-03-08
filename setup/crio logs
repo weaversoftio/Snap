@@ -1,0 +1,1 @@
+/etc/criu/runc.conf -------> log-file /path/to/your/custom.log

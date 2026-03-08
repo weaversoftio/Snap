@@ -1,18 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo-deployment-test
+  name: simple-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "demo-deployment-test"
+      app: "simple-deployment"
   template:
     metadata:
       labels:
-        app: "demo-deployment-test"
+        app: "simple-deployment"
         snap.weaversoft.io/snap: "true"
     spec:
+      runtimeClassName: runc
       containers:
       - name: time-loop
         image: busybox:stable
@@ -21,4 +22,4 @@ spec:
           - |
             while true;  do     date;   sleep       1 ; done
         imagePullSecrets:
-        - name: nexus-registry-secret 
+        - name: regcred
